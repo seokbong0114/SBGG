@@ -182,6 +182,13 @@
         .fb-submit:hover { opacity: 0.88; transform: translateY(-2px); }
         .fb-submit:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
 
+        /* 챔피언 스킬 구성 (DDragon) */
+        .skill-box { display: flex; flex-direction: column; align-items: center; gap: 8px; width: 88px; cursor: default; }
+        .skill-box img { width: 56px; height: 56px; border-radius: 12px; border: 2px solid rgba(255,255,255,0.12); transition: 0.2s; display: block; }
+        .skill-box:hover img { border-color: var(--point-color); transform: translateY(-3px); }
+        .skill-key { position: absolute; bottom: -6px; right: -6px; background: var(--point-color); color: white; font-size: 11px; font-weight: 900; width: 20px; height: 20px; border-radius: 6px; display: flex; align-items: center; justify-content: center; border: 2px solid var(--bg-panel); }
+        .skill-name { font-size: 11px; font-weight: 700; color: #e2e8f0; text-align: center; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 88px; }
+
         .scoreboard-container { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; padding: 15px; }
         
         .team-box { border-radius: 12px; padding: 15px; border: var(--border-glass); box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
@@ -1492,7 +1499,7 @@
                 <div>
                     <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 6px;">
                         <h1 style="margin: 0; font-size: 34px; font-weight: 900;">{{ champ.kr }}</h1>
-                        <span style="background: {{ champ.tier_style.bg }}; color: {{ champ.tier_style.color }}; border: 1px solid {{ champ.tier_style.border }}; padding: 4px 14px; border-radius: 10px; font-size: 16px; font-weight: 900;">{{ champ.tier }}티어</span>
+                        <span style="background: {{ champ.tier_style.bg }}; color: {{ champ.tier_style.color }}; border: 1px solid {{ champ.tier_style.border }}; padding: 4px 14px; border-radius: 10px; font-size: 16px; font-weight: 900;">{% if champ.tier == 'OP' %}OP{% else %}{{ champ.tier }}티어{% endif %}</span>
                         <span style="font-size: 20px; font-weight: 900; color: {{ champ.trend_color }};">{{ champ.trend_icon }}</span>
                     </div>
                     <div style="display: flex; gap: 10px; flex-wrap: wrap;">
@@ -1525,11 +1532,37 @@
             </div>
         </div>
 
+        <!-- 스킬 구성 (DDragon 실시간 · 모든 챔피언) -->
+        {% if skills %}
+        <div class="glass-panel" style="padding: 24px; margin-bottom: 20px;">
+            <div class="section-title" style="margin-bottom: 16px;">📖 스킬 구성 <span style="font-size: 12px; color: var(--text-muted); font-weight: 600;">패치 {{ current_patch }} · 공식 데이터</span></div>
+            <div style="display: flex; gap: 14px; flex-wrap: wrap;">
+                <div class="skill-box" title="{{ skills.passive.name }} (패시브) — {{ skills.passive.desc }}">
+                    <div style="position: relative;">
+                        <img src="{{ skills.passive.img }}" onerror="this.style.opacity='0'">
+                        <span class="skill-key" style="background: #64748b;">P</span>
+                    </div>
+                    <div class="skill-name">{{ skills.passive.name }}</div>
+                </div>
+                {% for sp in skills.spells %}
+                <div class="skill-box" title="{{ sp.name }} ({{ sp.key }}) — {{ sp.desc }}">
+                    <div style="position: relative;">
+                        <img src="{{ sp.img }}" onerror="this.style.opacity='0'">
+                        <span class="skill-key">{{ sp.key }}</span>
+                    </div>
+                    <div class="skill-name">{{ sp.name }}</div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+        {% endif %}
+
         <div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 20px;">
             <!-- 빌드 추천 -->
             <div>
                 <div class="glass-panel" style="padding: 24px; margin-bottom: 16px;">
                     <div class="section-title" style="margin-bottom: 18px;">🛠️ 추천 빌드 ({{ current_patch }})</div>
+                    {% if has_build %}
                     <div style="margin-bottom: 16px;">
                         <div style="font-size: 12px; color: var(--text-muted); font-weight: 700; margin-bottom: 8px;">주문/보조 룬</div>
                         <div style="display: flex; gap: 10px; align-items: center;">
@@ -1539,7 +1572,7 @@
                         </div>
                     </div>
                     <div style="margin-bottom: 16px;">
-                        <div style="font-size: 12px; color: var(--text-muted); font-weight: 700; margin-bottom: 8px;">스킬 순서</div>
+                        <div style="font-size: 12px; color: var(--text-muted); font-weight: 700; margin-bottom: 8px;">스킬 마스터 순서</div>
                         <div style="display: flex; gap: 8px;">
                             {% for sk in champ.skill_order.split('→') %}
                             <div style="width: 40px; height: 40px; background: rgba(244,63,94,0.15); border: 1px solid rgba(244,63,94,0.4); border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 900; color: var(--point-color);">{{ sk }}</div>
@@ -1558,19 +1591,29 @@
                             {% endfor %}
                         </div>
                     </div>
+                    {% else %}
+                    <div style="text-align: center; padding: 24px 12px; color: var(--text-muted);">
+                        <div style="font-size: 34px; margin-bottom: 10px;">🧪</div>
+                        <div style="font-size: 14px; font-weight: 800; color: #e2e8f0; margin-bottom: 6px;">정밀 빌드 데이터 준비 중</div>
+                        <div style="font-size: 12px; line-height: 1.6;">이 챔피언의 룬·스킬 순서·코어 아이템 추천은<br>최신 패치 통계 수집 후 순차적으로 제공됩니다.<br>위 <b style="color:#93c5fd;">스킬 구성</b>은 공식 최신 데이터입니다.</div>
+                    </div>
+                    {% endif %}
                 </div>
 
                 <!-- 플레이 팁 -->
+                {% if champ.tip %}
                 <div class="glass-panel" style="padding: 24px;">
                     <div class="section-title" style="margin-bottom: 14px;">💡 핵심 플레이 팁</div>
                     <div style="font-size: 14px; color: var(--text-muted); line-height: 1.8; background: rgba(255,255,255,0.03); padding: 16px; border-radius: 12px; border-left: 3px solid var(--point-color);">
                         {{ champ.tip }}
                     </div>
                 </div>
+                {% endif %}
             </div>
 
             <!-- 카운터/시너지 -->
             <div>
+                {% if champ.weak_vs_kr or champ.strong_vs_kr %}
                 <div class="glass-panel" style="padding: 24px; margin-bottom: 16px;">
                     <div class="section-title" style="margin-bottom: 18px;">⚔️ 카운터 픽 (취약한 상대)</div>
                     <div style="display: flex; flex-direction: column; gap: 10px;">
@@ -1604,6 +1647,15 @@
                         {% endfor %}
                     </div>
                 </div>
+                {% else %}
+                <div class="glass-panel" style="padding: 24px;">
+                    <div class="section-title" style="margin-bottom: 14px;">⚔️ 상성 정보</div>
+                    <div style="text-align: center; padding: 20px 12px; color: var(--text-muted);">
+                        <div style="font-size: 30px; margin-bottom: 8px;">📊</div>
+                        <div style="font-size: 13px; line-height: 1.7;">카운터·시너지 상성 데이터는<br>최신 패치 매치 통계 수집 후 제공됩니다.</div>
+                    </div>
+                </div>
+                {% endif %}
             </div>
         </div>
 

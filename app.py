@@ -4,6 +4,7 @@ import hashlib
 import sqlite3
 import json
 import time
+import re
 from flask import Flask, render_template, request, redirect, jsonify
 import requests
 from dotenv import load_dotenv
@@ -105,6 +106,13 @@ except Exception as e:
     print(f"라이엇 데이터 로드 실패 (안전 모드 실행): {e}")
     LATEST_VERSION = "14.12.1"
     CHAMP_KR_MAP, CHAMP_KEYS, SPELL_MAP, RUNE_MAP, CHAMP_TAGS = {}, {}, {}, {}, {}
+
+# 패치 라벨을 DDragon 최신 버전에서 자동 도출 ("16.13.1" → "16.13")
+# → 화면에 표시되는 패치 번호가 실제 데이터 출처와 항상 일치
+try:
+    CURRENT_PATCH = ".".join(LATEST_VERSION.split(".")[:2])
+except Exception:
+    pass  # 실패 시 champion_meta.py의 기본값 유지
 
 ROLE_MAP = {"TOP": "탑", "JUNGLE": "정글", "MIDDLE": "미드", "BOTTOM": "원딜", "UTILITY": "서포터", "": "기타", "Invalid": "기타"}
 ROLE_ICON = {"TOP": "🪓", "JUNGLE": "🌲", "MIDDLE": "🪄", "BOTTOM": "🏹", "UTILITY": "🛡️", "": "🎲", "Invalid": "🎲"}
@@ -238,6 +246,45 @@ def get_mastery(puuid):
             masteries.append({'champ_en': c_en, 'champ_kr': CHAMP_KR_MAP.get(c_en, c_en), 'level': m['championLevel'], 'points': pts_str})
         return masteries
     return []
+
+def _strip_html(text):
+    """DDragon 설명문의 HTML 태그 제거 (툴팁용)."""
+    return re.sub(r'<[^>]+>', '', text or '').strip()
+
+def get_champion_detail(champ_id):
+    """DDragon에서 최신 패치 기준 챔피언 스킬(패시브 + QWER) 정보를 가져옴.
+    패치 버전을 캐시 키에 포함 → 패치 변경 시 자동 갱신."""
+    cache_key = f"champdetail#{champ_id}#{LATEST_VERSION}"
+    cached_json, _ = db_read(cache_key)
+    if cached_json:
+        return json.loads(cached_json)
+    try:
+        url = f"https://ddragon.leagueoflegends.com/cdn/{LATEST_VERSION}/data/ko_KR/champion/{champ_id}.json"
+        res = requests.get(url, timeout=5)
+        if res.status_code != 200:
+            return None
+        d = res.json()['data'][champ_id]
+        keys = ['Q', 'W', 'E', 'R']
+        detail = {
+            'title': d.get('title', ''),
+            'lore': _strip_html(d.get('blurb', '')),
+            'passive': {
+                'name': d['passive']['name'],
+                'img': f"https://ddragon.leagueoflegends.com/cdn/{LATEST_VERSION}/img/passive/{d['passive']['image']['full']}",
+                'desc': _strip_html(d['passive'].get('description', '')),
+            },
+            'spells': [{
+                'key': keys[i],
+                'name': s['name'],
+                'img': f"https://ddragon.leagueoflegends.com/cdn/{LATEST_VERSION}/img/spell/{s['image']['full']}",
+                'desc': _strip_html(s.get('description', '')),
+            } for i, s in enumerate(d['spells'][:4])],
+        }
+        db_write(cache_key, detail, int(time.time()))
+        return detail
+    except Exception as e:
+        print(f"챔피언 상세 로드 에러 [{champ_id}]: {e}")
+        return None
 
 def get_match_details(puuid, start=0, count=20, queue=None):
     url = f"https://asia.api.riotgames.com/lol/match/v5/matches/by-puuid/{puuid}/ids?start={start}&count={count}"
@@ -984,26 +1031,71 @@ def meta():
 
 @app.route('/champion/<champ_id>')
 def champion_page(champ_id):
+    # 1) DDragon 정식 챔피언 ID로 정규화 (대소문자 보정)
+    canonical_id = next((cid for cid in CHAMP_KR_MAP if cid.lower() == champ_id.lower()), None)
+    if not canonical_id and champ_id in CHAMP_KR_MAP:
+        canonical_id = champ_id
+    if not canonical_id:
+        return redirect('/')
+
+    # 2) 상세 빌드 데이터(CHAMPION_TIERS) 보유 여부 확인
     champ_data, champ_role = None, None
     for role, champs in CHAMPION_TIERS.items():
         for c in champs:
-            if c['id'].lower() == champ_id.lower():
+            if c['id'].lower() == canonical_id.lower():
                 champ_data, champ_role = c, role
                 break
         if champ_data: break
-    if not champ_data: return redirect('/')
-    styled = {**champ_data,
-              'tier_style': TIER_COLOR.get(champ_data['tier'], TIER_COLOR['B']),
-              'trend_icon': TREND_ICON.get(champ_data['trend'], '→'),
-              'trend_color': TREND_COLOR.get(champ_data['trend'], '#94a3b8'),
-              'diff_label': DIFFICULTY_LABEL.get(champ_data['difficulty'], '보통'),
-              'diff_color': DIFFICULTY_COLOR.get(champ_data['difficulty'], '#fbbf24'),
-              # 카운터/시너지 챔피언을 한글명과 함께 변환
-              'weak_vs_kr': [{'id': e, 'kr': CHAMP_KR_MAP.get(e, e)} for e in champ_data.get('weak_vs', [])],
-              'strong_vs_kr': [{'id': e, 'kr': CHAMP_KR_MAP.get(e, e)} for e in champ_data.get('strong_vs', [])]}
+
+    has_build = champ_data is not None
+
+    if has_build:
+        styled = {**champ_data,
+                  'tier_style': TIER_COLOR.get(champ_data['tier'], TIER_COLOR['B']),
+                  'trend_icon': TREND_ICON.get(champ_data['trend'], '→'),
+                  'trend_color': TREND_COLOR.get(champ_data['trend'], '#94a3b8'),
+                  'diff_label': DIFFICULTY_LABEL.get(champ_data['difficulty'], '보통'),
+                  'diff_color': DIFFICULTY_COLOR.get(champ_data['difficulty'], '#fbbf24'),
+                  'weak_vs_kr': [{'id': e, 'kr': CHAMP_KR_MAP.get(e, e)} for e in champ_data.get('weak_vs', [])],
+                  'strong_vs_kr': [{'id': e, 'kr': CHAMP_KR_MAP.get(e, e)} for e in champ_data.get('strong_vs', [])]}
+    else:
+        # 3) 상세 빌드가 없는 챔피언 — 메타 통계 기반 기본 페이지 구성
+        roles = CHAMPION_ROLE_MAP.get(canonical_id, [])
+        if not roles:
+            tags = CHAMP_TAGS.get(canonical_id, [])
+            if "Marksman" in tags: roles = ["BOTTOM"]
+            elif "Support" in tags and "Fighter" not in tags: roles = ["UTILITY"]
+            elif "Mage" in tags and "Fighter" not in tags: roles = ["MIDDLE"]
+            elif "Assassin" in tags and "Fighter" not in tags: roles = ["MIDDLE"]
+            else: roles = ["TOP"]
+        primary_role = roles[0]
+        stats = META_STATS.get(canonical_id, {}).get(primary_role, {}).get("emeraldplus")
+        if not stats:
+            stats = DEFAULT_ROLE_STATS.get(primary_role, DEFAULT_ROLE_STATS["TOP"])
+        wr, pr, br = stats["wr"], stats["pr"], stats["br"]
+        trend, difficulty = stats.get("trend", "stable"), stats.get("difficulty", 2)
+        num_tier = calc_meta_tier(wr, pr, br)
+        tags = CHAMP_TAGS.get(canonical_id, [])
+        style_kr = "/".join(tags[:2]) if tags else "—"
+        champ_role = primary_role
+        styled = {
+            'id': canonical_id, 'kr': CHAMP_KR_MAP.get(canonical_id, canonical_id),
+            'tier': ('OP' if num_tier == 'OP' else num_tier),
+            'tier_style': NUMERIC_TIER_COLOR.get(num_tier, NUMERIC_TIER_COLOR["5"]),
+            'wr': wr, 'pr': pr, 'br': br,
+            'trend_icon': TREND_ICON.get(trend, '→'), 'trend_color': TREND_COLOR.get(trend, '#94a3b8'),
+            'diff_label': DIFFICULTY_LABEL.get(difficulty, '보통'), 'diff_color': DIFFICULTY_COLOR.get(difficulty, '#fbbf24'),
+            'style': style_kr,
+            'rune_main': None, 'rune_sub': None, 'skill_order': None, 'items': [], 'tip': None,
+            'weak_vs_kr': [], 'strong_vs_kr': [],
+        }
+
+    # 4) DDragon 실시간 스킬 데이터 (패시브 + QWER) — 모든 챔피언 공통
+    skills = get_champion_detail(canonical_id)
+
     return render_template('index.html', page='champion', champ=styled,
                            champ_role=ROLE_KR.get(champ_role, champ_role),
-                           champ_role_en=champ_role,
+                           champ_role_en=champ_role, has_build=has_build, skills=skills,
                            latest_version=LATEST_VERSION, current_patch=CURRENT_PATCH)
 
 @app.route('/search')
