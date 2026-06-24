@@ -32,7 +32,20 @@
         .home-search-box:focus-within { box-shadow: 0 8px 32px rgba(244, 63, 94, 0.3); border-color: rgba(244, 63, 94, 0.4); }
         .home-search-box textarea, .home-search-box input[type="text"] { border: none; outline: none; font-size: 18px; color: white; font-family: 'Pretendard'; font-weight: 800; background: transparent; width: 100%; height: 26px; line-height: 26px; padding: 0; margin-top: 2px; display: block; }
         .home-search-box input[type="text"]::placeholder { color: rgba(255,255,255,0.35); font-weight: 600; }
-        
+        /* 브라우저 자동완성(autofill) 흰색 배경 제거 — 글래스모피즘 테마 유지 */
+        input:-webkit-autofill,
+        input:-webkit-autofill:hover,
+        input:-webkit-autofill:focus,
+        input:-webkit-autofill:active,
+        textarea:-webkit-autofill,
+        textarea:-webkit-autofill:hover,
+        textarea:-webkit-autofill:focus {
+            -webkit-text-fill-color: white !important;
+            -webkit-box-shadow: 0 0 0 1000px transparent inset !important;
+            caret-color: white;
+            transition: background-color 9999s ease-in-out 0s !important;
+        }
+
         .nav-search-wrapper { position: absolute; left: 50%; transform: translateX(-50%); z-index: 1; }
         .nav-search-box { background-color: rgba(255,255,255,0.95); border-radius: 20px; padding: 4px 4px 4px 15px; display: flex; align-items: center; box-shadow: 0 4px 15px rgba(0,0,0,0.3); transition: 0.3s; }
         .nav-search-box:focus-within { box-shadow: 0 4px 20px rgba(244, 63, 94, 0.4); }
@@ -245,7 +258,7 @@
                             <tbody>
                                 {% for p in match.blue_team %}
                                 <tr class="{% if p.puuid == searched_puuid %}main-user-row{% endif %}">
-                                    <td style="width: 25px;"><a href="/champion/{{ p.champ_img }}" title="{{ p.champ_img }} 메타 보기" style="display:block;"><img src="https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/champion/{{ p.champ_img }}.png" style="width: 22px; border-radius: 50%; transition:0.15s;" onmouseover="this.style.opacity='0.7'" onmouseout="this.style.opacity='1'"></a></td>
+                                    <td style="width: 25px;"><a href="/champion/{{ p.champ_img }}" title="{{ p.champ_kr }} 메타 보기" style="display:block;"><img src="https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/champion/{{ p.champ_img }}.png" style="width: 22px; border-radius: 50%; transition:0.15s;" onmouseover="this.style.opacity='0.7'" onmouseout="this.style.opacity='1'"></a></td>
                                     <td style="width: 80px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 80px;">{{ p.name }}</td>
                                     <td style="text-align: center; font-weight: 600;">{{ p.k }}/{{ p.d }}/{{ p.a }}</td>
                                     <td><div style="font-weight: 800;">{{ p.dmg_str }}</div><div class="bar-container"><div class="bar-fill" style="width: {{ p.dmg_percent }}%; background-color: {% if p.puuid == searched_puuid %}{% if p.win %}var(--win-color){% else %}var(--lose-color){% endif %}{% else %}var(--text-muted){% endif %};"></div></div></td>
@@ -269,7 +282,7 @@
                             <tbody>
                                 {% for p in match.red_team %}
                                 <tr class="{% if p.puuid == searched_puuid %}main-user-row{% endif %}">
-                                    <td style="width: 25px;"><a href="/champion/{{ p.champ_img }}" title="{{ p.champ_img }} 메타 보기" style="display:block;"><img src="https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/champion/{{ p.champ_img }}.png" style="width: 24px; border-radius: 50%; transition:0.15s;" onmouseover="this.style.opacity='0.7'" onmouseout="this.style.opacity='1'"></a></td>
+                                    <td style="width: 25px;"><a href="/champion/{{ p.champ_img }}" title="{{ p.champ_kr }} 메타 보기" style="display:block;"><img src="https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/champion/{{ p.champ_img }}.png" style="width: 24px; border-radius: 50%; transition:0.15s;" onmouseover="this.style.opacity='0.7'" onmouseout="this.style.opacity='1'"></a></td>
                                     <td style="width: 80px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 80px;">{{ p.name }}</td>
                                     <td style="text-align: center; font-weight: 600;">{{ p.k }}/{{ p.d }}/{{ p.a }}</td>
                                     <td><div style="font-weight: 800;">{{ p.dmg_str }}</div><div class="bar-container"><div class="bar-fill" style="width: {{ p.dmg_percent }}%; background-color: {% if p.puuid == searched_puuid %}{% if p.win %}var(--win-color){% else %}var(--lose-color){% endif %}{% else %}var(--text-muted){% endif %};"></div></div></td>
@@ -668,8 +681,8 @@
                             <span style="font-size: 11px; font-weight: 800; color: var(--win-color); width: 40px; flex-shrink: 0;">블루</span>
                             <div style="display: flex; gap: 6px;">
                                 {% for champ in game.blue_champs %}
-                                <img src="https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/champion/{{ champ }}.png"
-                                     title="{{ champ }}"
+                                <img src="https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/champion/{{ champ.id }}.png"
+                                     title="{{ champ.kr }}"
                                      style="width: 38px; height: 38px; border-radius: 8px; border: 2px solid var(--win-color);">
                                 {% endfor %}
                             </div>
@@ -680,8 +693,8 @@
                             <span style="font-size: 11px; font-weight: 800; color: var(--lose-color); width: 40px; flex-shrink: 0;">레드</span>
                             <div style="display: flex; gap: 6px;">
                                 {% for champ in game.red_champs %}
-                                <img src="https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/champion/{{ champ }}.png"
-                                     title="{{ champ }}"
+                                <img src="https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/champion/{{ champ.id }}.png"
+                                     title="{{ champ.kr }}"
                                      style="width: 38px; height: 38px; border-radius: 8px; border: 2px solid var(--lose-color);">
                                 {% endfor %}
                             </div>
@@ -746,7 +759,7 @@
                         <div style="display: flex; gap: 10px; margin-top: 5px;">
                             {% for m in masteries %}
                             <div style="display: flex; align-items: center; gap: 6px; background: rgba(0,0,0,0.4); padding: 4px 12px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.1); backdrop-filter: blur(5px);">
-                                <img src="https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/champion/{{ m.champ_en }}.png" style="width: 20px; border-radius: 50%;">
+                                <img src="https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/champion/{{ m.champ_en }}.png" title="{{ m.champ_kr }}" style="width: 20px; border-radius: 50%;">
                                 <span style="font-size: 13px; color: #fbbf24; font-weight: 800;">{{ m.points }}</span>
                             </div>
                             {% endfor %}
@@ -806,7 +819,7 @@
                         <div style="width: 100%;">
                             {% for c in top_recent_champs %}
                             <div style="display: flex; align-items: center; gap: 15px; width: 100%; margin-bottom: 15px;">
-                                <img src="https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/champion/{{ c.img }}.png" style="width: 38px; height: 38px; border-radius: 12px;">
+                                <img src="https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/champion/{{ c.img }}.png" title="{{ c.name }}" style="width: 38px; height: 38px; border-radius: 12px;">
                                 <div style="width: 50px; font-size: 14px; font-weight: 800; color: {% if c.win_rate >= 60 %}var(--win-color){% elif c.win_rate < 40 %}var(--lose-color){% else %}var(--text-main){% endif %};">{{ c.win_rate }}%</div>
                                 <div style="flex-grow: 1; height: 6px; background: rgba(255,255,255,0.05); border-radius: 3px; overflow: hidden; display: flex;"><div style="height: 100%; border-radius: 3px; width: {{ c.win_rate }}%; background-color: {% if c.win_rate >= 60 %}var(--win-color){% elif c.win_rate < 40 %}var(--lose-color){% else %}var(--text-muted){% endif %};"></div></div>
                                 <div style="width: 40px; text-align: right; font-size: 13px; font-weight:600; color: var(--text-muted);">{{ c.kda }}</div>
@@ -1420,13 +1433,13 @@
                 <div class="glass-panel" style="padding: 24px; margin-bottom: 16px;">
                     <div class="section-title" style="margin-bottom: 18px;">⚔️ 카운터 픽 (취약한 상대)</div>
                     <div style="display: flex; flex-direction: column; gap: 10px;">
-                        {% for enemy in champ.weak_vs %}
-                        <a href="/champion/{{ enemy }}" style="text-decoration:none; display:flex; align-items: center; gap: 14px; padding: 12px 14px; background: rgba(239,68,68,0.06); border-radius: 12px; border: 1px solid rgba(239,68,68,0.2); transition:0.2s;" onmouseover="this.style.background='rgba(239,68,68,0.12)'" onmouseout="this.style.background='rgba(239,68,68,0.06)'">
-                            <img src="https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/champion/{{ enemy }}.png"
+                        {% for enemy in champ.weak_vs_kr %}
+                        <a href="/champion/{{ enemy.id }}" style="text-decoration:none; display:flex; align-items: center; gap: 14px; padding: 12px 14px; background: rgba(239,68,68,0.06); border-radius: 12px; border: 1px solid rgba(239,68,68,0.2); transition:0.2s;" onmouseover="this.style.background='rgba(239,68,68,0.12)'" onmouseout="this.style.background='rgba(239,68,68,0.06)'">
+                            <img src="https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/champion/{{ enemy.id }}.png"
                                  style="width: 40px; height: 40px; border-radius: 10px; border: 2px solid rgba(239,68,68,0.5);"
                                  onerror="this.src='https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/champion/Teemo.png'">
                             <div>
-                                <div style="font-size: 14px; font-weight: 800; color: white;">{{ enemy }}</div>
+                                <div style="font-size: 14px; font-weight: 800; color: white;">{{ enemy.kr }}</div>
                                 <div style="font-size: 11px; color: #f87171; font-weight: 700; margin-top: 2px;">불리한 매치업 · 메타 분석 보기 →</div>
                             </div>
                         </a>
@@ -1437,13 +1450,13 @@
                 <div class="glass-panel" style="padding: 24px;">
                     <div class="section-title" style="margin-bottom: 18px;">✅ 유리한 상대</div>
                     <div style="display: flex; flex-direction: column; gap: 10px;">
-                        {% for ally in champ.strong_vs %}
-                        <a href="/champion/{{ ally }}" style="text-decoration:none; display:flex; align-items: center; gap: 14px; padding: 12px 14px; background: rgba(74,222,128,0.06); border-radius: 12px; border: 1px solid rgba(74,222,128,0.2); transition:0.2s;" onmouseover="this.style.background='rgba(74,222,128,0.12)'" onmouseout="this.style.background='rgba(74,222,128,0.06)'">
-                            <img src="https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/champion/{{ ally }}.png"
+                        {% for ally in champ.strong_vs_kr %}
+                        <a href="/champion/{{ ally.id }}" style="text-decoration:none; display:flex; align-items: center; gap: 14px; padding: 12px 14px; background: rgba(74,222,128,0.06); border-radius: 12px; border: 1px solid rgba(74,222,128,0.2); transition:0.2s;" onmouseover="this.style.background='rgba(74,222,128,0.12)'" onmouseout="this.style.background='rgba(74,222,128,0.06)'">
+                            <img src="https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/champion/{{ ally.id }}.png"
                                  style="width: 40px; height: 40px; border-radius: 10px; border: 2px solid rgba(74,222,128,0.5);"
                                  onerror="this.src='https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/champion/Teemo.png'">
                             <div>
-                                <div style="font-size: 14px; font-weight: 800; color: white;">{{ ally }}</div>
+                                <div style="font-size: 14px; font-weight: 800; color: white;">{{ ally.kr }}</div>
                                 <div style="font-size: 11px; color: #4ade80; font-weight: 700; margin-top: 2px;">유리한 매치업 · 메타 분석 보기 →</div>
                             </div>
                         </a>

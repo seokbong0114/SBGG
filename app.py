@@ -224,7 +224,7 @@ def get_mastery(puuid):
             c_en = CHAMP_KEYS.get(str(m['championId']), "Unknown")
             pts = m['championPoints']
             pts_str = f"{round(pts/1000000, 1)}M" if pts >= 1000000 else f"{round(pts/1000)}k" if pts >= 1000 else str(pts)
-            masteries.append({'champ_en': c_en, 'level': m['championLevel'], 'points': pts_str})
+            masteries.append({'champ_en': c_en, 'champ_kr': CHAMP_KR_MAP.get(c_en, c_en), 'level': m['championLevel'], 'points': pts_str})
         return masteries
     return []
 
@@ -285,6 +285,7 @@ def get_match_details(puuid, start=0, count=20, queue=None):
 
                 participants_details.append({
                     'puuid': p['puuid'], 'name': p.get('riotIdGameName', 'Unknown'), 'champ_img': champ_en,
+                    'champ_kr': CHAMP_KR_MAP.get(champ_en, champ_en),
                     'teamId': p['teamId'], 'win': p['win'], 'role_en': p.get('teamPosition', ''),
                     'k': k, 'd': d, 'a': a, 'dmg': dmg, 'dmg_str': dmg_str, 'cs': cs, 'cspm': cspm,
                     'score': op_score, 'spell1': spell1, 'spell2': spell2, 'rune1': rune1, 'rune2': rune2, 'item_list': items
@@ -792,8 +793,10 @@ def get_live_challenger_games():
                 "tier": "CHALLENGER",
                 "queue": QUEUE_MAP.get(game.get('gameQueueConfigId', 0), "랭크"),
                 "time": f"{length // 60:02d}:{length % 60:02d}",
-                "blue_champs": [CHAMP_KEYS.get(str(p['championId']), 'Teemo') for p in blue[:5]],
-                "red_champs":  [CHAMP_KEYS.get(str(p['championId']), 'Teemo') for p in red[:5]],
+                "blue_champs": [{'id': CHAMP_KEYS.get(str(p['championId']), 'Teemo'),
+                                 'kr': CHAMP_KR_MAP.get(CHAMP_KEYS.get(str(p['championId']), 'Teemo'), 'Teemo')} for p in blue[:5]],
+                "red_champs":  [{'id': CHAMP_KEYS.get(str(p['championId']), 'Teemo'),
+                                 'kr': CHAMP_KR_MAP.get(CHAMP_KEYS.get(str(p['championId']), 'Teemo'), 'Teemo')} for p in red[:5]],
             })
 
         # ✅ MEDIUM 개선: db_write() 헬퍼 사용
@@ -913,7 +916,10 @@ def champion_page(champ_id):
               'trend_icon': TREND_ICON.get(champ_data['trend'], '→'),
               'trend_color': TREND_COLOR.get(champ_data['trend'], '#94a3b8'),
               'diff_label': DIFFICULTY_LABEL.get(champ_data['difficulty'], '보통'),
-              'diff_color': DIFFICULTY_COLOR.get(champ_data['difficulty'], '#fbbf24')}
+              'diff_color': DIFFICULTY_COLOR.get(champ_data['difficulty'], '#fbbf24'),
+              # 카운터/시너지 챔피언을 한글명과 함께 변환
+              'weak_vs_kr': [{'id': e, 'kr': CHAMP_KR_MAP.get(e, e)} for e in champ_data.get('weak_vs', [])],
+              'strong_vs_kr': [{'id': e, 'kr': CHAMP_KR_MAP.get(e, e)} for e in champ_data.get('strong_vs', [])]}
     return render_template('index.html', page='champion', champ=styled,
                            champ_role=ROLE_KR.get(champ_role, champ_role),
                            champ_role_en=champ_role,
