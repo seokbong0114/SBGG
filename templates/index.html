@@ -159,6 +159,29 @@
         .ai-rec-item span { font-size: 11px; font-weight: 700; color: #e2e8f0; white-space: nowrap; }
         .ai-rec-reason { font-size: 13px; line-height: 1.7; color: var(--text-muted); background: rgba(0,0,0,0.25); border-left: 3px solid #fbbf24; border-radius: 8px; padding: 10px 14px; }
 
+        /* 고객의 소리(피드백) 버튼 & 모달 */
+        .feedback-btn { display: inline-flex; align-items: center; gap: 6px; background: rgba(255,255,255,0.06); color: var(--text-main); border: 1px solid rgba(255,255,255,0.14); border-radius: 20px; padding: 8px 16px; font-size: 13px; font-weight: 800; font-family: 'Pretendard'; cursor: pointer; backdrop-filter: blur(10px); transition: 0.2s; }
+        .feedback-btn:hover { background: rgba(244,63,94,0.15); border-color: rgba(244,63,94,0.4); color: white; transform: translateY(-2px); }
+        .feedback-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(6px); z-index: 1000; display: none; align-items: center; justify-content: center; opacity: 0; transition: opacity 0.25s; padding: 20px; }
+        .feedback-overlay.open { display: flex; opacity: 1; }
+        .feedback-modal { position: relative; width: 100%; max-width: 460px; background: linear-gradient(160deg, rgba(30,41,59,0.98) 0%, rgba(15,23,42,0.98) 100%); border: 1px solid rgba(255,255,255,0.12); border-radius: 24px; padding: 32px; box-shadow: 0 24px 64px rgba(0,0,0,0.6); transform: translateY(12px) scale(0.98); transition: transform 0.25s; }
+        .feedback-overlay.open .feedback-modal { transform: translateY(0) scale(1); }
+        .feedback-close { position: absolute; top: 18px; right: 18px; background: rgba(255,255,255,0.06); border: none; color: var(--text-muted); width: 32px; height: 32px; border-radius: 50%; cursor: pointer; font-size: 14px; transition: 0.2s; }
+        .feedback-close:hover { background: rgba(255,255,255,0.15); color: white; }
+        .fb-label { display: block; font-size: 12px; font-weight: 800; color: var(--text-muted); margin-bottom: 8px; }
+        .fb-input { width: 100%; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 12px 14px; color: white; font-size: 14px; font-family: 'Pretendard'; font-weight: 600; outline: none; box-sizing: border-box; transition: 0.2s; resize: vertical; }
+        .fb-input:focus { border-color: rgba(244,63,94,0.5); background: rgba(0,0,0,0.4); }
+        .fb-input::placeholder { color: rgba(255,255,255,0.3); font-weight: 500; }
+        .fb-cat-group { display: flex; gap: 8px; }
+        .fb-cat { flex: 1; }
+        .fb-cat input { display: none; }
+        .fb-cat span { display: block; text-align: center; font-size: 12px; font-weight: 800; padding: 10px 6px; border-radius: 10px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); color: var(--text-muted); cursor: pointer; transition: 0.2s; }
+        .fb-cat input:checked + span { background: rgba(244,63,94,0.15); border-color: rgba(244,63,94,0.5); color: white; }
+        .fb-cat:hover span { background: rgba(255,255,255,0.08); }
+        .fb-submit { width: 100%; background: var(--point-color); color: white; border: none; border-radius: 14px; padding: 14px; font-size: 15px; font-weight: 900; font-family: 'Pretendard'; cursor: pointer; transition: 0.2s; }
+        .fb-submit:hover { opacity: 0.88; transform: translateY(-2px); }
+        .fb-submit:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
         .scoreboard-container { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; padding: 15px; }
         
         .team-box { border-radius: 12px; padding: 15px; border: var(--border-glass); box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
@@ -259,7 +282,14 @@
                                 {% for p in match.blue_team %}
                                 <tr class="{% if p.puuid == searched_puuid %}main-user-row{% endif %}">
                                     <td style="width: 25px;"><a href="/champion/{{ p.champ_img }}" title="{{ p.champ_kr }} 메타 보기" style="display:block;"><img src="https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/champion/{{ p.champ_img }}.png" style="width: 22px; border-radius: 50%; transition:0.15s;" onmouseover="this.style.opacity='0.7'" onmouseout="this.style.opacity='1'"></a></td>
-                                    <td style="width: 80px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 80px;">{{ p.name }}</td>
+                                    <td style="max-width: 130px;">
+                                        <a href="/search?name={{ p.name|urlencode }}&tag={{ p.tag or 'KR1' }}" title="{{ p.name }}#{{ p.tag }} 전적 분석 보기" style="text-decoration:none; color:inherit; display:block;" onmouseover="this.style.color='var(--point-color)'" onmouseout="this.style.color='inherit'">
+                                            <div style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-weight:700; font-size:12px;">{{ p.name }}<span style="font-size:10px; color:var(--text-muted); margin-left:2px;">#{{ p.tag }}</span></div>
+                                        </a>
+                                        {% if p.analysis_tag %}
+                                        <span style="display:inline-block; margin-top:3px; font-size:9px; font-weight:800; padding:1px 6px; border-radius:5px; background:{{ p.analysis_tag.color }}1a; color:{{ p.analysis_tag.color }}; border:1px solid {{ p.analysis_tag.color }}44;">{{ p.analysis_tag.label }}</span>
+                                        {% endif %}
+                                    </td>
                                     <td style="text-align: center; font-weight: 600;">{{ p.k }}/{{ p.d }}/{{ p.a }}</td>
                                     <td><div style="font-weight: 800;">{{ p.dmg_str }}</div><div class="bar-container"><div class="bar-fill" style="width: {{ p.dmg_percent }}%; background-color: {% if p.puuid == searched_puuid %}{% if p.win %}var(--win-color){% else %}var(--lose-color){% endif %}{% else %}var(--text-muted){% endif %};"></div></div></td>
                                     <td><div style="font-weight: 800;">{{ p.cs }} <span style="font-size:10px; color:var(--text-muted);">({{ p.cspm }})</span></div><div class="bar-container"><div class="bar-fill" style="width: {{ p.cspm_percent }}%; background-color: var(--cs-color);"></div></div></td>
@@ -283,7 +313,14 @@
                                 {% for p in match.red_team %}
                                 <tr class="{% if p.puuid == searched_puuid %}main-user-row{% endif %}">
                                     <td style="width: 25px;"><a href="/champion/{{ p.champ_img }}" title="{{ p.champ_kr }} 메타 보기" style="display:block;"><img src="https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/champion/{{ p.champ_img }}.png" style="width: 24px; border-radius: 50%; transition:0.15s;" onmouseover="this.style.opacity='0.7'" onmouseout="this.style.opacity='1'"></a></td>
-                                    <td style="width: 80px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 80px;">{{ p.name }}</td>
+                                    <td style="max-width: 130px;">
+                                        <a href="/search?name={{ p.name|urlencode }}&tag={{ p.tag or 'KR1' }}" title="{{ p.name }}#{{ p.tag }} 전적 분석 보기" style="text-decoration:none; color:inherit; display:block;" onmouseover="this.style.color='var(--point-color)'" onmouseout="this.style.color='inherit'">
+                                            <div style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis; font-weight:700; font-size:12px;">{{ p.name }}<span style="font-size:10px; color:var(--text-muted); margin-left:2px;">#{{ p.tag }}</span></div>
+                                        </a>
+                                        {% if p.analysis_tag %}
+                                        <span style="display:inline-block; margin-top:3px; font-size:9px; font-weight:800; padding:1px 6px; border-radius:5px; background:{{ p.analysis_tag.color }}1a; color:{{ p.analysis_tag.color }}; border:1px solid {{ p.analysis_tag.color }}44;">{{ p.analysis_tag.label }}</span>
+                                        {% endif %}
+                                    </td>
                                     <td style="text-align: center; font-weight: 600;">{{ p.k }}/{{ p.d }}/{{ p.a }}</td>
                                     <td><div style="font-weight: 800;">{{ p.dmg_str }}</div><div class="bar-container"><div class="bar-fill" style="width: {{ p.dmg_percent }}%; background-color: {% if p.puuid == searched_puuid %}{% if p.win %}var(--win-color){% else %}var(--lose-color){% endif %}{% else %}var(--text-muted){% endif %};"></div></div></td>
                                     <td><div style="font-weight: 800;">{{ p.cs }} <span style="font-size:10px; color:var(--text-muted);">({{ p.cspm }})</span></div><div class="bar-container"><div class="bar-fill" style="width: {{ p.cspm_percent }}%; background-color: var(--cs-color);"></div></div></td>
@@ -416,8 +453,11 @@
 
     {% elif page == 'home' %}
         <!-- ================= 1. 메인 홈 화면 ================= -->
-        <nav class="top-nav" style="background: transparent; border: none;">
+        <nav class="top-nav" style="background: transparent; border: none; justify-content: space-between;">
             <a href="/" class="logo-wrapper"><span class="logo-sb">SB</span>.GG</a>
+            <button type="button" class="feedback-btn" onclick="openFeedback()">
+                <span style="font-size:14px;">💬</span> 고객의 소리
+            </button>
         </nav>
         <div class="home-hero">
             <div class="home-title"><span class="logo-sb">SB</span>.GG</div>
@@ -496,6 +536,42 @@
             </div>
         </div>
 
+        <!-- ================= 고객의 소리 (피드백) 모달 ================= -->
+        <div id="feedbackOverlay" class="feedback-overlay" onclick="if(event.target===this)closeFeedback()">
+            <div class="feedback-modal">
+                <button type="button" class="feedback-close" onclick="closeFeedback()">✕</button>
+                <div style="font-size:20px; font-weight:900; margin-bottom:4px;">💬 고객의 소리</div>
+                <div style="font-size:13px; color:var(--text-muted); margin-bottom:20px;">SB.GG를 더 좋게 만들 의견을 들려주세요. 버그 제보·기능 제안 모두 환영합니다.</div>
+
+                <div id="feedbackForm">
+                    <div style="margin-bottom:14px;">
+                        <label class="fb-label">분류</label>
+                        <div class="fb-cat-group">
+                            <label class="fb-cat"><input type="radio" name="fbCategory" value="기능 제안" checked><span>💡 기능 제안</span></label>
+                            <label class="fb-cat"><input type="radio" name="fbCategory" value="버그 제보"><span>🐞 버그 제보</span></label>
+                            <label class="fb-cat"><input type="radio" name="fbCategory" value="기타"><span>✏️ 기타</span></label>
+                        </div>
+                    </div>
+                    <div style="margin-bottom:14px;">
+                        <label class="fb-label">내용 <span style="color:var(--point-color);">*</span></label>
+                        <textarea id="fbContent" class="fb-input" rows="5" maxlength="2000" placeholder="자유롭게 의견을 작성해주세요. (최대 2000자)"></textarea>
+                    </div>
+                    <div style="margin-bottom:20px;">
+                        <label class="fb-label">연락처 / 답변받을 곳 <span style="font-weight:600; color:var(--text-muted);">(선택)</span></label>
+                        <input type="text" id="fbContact" class="fb-input" placeholder="이메일 또는 디스코드 (회원 기능 도입 전까지 선택사항)">
+                    </div>
+                    <button type="button" class="fb-submit" id="fbSubmitBtn" onclick="submitFeedback()">의견 보내기</button>
+                </div>
+
+                <div id="feedbackSuccess" style="display:none; text-align:center; padding:30px 10px;">
+                    <div style="font-size:42px; margin-bottom:12px;">🙏</div>
+                    <div style="font-size:18px; font-weight:900; margin-bottom:6px;">소중한 의견 감사합니다!</div>
+                    <div style="font-size:13px; color:var(--text-muted);">보내주신 피드백은 서비스 개선에 큰 힘이 됩니다.</div>
+                    <button type="button" class="fb-submit" style="margin-top:24px; max-width:160px;" onclick="closeFeedback()">닫기</button>
+                </div>
+            </div>
+        </div>
+
         <script>
             document.addEventListener("DOMContentLoaded", () => {
                 const recentList = JSON.parse(localStorage.getItem('sbgg_recent') || '[]');
@@ -510,6 +586,47 @@
                 }
             });
             function applySearch(name, tag) { document.getElementById('homeSearchName').value = name; document.getElementById('homeSearchTag').value = tag; document.querySelector('.home-hero form').submit(); }
+
+            // ===== 고객의 소리(피드백) =====
+            function openFeedback() {
+                document.getElementById('feedbackForm').style.display = 'block';
+                document.getElementById('feedbackSuccess').style.display = 'none';
+                document.getElementById('feedbackOverlay').classList.add('open');
+                document.body.style.overflow = 'hidden';
+            }
+            function closeFeedback() {
+                document.getElementById('feedbackOverlay').classList.remove('open');
+                document.body.style.overflow = '';
+            }
+            async function submitFeedback() {
+                const content = document.getElementById('fbContent').value.trim();
+                if (!content) { alert('내용을 입력해주세요.'); document.getElementById('fbContent').focus(); return; }
+                const category = document.querySelector('input[name="fbCategory"]:checked').value;
+                const contact = document.getElementById('fbContact').value.trim();
+                const btn = document.getElementById('fbSubmitBtn');
+                btn.disabled = true; btn.innerText = '전송 중...';
+                try {
+                    const res = await fetch('/feedback', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ category, content, contact })
+                    });
+                    const data = await res.json();
+                    if (data.ok) {
+                        document.getElementById('feedbackForm').style.display = 'none';
+                        document.getElementById('feedbackSuccess').style.display = 'block';
+                        document.getElementById('fbContent').value = '';
+                        document.getElementById('fbContact').value = '';
+                    } else {
+                        alert(data.msg || '전송에 실패했습니다.');
+                    }
+                } catch (e) {
+                    alert('네트워크 오류로 전송에 실패했습니다.');
+                } finally {
+                    btn.disabled = false; btn.innerText = '의견 보내기';
+                }
+            }
+            document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeFeedback(); });
         </script>
 
     {% elif page == 'leaderboard' %}
@@ -988,10 +1105,34 @@
             </div>
             {% endif %}
 
+            {% if repeat_encounters is defined and repeat_encounters %}
+            <div class="glass-panel" style="padding: 24px; margin-top: 24px;">
+                <div style="display:flex; align-items:center; gap:10px; margin-bottom: 6px;">
+                    <div class="section-title" style="margin:0;">🔁 자주 만난 소환사</div>
+                    <span style="font-size:11px; background:rgba(96,165,250,0.15); color:#93c5fd; border:1px solid rgba(96,165,250,0.35); border-radius:6px; padding:2px 8px; font-weight:800;">{{ repeat_encounters|length }}명</span>
+                </div>
+                <div style="font-size:12px; color:var(--text-muted); margin-bottom:18px;">최근 20게임 중 <b style="color:#93c5fd;">2번 이상</b> 같은 판에서 마주친 소환사입니다. (듀오 파트너·단골 상대 추적)</div>
+                <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(220px, 1fr)); gap:10px;">
+                    {% for u in repeat_encounters %}
+                    <a href="/search?name={{ u.name|urlencode }}&tag={{ u.tag or 'KR1' }}" style="text-decoration:none; display:flex; align-items:center; gap:12px; padding:12px 14px; background:rgba(255,255,255,0.025); border:1px solid rgba(255,255,255,0.07); border-radius:12px; transition:0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.06)'; this.style.borderColor='rgba(96,165,250,0.3)'; this.style.transform='translateY(-2px)'" onmouseout="this.style.background='rgba(255,255,255,0.025)'; this.style.borderColor='rgba(255,255,255,0.07)'; this.style.transform='translateY(0)'">
+                        <img src="https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/champion/{{ u.champ_img }}.png" title="{{ u.champ_kr }}" style="width:42px; height:42px; border-radius:12px; border:2px solid rgba(255,255,255,0.12); flex-shrink:0;">
+                        <div style="min-width:0; flex:1;">
+                            <div style="font-size:13px; font-weight:800; color:white; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ u.name }}<span style="font-size:10px; color:var(--text-muted); font-weight:600;"> #{{ u.tag }}</span></div>
+                            <div style="display:flex; align-items:center; gap:6px; margin-top:4px;">
+                                <span style="font-size:10px; font-weight:900; color:#fbbf24;">{{ u.count }}번 만남</span>
+                                <span style="font-size:10px; font-weight:800; padding:1px 6px; border-radius:5px; color:{{ u.rel_color }}; background:{{ u.rel_color }}1a; border:1px solid {{ u.rel_color }}44;">{{ u.rel_label }}</span>
+                            </div>
+                        </div>
+                    </a>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
             <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 24px; margin-bottom: 12px;">
                 <div class="section-title" style="margin: 0;">최근 전적</div>
             </div>
-            
+
             <div id="dynamic-champ-filters" class="champ-filter-container" style="display: none;"></div>
 
             <div id="match-list-container">

@@ -4,7 +4,7 @@ import hashlib
 import sqlite3
 import json
 import time
-from flask import Flask, render_template, request, redirect
+from flask import Flask, render_template, request, redirect, jsonify
 import requests
 from dotenv import load_dotenv
 from collections import Counter
@@ -41,6 +41,17 @@ def init_db():
             cache_key TEXT PRIMARY KEY,
             json_data TEXT,
             updated_at INTEGER
+        )
+    ''')
+    # 고객의 소리(피드백) 테이블 — 추후 회원 기능 대비 user_ref 컬럼 포함
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS feedback (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            category TEXT,
+            content TEXT NOT NULL,
+            contact TEXT,
+            user_ref TEXT,
+            created_at INTEGER
         )
     ''')
     conn.commit()
@@ -233,13 +244,14 @@ def get_match_details(puuid, start=0, count=20, queue=None):
     url += f"&queue={queue}" if queue and queue != 'all' else "&type=ranked"
         
     response = riot_get(url)
-    if response.status_code != 200: return [], None, None, None, 0, [], {}, [], puuid, 0, [], 0, 0, "Teemo"
+    if response.status_code != 200: return [], None, None, None, 0, [], {}, [], puuid, 0, [], 0, 0, "Teemo", []
 
     match_ids = response.json()
     matches, role_stats = [], {}
     overall_stats = {"combat": 0, "growth": 0, "vision": 0, "survival": 0, "objectives": 0, "join": 0}
     total_k, total_d, total_a, total_vision, total_kp, win_count, lose_count = 0, 0, 0, 0, 0, 0, 0
     recent_champ_stats = {}
+    coplayer_tracker = {}  # ★ 과거 매칭 추적: 최근 N판 동반 플레이어 누적
 
     for m_id in match_ids:
         try:  # ✅ 버그 수정 3: 매치 1개 실패해도 나머지 계속 처리
@@ -284,10 +296,13 @@ def get_match_details(puuid, start=0, count=20, queue=None):
                 items = [p.get(f'item{i}', 0) for i in range(7)]
 
                 participants_details.append({
-                    'puuid': p['puuid'], 'name': p.get('riotIdGameName', 'Unknown'), 'champ_img': champ_en,
+                    'puuid': p['puuid'], 'name': p.get('riotIdGameName', 'Unknown'),
+                    'tag': p.get('riotIdTagline', ''), 'champ_img': champ_en,
                     'champ_kr': CHAMP_KR_MAP.get(champ_en, champ_en),
                     'teamId': p['teamId'], 'win': p['win'], 'role_en': p.get('teamPosition', ''),
                     'k': k, 'd': d, 'a': a, 'dmg': dmg, 'dmg_str': dmg_str, 'cs': cs, 'cspm': cspm,
+                    'kda': round((k + a) / max(1, d), 2),
+                    'kp': round(p.get('challenges', {}).get('killParticipation', 0) * 100),
                     'score': op_score, 'spell1': spell1, 'spell2': spell2, 'rune1': rune1, 'rune2': rune2, 'item_list': items
                 })
 
@@ -344,6 +359,7 @@ def get_match_details(puuid, start=0, count=20, queue=None):
             for i, p in enumerate(participants_details):
                 p['dmg_percent'] = round((p['dmg'] / max_damage) * 100) if max_damage else 0
                 p['cspm_percent'] = round((p['cspm'] / max_cspm) * 100) if max_cspm else 0
+                p['analysis_tag'] = calc_player_tag(p)
 
                 if p['win'] and not win_mvp: p['badge'], p['badge_class'] = "MVP", "badge-mvp"; win_mvp = True
                 elif not p['win'] and not lose_ace: p['badge'], p['badge_class'] = "ACE", "badge-ace"; lose_ace = True
@@ -377,6 +393,25 @@ def get_match_details(puuid, start=0, count=20, queue=None):
             main_player_data['situational_build'] = recommend_situational_build(
                 main_player_data['champ_img'], main_player_data.get('role_en', ''), comp)
 
+            # ★ 과거 매칭 추적: 이 판의 동반 플레이어를 누적 (본인 제외)
+            my_team_id = main_player_data['teamId']
+            for cp in participants_details:
+                if cp['puuid'] == puuid:
+                    continue
+                key = cp['puuid']
+                if key not in coplayer_tracker:
+                    coplayer_tracker[key] = {'name': cp['name'], 'tag': cp['tag'],
+                                             'champ_img': cp['champ_img'], 'champ_kr': cp['champ_kr'],
+                                             'count': 0, 'as_ally': 0, 'as_enemy': 0}
+                ct = coplayer_tracker[key]
+                ct['count'] += 1
+                ct['name'], ct['tag'] = cp['name'], cp['tag']  # 최신 닉네임 갱신
+                ct['champ_img'], ct['champ_kr'] = cp['champ_img'], cp['champ_kr']
+                if cp['teamId'] == my_team_id:
+                    ct['as_ally'] += 1
+                else:
+                    ct['as_enemy'] += 1
+
             matches.append(main_player_data)
 
         except Exception as e:
@@ -408,8 +443,20 @@ def get_match_details(puuid, start=0, count=20, queue=None):
 
     win_rate = round((win_count/game_count)*100) if matches else 0
     most = Counter([m['champ_img'] for m in matches]).most_common(3)
-    
-    return matches, overall_radar, primary_role, secondary_role, win_rate, most, overall_kda, deep_tags, puuid, len(matches), top_recent_champs, win_count, lose_count, banner_champ
+
+    # ★ 과거 매칭 추적: 2회 이상 마주친 동반 플레이어 추출 (자주 만난 순)
+    repeat_encounters = []
+    for info in coplayer_tracker.values():
+        if info['count'] >= 2:
+            if info['as_ally'] >= info['as_enemy']:
+                rel_label, rel_color = "주로 아군", "#60a5fa"
+            else:
+                rel_label, rel_color = "주로 상대", "#f87171"
+            repeat_encounters.append({**info, 'rel_label': rel_label, 'rel_color': rel_color})
+    repeat_encounters.sort(key=lambda x: -x['count'])
+    repeat_encounters = repeat_encounters[:8]
+
+    return matches, overall_radar, primary_role, secondary_role, win_rate, most, overall_kda, deep_tags, puuid, len(matches), top_recent_champs, win_count, lose_count, banner_champ, repeat_encounters
 
 def get_multi_search_summary(name, tag):
     try:
@@ -462,6 +509,40 @@ def calc_game_grade(kda_ratio, kp, cs_per_min, win):
     elif score >= 42: return "B+"
     elif score >= 32: return "B"
     return "C"
+
+def calc_player_tag(p):
+    """스코어보드용 플레이어 1줄 분석 태그. 인게임 성과 기반 자동 판정."""
+    kda = p.get('kda', 0)
+    deaths = p.get('d', 0)
+    dmg_pct = p.get('dmg_percent', 0)
+    kp = p.get('kp', 0)
+    cspm = p.get('cspm', 0)
+    role = p.get('role_en', '')
+
+    # 우선순위 순으로 가장 두드러진 특성 1개 부여
+    if kda >= 6 and dmg_pct >= 70:
+        return {"label": "하드 캐리", "color": "#fbbf24"}
+    if dmg_pct >= 85:
+        return {"label": "딜링 1위", "color": "#f472b6"}
+    if deaths >= 10:
+        return {"label": "휘청임", "color": "#f87171"}
+    if kda >= 5:
+        return {"label": "고효율", "color": "#4ade80"}
+    if role == 'UTILITY' and kp >= 60:
+        return {"label": "교전 설계", "color": "#a78bfa"}
+    if role in ('BOTTOM', 'MIDDLE') and dmg_pct >= 60:
+        return {"label": "주력 딜러", "color": "#f472b6"}
+    if role == 'TOP' and deaths <= 4 and kda >= 2:
+        return {"label": "단단함", "color": "#60a5fa"}
+    if cspm >= 8.5:
+        return {"label": "파밍왕", "color": "#60a5fa"}
+    if kp >= 70:
+        return {"label": "교전 집중", "color": "#4ade80"}
+    if kda >= 3:
+        return {"label": "안정적", "color": "#94a3b8"}
+    if kp < 35:
+        return {"label": "이탈 잦음", "color": "#f87171"}
+    return {"label": "무난함", "color": "#94a3b8"}
 
 GRADE_STYLE = {
     "S+": {"color": "#fbbf24", "bg": "rgba(251,191,36,0.2)", "border": "rgba(251,191,36,0.5)"},
@@ -976,7 +1057,7 @@ def search():
     live_game = get_live_game(searched_puuid)
     masteries = get_mastery(searched_puuid)
     
-    matches, overall_radar, primary_role, secondary_role, win, most, overall_kda, deep_tags, _, game_count, top_recent_champs, win_count, lose_count, banner_champ = get_match_details(searched_puuid, 0, 20, queue)
+    matches, overall_radar, primary_role, secondary_role, win, most, overall_kda, deep_tags, _, game_count, top_recent_champs, win_count, lose_count, banner_champ, repeat_encounters = get_match_details(searched_puuid, 0, 20, queue)
     improvement_tips = generate_improvement_tips(matches, overall_kda, overall_radar)
     champion_recs = recommend_champions(overall_radar)
 
@@ -1008,6 +1089,7 @@ def search():
         "improvement_tips": improvement_tips, "champion_recs": champion_recs,
         "grade_dist": grade_dist, "grade_style_map": GRADE_STYLE,
         "streak_count": streak_count, "streak_type": streak_type,
+        "repeat_encounters": repeat_encounters,
     }
 
     # 3. 새로운 데이터를 DB에 JSON 문자열 형태로 저장/갱신
@@ -1044,9 +1126,37 @@ def spectate():
 def more_matches():
     puuid = request.args.get('puuid')
     start = int(request.args.get('start', 20))
-    queue = request.args.get('queue', 'all') 
-    matches, _, _, _, _, _, _, _, _, _, _, _, _, _ = get_match_details(puuid, start, 20, queue)
+    queue = request.args.get('queue', 'all')
+    matches, _, _, _, _, _, _, _, _, _, _, _, _, _, _ = get_match_details(puuid, start, 20, queue)
     return render_template('index.html', page='search', matches=matches, ajax=True, searched_puuid=puuid, latest_version=LATEST_VERSION)
+
+@app.route('/feedback', methods=['POST'])
+def feedback():
+    """고객의 소리 접수. JSON 또는 폼 데이터 모두 허용."""
+    data = request.get_json(silent=True) or request.form
+    content = (data.get('content') or '').strip()
+    category = (data.get('category') or '기타').strip()
+    contact = (data.get('contact') or '').strip()
+    user_ref = (data.get('user_ref') or '').strip()  # 추후 회원 식별자 연동
+
+    if not content:
+        return jsonify({"ok": False, "msg": "내용을 입력해주세요."}), 400
+    if len(content) > 2000:
+        content = content[:2000]
+
+    try:
+        conn = sqlite3.connect(DB_FILE)
+        conn.execute(
+            "INSERT INTO feedback (category, content, contact, user_ref, created_at) VALUES (?, ?, ?, ?, ?)",
+            (category, content, contact, user_ref, int(time.time()))
+        )
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"피드백 저장 에러: {e}")
+        return jsonify({"ok": False, "msg": "저장 중 오류가 발생했습니다."}), 500
+
+    return jsonify({"ok": True, "msg": "소중한 의견 감사합니다!"})
 
 if __name__ == '__main__': 
     app.run(debug=True, port=5000)
