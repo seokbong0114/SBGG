@@ -1,0 +1,1408 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SB.GG - 프리미엄 롤 전적 분석</title>
+    <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@400;600;800;900&family=Montserrat:wght@800;900&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --bg-base: #0f172a; 
+            --bg-panel: rgba(30, 41, 59, 0.7); 
+            --bg-panel-hover: rgba(51, 65, 85, 0.9);
+            --border-glass: 1px solid rgba(255, 255, 255, 0.1);
+            
+            --text-main: #f8fafc; --text-muted: #94a3b8;
+            
+            --win-color: #3b82f6; --lose-color: #ef4444;
+            --point-color: #f43f5e; --cs-color: #f59e0b;
+        }
+        
+        body { background-color: var(--bg-base); color: var(--text-main); font-family: 'Pretendard', sans-serif; margin: 0; padding: 0; min-height: 100vh; display: flex; flex-direction: column; overflow-x: hidden; }
+
+        .glass-panel { background: var(--bg-panel); border: var(--border-glass); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
+
+        .top-nav { position: sticky; top: 0; z-index: 1000; background-color: rgba(15, 23, 42, 0.75); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); padding: 15px 40px; display: flex; align-items: center; justify-content: space-between; border-bottom: var(--border-glass); transition: 0.3s; }
+        .logo-wrapper { font-family: 'Montserrat', sans-serif; font-size: 28px; text-decoration: none; display: flex; align-items: center; cursor: pointer; color: white; letter-spacing: -1px; z-index: 2; }
+        .logo-sb { background: linear-gradient(135deg, #f43f5e, #8b5cf6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-weight: 900; }
+        
+        .home-search-wrapper { position: relative; max-width: 700px; width: 100%; margin: 0 auto; }
+        .home-search-box { background-color: rgba(255,255,255,0.05); border-radius: 30px; padding: 8px 8px 8px 30px; display: flex; align-items: center; border: var(--border-glass); backdrop-filter: blur(20px); box-shadow: 0 8px 32px rgba(0,0,0,0.5); transition: 0.3s; }
+        .home-search-box:focus-within { box-shadow: 0 8px 32px rgba(244, 63, 94, 0.3); border-color: rgba(244, 63, 94, 0.4); }
+        .home-search-box textarea, .home-search-box input[type="text"] { border: none; outline: none; font-size: 18px; color: white; font-family: 'Pretendard'; font-weight: 800; background: transparent; width: 100%; height: 26px; line-height: 26px; padding: 0; margin-top: 2px; display: block; }
+        .home-search-box input[type="text"]::placeholder { color: rgba(255,255,255,0.35); font-weight: 600; }
+        
+        .nav-search-wrapper { position: absolute; left: 50%; transform: translateX(-50%); z-index: 1; }
+        .nav-search-box { background-color: rgba(255,255,255,0.95); border-radius: 20px; padding: 4px 4px 4px 15px; display: flex; align-items: center; box-shadow: 0 4px 15px rgba(0,0,0,0.3); transition: 0.3s; }
+        .nav-search-box:focus-within { box-shadow: 0 4px 20px rgba(244, 63, 94, 0.4); }
+        .nav-search-box input { border: none; outline: none; font-size: 14px; color: #111; font-family: 'Pretendard'; font-weight: 800; background: transparent; }
+        
+        .search-btn { background: linear-gradient(135deg, #f43f5e, #8b5cf6); border: none; font-weight: 800; color: white; cursor: pointer; transition: 0.2s; white-space: nowrap; border-radius: 16px; }
+        .search-btn:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(244, 63, 94, 0.6); }
+        .search-btn:active { transform: scale(0.95); }
+
+        .home-hero { position: relative; padding: 120px 20px 60px; text-align: center; display: flex; flex-direction: column; align-items: center; overflow: hidden; }
+        .home-hero::before { content: ''; position: absolute; top: -50%; left: 50%; transform: translateX(-50%); width: 800px; height: 800px; background: radial-gradient(circle, rgba(139, 92, 246, 0.15) 0%, rgba(0,0,0,0) 70%); z-index: -1; pointer-events: none; }
+        .home-title { font-family: 'Montserrat'; font-size: 90px; font-weight: 900; margin-bottom: 40px; letter-spacing: -2px; }
+        
+        .recent-chips-container { display: flex; gap: 10px; margin-top: 20px; flex-wrap: wrap; justify-content: center; width: 100%; max-width: 700px; margin-left: auto; margin-right: auto; }
+        .recent-chip { background: rgba(255,255,255,0.05); border: var(--border-glass); padding: 8px 16px; border-radius: 20px; font-size: 13px; color: var(--text-muted); cursor: pointer; transition: 0.2s; font-weight: 600; }
+        .recent-chip:hover { background: rgba(255,255,255,0.1); color: white; border-color: rgba(255,255,255,0.3); }
+
+        .main-container { max-width: 1080px; width: 100%; margin: 30px auto; padding: 0 20px; display: flex; flex-direction: column; gap: 20px; box-sizing: border-box; }
+
+        .role-tabs { display: flex; gap: 10px; margin-bottom: 15px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px; }
+        .role-tab { background: transparent; border: none; color: var(--text-muted); font-size: 16px; font-weight: 800; cursor: pointer; padding: 5px 15px; transition: 0.2s; position: relative; }
+        .role-tab:hover { color: white; }
+        .role-tab.active { color: var(--win-color); }
+        .role-tab.active::after { content: ''; position: absolute; bottom: -11px; left: 0; width: 100%; height: 3px; background: var(--win-color); border-radius: 3px 3px 0 0; }
+        
+        .page-title { font-size: 28px; font-weight: 900; margin-bottom: 10px; display: flex; align-items: center; gap: 10px; }
+        .quick-menu-list { display: flex; flex-direction: column; gap: 10px; }
+        .quick-menu-item { background: rgba(255,255,255,0.02); border: var(--border-glass); padding: 15px 20px; border-radius: 12px; display: flex; justify-content: space-between; align-items: center; cursor: pointer; transition: 0.2s; text-decoration: none; }
+        .quick-menu-item:hover { background: rgba(255,255,255,0.08); transform: translateX(5px); }
+        .quick-menu-item b { font-size: 15px; color: white; }
+        .quick-menu-item span { font-size: 12px; color: var(--point-color); font-weight: 800; }
+
+        /* 💡 수정 1: 프로필 배너 높이 확장 및 얼굴 포커싱, 반복 금지 적용 */
+        .profile-banner { position: relative; width: 100%; height: 360px; display: flex; align-items: flex-end; padding-bottom: 40px; background-size: cover; background-repeat: no-repeat; background-position: center 15%; border-bottom: none; }
+        .profile-banner::before { content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: linear-gradient(to bottom, rgba(15,23,42,0) 0%, rgba(15,23,42,1) 100%); }
+        .profile-content { position: relative; z-index: 1; max-width: 1080px; width: 100%; margin: 0 auto; padding: 0 20px; display: flex; gap: 30px; align-items: flex-end; }
+        
+        .profile-icon-wrap { position: relative; display: inline-block; width: 120px; height: 120px; flex-shrink: 0; }
+        .profile-icon { width: 100%; height: 100%; border-radius: 28px; border: 2px solid rgba(255,255,255,0.15); box-shadow: 0 15px 30px rgba(0,0,0,0.6); object-fit: cover; }
+        .level-badge { position: absolute; bottom: -14px; left: 50%; transform: translateX(-50%); background: #0f172a; border: 1px solid rgba(255,255,255,0.15); border-radius: 12px; padding: 4px 14px; font-size: 13px; font-weight: 800; color: white; white-space: nowrap; z-index: 2; box-shadow: 0 4px 10px rgba(0,0,0,0.5); }
+        
+        .tier-icon { width: 55px; height: 55px; margin-right: 10px; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.5)); }
+        
+        .live-badge { background: rgba(34, 197, 94, 0.2); color: #4ade80; border: 1px solid rgba(34, 197, 94, 0.4); padding: 4px 10px; border-radius: 20px; font-size: 13px; font-weight: 800; display: inline-flex; align-items: center; gap: 6px; margin-left: 15px; animation: pulse 2s infinite; vertical-align: middle; }
+        @keyframes pulse { 0% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0.4); } 70% { box-shadow: 0 0 0 6px rgba(34, 197, 94, 0); } 100% { box-shadow: 0 0 0 0 rgba(34, 197, 94, 0); } }
+        .live-dot { width: 8px; height: 8px; background: #4ade80; border-radius: 50%; }
+
+        .deep-tag { display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 16px; font-size: 13px; font-weight: 800; letter-spacing: 0.5px; box-shadow: 0 4px 10px rgba(0,0,0,0.3); backdrop-filter: blur(5px); }
+
+        .dashboard-wrapper { display: flex; flex-direction: column; }
+        .queue-filter { display: flex; gap: 4px; margin-bottom: -1px; padding-left: 20px; position: relative; z-index: 5; }
+        .queue-btn { background: rgba(255, 255, 255, 0.03); color: var(--text-muted); padding: 12px 24px; border-radius: 12px 12px 0 0; text-decoration: none; font-weight: 800; font-size: 14px; transition: 0.2s; border: var(--border-glass); border-bottom: none; }
+        .queue-btn:hover { background: rgba(255, 255, 255, 0.08); color: white; }
+        .queue-btn.active { background: rgba(30, 41, 59, 0.8); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); color: white; padding-bottom: 13px; border-top: 2px solid var(--win-color); border-bottom: 1px solid transparent; }
+        
+        .summary-dashboard { background: rgba(30, 41, 59, 0.8); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border-radius: 16px; border-top-left-radius: 0; border: var(--border-glass); display: flex; overflow: hidden; position: relative; z-index: 1; }
+
+        .radar-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-top: 5px; margin-bottom: 20px; }
+        .radar-card { background: var(--bg-panel); border-radius: 16px; padding: 20px; border: var(--border-glass); text-align: center; }
+
+        .section-title { font-size: 16px; font-weight: 900; color: white; margin-bottom: 12px; padding-left: 5px; letter-spacing: -0.5px; display: flex; align-items: center; gap: 8px; }
+        .section-title::before { content: ''; display: inline-block; width: 4px; height: 16px; background: var(--point-color); border-radius: 2px; }
+
+        .champ-filter-container { display: flex; gap: 8px; margin-bottom: 15px; flex-wrap: wrap; background: var(--bg-panel); padding: 12px 20px; border-radius: 16px; border: var(--border-glass); align-items: center; box-shadow: 0 4px 20px rgba(0,0,0,0.2); }
+        .champ-filter-label { font-size: 13px; font-weight: 800; color: var(--text-muted); margin-right: 5px; }
+        .champ-filter-btn { background: rgba(255,255,255,0.03); border: var(--border-glass); border-radius: 20px; padding: 5px 12px; display: flex; align-items: center; gap: 6px; cursor: pointer; transition: 0.2s; color: var(--text-muted); font-family: 'Pretendard'; font-size: 13px; font-weight: 800; outline: none; }
+        .champ-filter-btn img { width: 22px; height: 22px; border-radius: 50%; }
+        .champ-filter-btn .cnt { background: rgba(255,255,255,0.1); padding: 2px 6px; border-radius: 10px; font-size: 11px; }
+        .champ-filter-btn:hover { background: rgba(255,255,255,0.1); color: white; }
+        .champ-filter-btn.active { background: var(--win-color); color: white; border-color: var(--win-color); }
+        .champ-filter-btn.active .cnt { background: rgba(0,0,0,0.2); }
+
+        .match-card { background: var(--bg-panel); border-radius: 16px; display: grid; grid-template-columns: 100px 130px 120px 140px 1fr 100px; gap: 15px; align-items: center; padding: 14px 20px; margin-bottom: 8px; transition: 0.2s; border: 1px solid transparent; position: relative; overflow: hidden; }
+        .match-card:hover { transform: translateY(-2px); box-shadow: 0 10px 20px rgba(0,0,0,0.4); }
+        .match-card.win { border-left: 4px solid var(--win-color); background: linear-gradient(90deg, rgba(59, 130, 246, 0.08) 0%, var(--bg-panel) 50%); border-top: 1px solid rgba(59, 130, 246, 0.2); }
+        .match-card.lose { border-left: 4px solid var(--lose-color); background: linear-gradient(90deg, rgba(239, 68, 68, 0.08) 0%, var(--bg-panel) 50%); border-top: 1px solid rgba(239, 68, 68, 0.2); }
+
+        .badge-pill { padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 800; display: inline-block; text-align: center; min-width: 50px; letter-spacing: 0.5px; }
+        .badge-mvp { background: rgba(245, 158, 11, 0.2); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.5); }
+        .badge-ace { background: rgba(139, 92, 246, 0.2); color: #c4b5fd; border: 1px solid rgba(139, 92, 246, 0.5); }
+        .badge-normal { background: rgba(255,255,255,0.05); color: var(--text-muted); border: var(--border-glass); }
+        
+        .luck-carry { background: rgba(244, 63, 94, 0.15); color: #fda4af; border: 1px solid rgba(244, 63, 94, 0.4); }
+        .luck-good { background: rgba(59, 130, 246, 0.15); color: #93c5fd; border: 1px solid rgba(59, 130, 246, 0.4); }
+        .luck-bad { background: rgba(168, 85, 247, 0.15); color: #d8b4fe; border: 1px solid rgba(168, 85, 247, 0.4); }
+        .luck-normal { background: rgba(255,255,255,0.03); color: var(--text-muted); border: var(--border-glass); }
+
+        details { background: rgba(0,0,0,0.3); border-radius: 12px; margin-bottom: 15px; border: var(--border-glass); overflow: hidden; }
+        summary { cursor: pointer; padding: 12px; font-size: 13px; color: var(--text-muted); text-align: center; list-style: none; transition: 0.2s; font-weight: 800; background: rgba(255,255,255,0.02); outline: none; display: flex; justify-content: center; align-items: center; gap: 8px; }
+        summary::-webkit-details-marker { display: none; }
+        summary:hover { background: rgba(255,255,255,0.06); color: white; }
+        .summary-icon { display: inline-block; transition: transform 0.3s ease; }
+        details[open] .summary-icon { transform: rotate(180deg); }
+        
+        .scoreboard-container { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; padding: 15px; }
+        
+        .team-box { border-radius: 12px; padding: 15px; border: var(--border-glass); box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
+        .blue-team-box { background: linear-gradient(180deg, rgba(59, 130, 246, 0.08) 0%, rgba(15, 23, 42, 0.4) 100%); border-top: 4px solid var(--win-color); }
+        .red-team-box { background: linear-gradient(180deg, rgba(239, 68, 68, 0.08) 0%, rgba(15, 23, 42, 0.4) 100%); border-top: 4px solid var(--lose-color); }
+        
+        .score-table { width: 100%; border-collapse: collapse; font-size: 12px; text-align: left; }
+        .score-table th { padding: 10px 5px; color: var(--text-muted); font-weight: 800; border-bottom: var(--border-glass); }
+        .score-table td { padding: 8px 5px; border-bottom: 1px solid rgba(255,255,255,0.02); vertical-align: middle; }
+        .main-user-row { background: rgba(255,255,255,0.08); font-weight: bold; border-radius: 8px; }
+        
+        .bar-container { width: 50px; height: 6px; background: rgba(0,0,0,0.6); border-radius: 3px; margin-top: 5px; overflow: hidden; }
+        .bar-fill { height: 100%; border-radius: 3px; }
+
+        .btn-load-more { width: 100%; background: var(--bg-panel); color: white; border: var(--border-glass); padding: 16px; border-radius: 16px; font-size: 15px; font-weight: 800; cursor: pointer; transition: 0.3s; margin-top: 10px; margin-bottom: 50px; backdrop-filter: blur(10px); }
+        .btn-load-more:hover { background: rgba(255,255,255,0.1); transform: translateY(-2px); }
+
+        .scroll-top-btn { position: fixed; bottom: 40px; right: 40px; width: 55px; height: 55px; background: linear-gradient(135deg, #f43f5e, #8b5cf6); color: white; border: none; border-radius: 50%; font-size: 20px; font-weight: bold; cursor: pointer; display: none; box-shadow: 0 4px 15px rgba(0,0,0,0.5); transition: 0.3s; z-index: 1000; }
+        .scroll-top-btn:hover { transform: translateY(-5px); box-shadow: 0 6px 20px rgba(244, 63, 94, 0.6); }
+
+        .multi-card { background: var(--bg-panel); border: var(--border-glass); border-radius: 16px; padding: 20px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 10px; transition: 0.3s; text-decoration: none; color: white; position: relative; overflow: hidden; }
+        .multi-card:hover { transform: translateY(-5px); box-shadow: 0 10px 30px rgba(0,0,0,0.4); background: var(--bg-panel-hover); }
+        .multi-glow { position: absolute; top: -50%; left: -50%; width: 200%; height: 200%; background: radial-gradient(circle, var(--win-glow) 0%, transparent 60%); z-index: 0; pointer-events: none; opacity: 0.5; }
+        .multi-card.bad .multi-glow { background: radial-gradient(circle, var(--lose-glow) 0%, transparent 60%); }
+        
+        .cache-notice { background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.3); padding: 8px 20px; border-radius: 12px; font-size: 13px; font-weight: 800; color: #34d399; display: flex; align-items: center; gap: 8px; margin-bottom: -5px; animation: fadeIn 0.4s ease; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body>
+
+    {% if ajax %}
+        <!-- AJAX 전적 더보기 렌더링 블록 -->
+        {% for match in matches %}
+        <div class="match-item-wrapper" data-champ="{{ match.champ_img }}" data-champ-kr="{{ match.championName_kr }}">
+            <div class="match-card {% if match.win %}win{% else %}lose{% endif %}">
+                <div style="display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: var(--text-muted); font-weight: 600;">
+                    <b style="color:white; font-size:13px;">{{ match.game_type }}</b>
+                    <div style="display:flex; align-items:center; gap:5px;">
+                        <span>{{ match.championName_kr }}</span>
+                        <a href="/champion/{{ match.champ_img }}" title="{{ match.championName_kr }} 메타 분석" style="font-size:10px; background:rgba(244,63,94,0.15); color:var(--point-color); border:1px solid rgba(244,63,94,0.3); border-radius:5px; padding:1px 5px; text-decoration:none; font-weight:800; flex-shrink:0;">메타</a>
+                    </div>
+                    {% if match.grade %}
+                    <span style="display:inline-block; padding:3px 10px; border-radius:8px; font-size:15px; font-weight:900; letter-spacing:1px; background:{{ match.grade_style.bg }}; color:{{ match.grade_style.color }}; border:1px solid {{ match.grade_style.border }};">{{ match.grade }}</span>
+                    {% endif %}
+                </div>
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <a href="/champion/{{ match.champ_img }}" title="{{ match.championName_kr }} 메타 분석 보기" style="display:block; position:relative; flex-shrink:0;">
+                        <img src="https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/champion/{{ match.champ_img }}.png" style="width: 55px; height: 55px; border-radius: 50%; box-shadow: 0 4px 10px rgba(0,0,0,0.5); transition:0.2s;" onmouseover="this.style.opacity='0.75'; this.style.transform='scale(1.05)'" onmouseout="this.style.opacity='1'; this.style.transform='scale(1)'">
+                    </a>
+                    <div style="display: flex; flex-direction: column; gap: 3px;">
+                        <img src="https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/spell/{{ match.spell1 }}.png" style="width: 26px; height: 26px; border-radius: 6px;">
+                        <img src="https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/spell/{{ match.spell2 }}.png" style="width: 26px; height: 26px; border-radius: 6px;">
+                    </div>
+                    <div style="display: flex; flex-direction: column; gap: 3px;">
+                        <img src="https://ddragon.leagueoflegends.com/cdn/img/{{ match.rune1 }}" style="width: 26px; height: 26px; border-radius: 50%; background: #000; padding: 1px;" onerror="this.style.display='none'">
+                        <img src="https://ddragon.leagueoflegends.com/cdn/img/{{ match.rune2 }}" style="width: 26px; height: 26px; border-radius: 50%; background: #000; padding: 1px;" onerror="this.style.display='none'">
+                    </div>
+                </div>
+                
+                <div style="display: flex; flex-direction: column; align-items: center; justify-content: center;">
+                    <div style="font-size: 18px; font-weight: 900; letter-spacing: 0.5px;">{{ match.k }} <span style="color:var(--text-muted); font-weight:600;">/</span> <span style="color:var(--point-color)">{{ match.d }}</span> <span style="color:var(--text-muted); font-weight:600;">/</span> {{ match.a }}</div>
+                    <div style="font-size: 13px; color: var(--text-muted); margin-top: 5px; font-weight: 600;">{{ match.kda_ratio }}:1 평점</div>
+                </div>
+                
+                <div style="display: flex; align-items: center; justify-content: flex-start; gap: 4px;">
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px;">
+                        {% for i in range(6) %}
+                            <div style="width: 24px; height: 24px; background: rgba(0,0,0,0.6); border-radius: 6px; overflow: hidden; border: 1px solid rgba(255,255,255,0.05);">
+                                {% if match.item_list[i] != 0 %}<img src="https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/item/{{ match.item_list[i] }}.png" style="width:100%; height:100%; object-fit:cover;" onerror="this.style.display='none'">{% endif %}
+                            </div>
+                        {% endfor %}
+                    </div>
+                    <div style="width: 24px; height: 24px; border-radius: 50%; background: rgba(0,0,0,0.6); overflow: hidden; border: 1px solid rgba(255,255,255,0.05);">
+                        {% if match.item_list[6] != 0 %}<img src="https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/item/{{ match.item_list[6] }}.png" style="width:100%; height:100%; object-fit:cover;" onerror="this.style.display='none'">{% endif %}
+                    </div>
+                </div>
+                
+                <div style="display: flex; flex-direction: column; gap: 5px; font-size: 12px; color: var(--text-muted); border-left: 1px solid rgba(255,255,255,0.05); padding-left: 15px;">
+                    <div>킬 관여 <b style="color:white">{{ match.kp }}%</b></div>
+                    <div>CS <b style="color:white">{{ match.cs }}</b> <span style="font-size:11px;">({{ match.cs_per_min }})</span></div>
+                    <div style="color: #fbbf24; font-weight: 800; margin-top:4px;">{{ match.feedback }}</div>
+                </div>
+                <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 8px;">
+                    <div style="font-size: 16px; font-weight: 900; color: {% if match.win %}var(--win-color){% else %}var(--lose-color){% endif %}; margin-bottom: 2px;">{% if match.win %}승리{% else %}패배{% endif %}</div>
+                    <div class="badge-pill {{ match.main_badge_class }}">{{ match.main_badge }}</div>
+                    <div class="badge-pill {{ match.team_luck_class }}">{{ match.team_luck }}</div>
+                </div>
+            </div>
+            
+            <details>
+                <summary><span class="summary-icon">▼</span> 팀 상세 스코어보드 열기</summary>
+                <div class="scoreboard-container">
+                    <div class="team-box blue-team-box">
+                        <table class="score-table">
+                            <thead><tr><th colspan="2" style="padding-bottom: 15px;"><span style="background: rgba(59, 130, 246, 0.2); color: #93c5fd; padding: 6px 12px; border-radius: 8px; font-size: 13px; font-weight: 900; border: 1px solid rgba(59, 130, 246, 0.4); letter-spacing: 0.5px;">🟦 블루 팀</span></th><th style="text-align:center">KDA</th><th>피해량</th><th>CS</th><th>아이템</th></tr></thead>
+                            <tbody>
+                                {% for p in match.blue_team %}
+                                <tr class="{% if p.puuid == searched_puuid %}main-user-row{% endif %}">
+                                    <td style="width: 25px;"><a href="/champion/{{ p.champ_img }}" title="{{ p.champ_img }} 메타 보기" style="display:block;"><img src="https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/champion/{{ p.champ_img }}.png" style="width: 22px; border-radius: 50%; transition:0.15s;" onmouseover="this.style.opacity='0.7'" onmouseout="this.style.opacity='1'"></a></td>
+                                    <td style="width: 80px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 80px;">{{ p.name }}</td>
+                                    <td style="text-align: center; font-weight: 600;">{{ p.k }}/{{ p.d }}/{{ p.a }}</td>
+                                    <td><div style="font-weight: 800;">{{ p.dmg_str }}</div><div class="bar-container"><div class="bar-fill" style="width: {{ p.dmg_percent }}%; background-color: {% if p.puuid == searched_puuid %}{% if p.win %}var(--win-color){% else %}var(--lose-color){% endif %}{% else %}var(--text-muted){% endif %};"></div></div></td>
+                                    <td><div style="font-weight: 800;">{{ p.cs }} <span style="font-size:10px; color:var(--text-muted);">({{ p.cspm }})</span></div><div class="bar-container"><div class="bar-fill" style="width: {{ p.cspm_percent }}%; background-color: var(--cs-color);"></div></div></td>
+                                    <td>
+                                        <div style="display: flex; align-items: center; gap: 4px;">
+                                            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px;">
+                                                {% for i in range(6) %}<div style="width:18px; height:18px; background:rgba(0,0,0,0.6); border-radius:4px; overflow:hidden;">{% if p.item_list[i] != 0 %}<img src="https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/item/{{ p.item_list[i] }}.png" style="width:100%" onerror="this.style.display='none'">{% endif %}</div>{% endfor %}
+                                            </div>
+                                            <div style="width:18px; height:18px; background:rgba(0,0,0,0.6); border-radius:50%; overflow:hidden;">{% if p.item_list[6] != 0 %}<img src="https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/item/{{ p.item_list[6] }}.png" style="width:100%" onerror="this.style.display='none'">{% endif %}</div>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="team-box red-team-box">
+                        <table class="score-table">
+                            <thead><tr><th colspan="2" style="padding-bottom: 15px;"><span style="background: rgba(239, 68, 68, 0.2); color: #fca5a5; padding: 6px 12px; border-radius: 8px; font-size: 13px; font-weight: 900; border: 1px solid rgba(239, 68, 68, 0.4); letter-spacing: 0.5px;">🟥 레드 팀</span></th><th style="text-align:center">KDA</th><th>피해량</th><th>CS</th><th>아이템</th></tr></thead>
+                            <tbody>
+                                {% for p in match.red_team %}
+                                <tr class="{% if p.puuid == searched_puuid %}main-user-row{% endif %}">
+                                    <td style="width: 25px;"><a href="/champion/{{ p.champ_img }}" title="{{ p.champ_img }} 메타 보기" style="display:block;"><img src="https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/champion/{{ p.champ_img }}.png" style="width: 24px; border-radius: 50%; transition:0.15s;" onmouseover="this.style.opacity='0.7'" onmouseout="this.style.opacity='1'"></a></td>
+                                    <td style="width: 80px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 80px;">{{ p.name }}</td>
+                                    <td style="text-align: center; font-weight: 600;">{{ p.k }}/{{ p.d }}/{{ p.a }}</td>
+                                    <td><div style="font-weight: 800;">{{ p.dmg_str }}</div><div class="bar-container"><div class="bar-fill" style="width: {{ p.dmg_percent }}%; background-color: {% if p.puuid == searched_puuid %}{% if p.win %}var(--win-color){% else %}var(--lose-color){% endif %}{% else %}var(--text-muted){% endif %};"></div></div></td>
+                                    <td><div style="font-weight: 800;">{{ p.cs }} <span style="font-size:10px; color:var(--text-muted);">({{ p.cspm }})</span></div><div class="bar-container"><div class="bar-fill" style="width: {{ p.cspm_percent }}%; background-color: var(--cs-color);"></div></div></td>
+                                    <td>
+                                        <div style="display: flex; align-items: center; gap: 4px;">
+                                            <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 2px;">
+                                                {% for i in range(6) %}<div style="width:18px; height:18px; background:rgba(0,0,0,0.6); border-radius:4px; overflow:hidden;">{% if p.item_list[i] != 0 %}<img src="https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/item/{{ p.item_list[i] }}.png" style="width:100%" onerror="this.style.display='none'">{% endif %}</div>{% endfor %}
+                                            </div>
+                                            <div style="width:18px; height:18px; background:rgba(0,0,0,0.6); border-radius:50%; overflow:hidden;">{% if p.item_list[6] != 0 %}<img src="https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/item/{{ p.item_list[6] }}.png" style="width:100%" onerror="this.style.display='none'">{% endif %}</div>
+                                        </div>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </details>
+        </div>
+        {% endfor %}
+        
+    {% elif page == 'multi' %}
+        <!-- ================= 멀티 서치 요약 대시보드 ================= -->
+        <nav class="top-nav">
+            <a href="/" class="logo-wrapper"><span class="logo-sb">SB</span>.GG</a>
+            <div class="nav-search-wrapper">
+                <form action="/search" method="get" class="nav-search-box">
+                    <input type="text" name="name" style="width: 150px;" placeholder="소환사명 여러명 가능" required>
+                    <span style="color: #ccc; margin: 0 5px;">#</span>
+                    <input type="text" name="tag" style="width: 50px;" value="KR1">
+                    <button type="submit" class="search-btn" style="padding: 6px 16px; font-size: 13px;">검색</button>
+                </form>
+            </div>
+            <div style="width: 80px;"></div>
+        </nav>
+        <div class="main-container">
+            <div class="page-title" style="margin-top: 40px; margin-bottom: 30px;">
+                👥 팀원 멀티 서치 분석 <span style="font-size: 14px; color: var(--text-muted); font-weight: 600;">(최근 10게임 요약)</span>
+            </div>
+            
+            <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 15px;">
+                {% for user in multi_data %}
+                <a href="/search?name={{ user.name }}&tag={{ user.tag }}" class="multi-card {% if user.win_rate < 40 %}bad{% endif %}">
+                    <div class="multi-glow"></div>
+                    <div style="position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; width: 100%;">
+                        <div style="position: relative; margin-bottom: 15px;">
+                            <img src="https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/profileicon/{{ user.icon }}.png" style="width: 70px; height: 70px; border-radius: 20px; border: 2px solid rgba(255,255,255,0.2);">
+                            <img src="https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/champion/{{ user.most_champ }}.png" style="width: 30px; height: 30px; border-radius: 50%; position: absolute; bottom: -5px; right: -5px; border: 2px solid var(--bg-panel);">
+                        </div>
+                        <div style="font-size: 16px; font-weight: 800; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;">{{ user.name }}</div>
+                        <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 15px;">#{{ user.tag }}</div>
+                        
+                        <div style="font-size: 12px; font-weight: 800; color: {% if user.tier_name != 'unranked' %}var(--win-color){% else %}var(--text-muted){% endif %}; margin-bottom: 20px; text-align: center; height: 30px;">
+                            {{ user.tier_text }}
+                        </div>
+                        
+                        <div style="width: 100%; border-top: var(--border-glass); padding-top: 15px; display: flex; justify-content: space-around; text-align: center;">
+                            <div>
+                                <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 5px;">승률</div>
+                                <b style="font-size: 16px; color: {% if user.win_rate >= 60 %}var(--win-color){% elif user.win_rate < 40 %}var(--lose-color){% else %}white{% endif %};">{{ user.win_rate }}%</b>
+                            </div>
+                            <div>
+                                <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 5px;">KDA</div>
+                                <b style="font-size: 16px;">{{ user.kda }}</b>
+                            </div>
+                        </div>
+                    </div>
+                </a>
+                {% endfor %}
+            </div>
+            
+            <div style="margin-top: 40px; text-align: center;">
+                <a href="/" style="background: rgba(255,255,255,0.1); padding: 12px 30px; border-radius: 20px; color: white; text-decoration: none; font-weight: 800; transition: 0.2s;">새로 검색하기</a>
+            </div>
+        </div>
+
+    {% elif page == 'home' %}
+        <!-- ================= 1. 메인 홈 화면 ================= -->
+        <nav class="top-nav" style="background: transparent; border: none;">
+            <a href="/" class="logo-wrapper"><span class="logo-sb">SB</span>.GG</a>
+        </nav>
+        <div class="home-hero">
+            <div class="home-title"><span class="logo-sb">SB</span>.GG</div>
+            <div class="home-search-wrapper">
+                <form action="/search" method="get" class="home-search-box" id="homeSearchForm">
+                    <input type="text" name="name" placeholder="소환사명 입력 후 Enter  (여러명: 쉼표로 구분)" required id="homeSearchName"
+                           style="border:none; outline:none; font-size:18px; color:white; font-family:'Pretendard'; font-weight:800; background:transparent; width:100%; padding:0;">
+                    <span style="color:rgba(255,255,255,0.25); font-size:18px; margin:0 6px; flex-shrink:0;">#</span>
+                    <input type="text" name="tag" value="KR1" id="homeSearchTag"
+                           style="border:none; outline:none; font-size:16px; color:rgba(255,255,255,0.5); font-family:'Pretendard'; font-weight:800; background:transparent; width:52px; flex-shrink:0; padding:0;">
+                    <button type="submit" class="search-btn" style="font-size:16px; padding:12px 28px; border-radius:20px; margin-left:10px; height:100%; flex-shrink:0; white-space:nowrap;">검색</button>
+                </form>
+            </div>
+            <div class="recent-chips-container" id="recentChips"></div>
+        </div>
+
+        <div class="main-container" style="display: grid; grid-template-columns: 1.5fr 1fr; margin-bottom: 100px;">
+            <div class="glass-panel" style="padding: 25px;">
+                <div style="font-size: 18px; font-weight: 800; margin-bottom: 20px; display: flex; align-items: center; gap: 8px;">
+                    🔥 주목받는 프로게이머 & 네임드 전적
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                    {% for pro in pro_gamers %}
+                    <div style="display: flex; align-items: center; gap: 12px; padding: 15px; border-radius: 12px; background: rgba(255,255,255,0.02); cursor: pointer; transition: 0.2s; border: 1px solid transparent;" onmouseover="this.style.background='rgba(255,255,255,0.05)'; this.style.borderColor='rgba(255,255,255,0.1)'; this.style.transform='translateY(-3px)';" onmouseout="this.style.background='rgba(255,255,255,0.02)'; this.style.borderColor='transparent'; this.style.transform='translateY(0)';" onclick="applySearch('{{ pro.riot_id }}', '{{ pro.tag }}')">
+                        <img src="https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/champion/{{ pro.champ }}.png" style="width: 45px; height: 45px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.1);">
+                        <div style="display: flex; flex-direction: column; flex-grow: 1;">
+                            <div style="display: flex; align-items: center; gap: 6px;">
+                                <span style="background: rgba(244, 63, 94, 0.2); color: #fda4af; padding: 2px 6px; border-radius: 6px; font-size: 10px; font-weight: 800;">{{ pro.team }}</span>
+                                <b style="font-size: 15px; color: white;">{{ pro.name }}</b>
+                            </div>
+                            <span style="font-size: 12px; color: var(--text-muted); margin-top: 3px;">{{ pro.riot_id }} <span style="opacity:0.5">#{{ pro.tag }}</span></span>
+                        </div>
+                        <div style="color: var(--point-color); font-weight: 900; font-size: 18px;">➔</div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div style="display: flex; flex-direction: column; gap: 20px;">
+                <div class="glass-panel" style="padding: 25px;">
+                    <div style="font-size: 18px; font-weight: 800; margin-bottom: 15px;">⭐ 즐겨찾기</div>
+                    <div id="fav-list" style="display: flex; flex-direction: column; gap: 10px;"></div>
+                </div>
+                <div class="glass-panel" style="padding: 25px;">
+                    <div style="font-size: 18px; font-weight: 800; margin-bottom: 15px;">🚀 퀵 메뉴</div>
+                    <div class="quick-menu-list">
+                        <a href="/meta" class="quick-menu-item"><b>📊 메타 분석</b><span>패치 {{ current_patch }} ➔</span></a>
+                        <a href="/leaderboard" class="quick-menu-item"><b>👑 래더 랭킹</b><span>바로가기 ➔</span></a>
+                        <a href="/spectate" class="quick-menu-item"><b>🔴 천상계 관전</b><span>바로가기 ➔</span></a>
+                        <a href="/duo" class="quick-menu-item"><b>🤝 듀오 찾기</b><span>바로가기 ➔</span></a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ★ 패치 메타 위젯 -->
+        <div class="main-container" style="margin-top: -40px; margin-bottom: 60px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
+                <div style="font-size: 18px; font-weight: 900;">⚡ 패치 {{ current_patch }} — 라인별 최강 챔피언</div>
+                <a href="/meta" style="font-size: 13px; color: var(--point-color); font-weight: 800; text-decoration: none;">전체 메타 보기 ➔</a>
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px;">
+                {% for c in meta_top %}
+                <a href="/champion/{{ c.id }}" style="text-decoration: none;">
+                    <div class="glass-panel" style="padding: 18px 14px; text-align: center; cursor: pointer; transition: 0.2s; border: 1px solid transparent;" onmouseover="this.style.borderColor='rgba(255,255,255,0.15)'; this.style.transform='translateY(-4px)';" onmouseout="this.style.borderColor='transparent'; this.style.transform='translateY(0)';">
+                        <div style="font-size: 11px; color: var(--text-muted); font-weight: 800; margin-bottom: 8px;">{{ c.role_kr }}</div>
+                        <img src="https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/champion/{{ c.id }}.png" style="width: 64px; height: 64px; border-radius: 50%; border: 3px solid {{ c.tier_style.color }}; box-shadow: 0 0 16px {{ c.tier_style.border }}; margin-bottom: 10px;">
+                        <div style="font-size: 14px; font-weight: 900; color: white; margin-bottom: 6px;">{{ c.kr }}</div>
+                        <div style="display: flex; justify-content: center; gap: 6px; align-items: center;">
+                            <span style="background: {{ c.tier_style.bg }}; color: {{ c.tier_style.color }}; border: 1px solid {{ c.tier_style.border }}; padding: 2px 10px; border-radius: 10px; font-size: 12px; font-weight: 900;">{{ c.tier }}티어</span>
+                        </div>
+                        <div style="margin-top: 8px; font-size: 12px; color: var(--text-muted);">승률 <b style="color: white;">{{ c.wr }}%</b></div>
+                    </div>
+                </a>
+                {% endfor %}
+            </div>
+        </div>
+
+        <script>
+            document.addEventListener("DOMContentLoaded", () => {
+                const recentList = JSON.parse(localStorage.getItem('sbgg_recent') || '[]');
+                if (recentList.length > 0) document.getElementById('recentChips').innerHTML = recentList.map(s => `<div class="recent-chip" onclick="applySearch('${s.name}', '${s.tag}')">${s.name} <span style="opacity:0.5">#${s.tag}</span></div>`).join('');
+                
+                const favs = JSON.parse(localStorage.getItem('sbgg_favs') || '[]');
+                const favContainer = document.getElementById('fav-list');
+                if(favs.length > 0) {
+                    favContainer.innerHTML = favs.map(f => `<div style="display: flex; align-items: center; gap: 15px; padding: 15px; background: rgba(255,255,255,0.02); border-radius: 12px; cursor: pointer;" onclick="applySearch('${f.name}', '${f.tag}')"><img src="https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/profileicon/${f.icon}.png" style="width: 45px; border-radius: 12px;"><div style="display: flex; flex-direction: column; flex-grow: 1;"><b style="font-size: 16px; color: white;">${f.name}</b><span style="font-size: 13px; color: var(--text-muted);">#${f.tag}</span></div></div>`).join('');
+                } else {
+                    favContainer.innerHTML = '<div style="text-align:center; padding:30px 0; color:var(--text-muted); font-size:13px;">즐겨찾기한 소환사가 없습니다.</div>';
+                }
+            });
+            function applySearch(name, tag) { document.getElementById('homeSearchName').value = name; document.getElementById('homeSearchTag').value = tag; document.querySelector('.home-hero form').submit(); }
+        </script>
+
+    {% elif page == 'leaderboard' %}
+        <!-- ================= 2. 래더 랭킹 화면 ================= -->
+        <nav class="top-nav">
+            <a href="/" class="logo-wrapper"><span class="logo-sb">SB</span>.GG</a>
+            <div class="nav-search-wrapper">
+                <form action="/search" method="get" class="nav-search-box">
+                    <input type="text" name="name" style="width: 150px;" placeholder="소환사명 여러명 가능" required>
+                    <span style="color: #ccc; margin: 0 5px;">#</span>
+                    <input type="text" name="tag" style="width: 50px;" value="KR1">
+                    <button type="submit" class="search-btn" style="padding: 6px 16px; font-size: 13px;">검색</button>
+                </form>
+            </div>
+            <div style="width: 80px;"></div>
+        </nav>
+        <div class="main-container">
+            <div class="page-title">👑 챌린저스 래더 랭킹 <span style="font-size: 14px; color: var(--text-muted); font-weight: 600;">(Top 50 · 솔로랭크)</span>{% if from_cache %}<span style="font-size: 12px; color: var(--text-muted); font-weight: 400; margin-left: 10px;">🗃️ 캐시</span>{% endif %}</div>
+            {% if not leaderboard %}
+            <div class="glass-panel" style="padding: 40px; text-align: center;">
+                <div style="font-size: 18px; font-weight: 800; margin-bottom: 8px;">데이터를 불러올 수 없습니다 😢</div>
+                <div style="font-size: 14px; color: var(--text-muted);">Riot API 오류이거나 개인 API 키 접근 권한 문제일 수 있습니다.</div>
+            </div>
+            {% else %}
+            <div class="glass-panel" style="padding: 30px;">
+                <table style="width: 100%; border-collapse: collapse; text-align: left;">
+                    <thead><tr>
+                        <th style="padding: 15px; color: var(--text-muted); font-size: 13px; font-weight: 800; border-bottom: 1px solid rgba(255,255,255,0.1); width: 80px; text-align: center;">순위</th>
+                        <th style="padding: 15px; color: var(--text-muted); font-size: 13px; font-weight: 800; border-bottom: 1px solid rgba(255,255,255,0.1);">소환사</th>
+                        <th style="padding: 15px; color: var(--text-muted); font-size: 13px; font-weight: 800; border-bottom: 1px solid rgba(255,255,255,0.1); text-align: center;">티어</th>
+                        <th style="padding: 15px; color: var(--text-muted); font-size: 13px; font-weight: 800; border-bottom: 1px solid rgba(255,255,255,0.1); text-align: center;">LP</th>
+                        <th style="padding: 15px; color: var(--text-muted); font-size: 13px; font-weight: 800; border-bottom: 1px solid rgba(255,255,255,0.1); text-align: center;">승률</th>
+                    </tr></thead>
+                    <tbody>
+                        {% for p in leaderboard %}
+                        <tr style="cursor: pointer; transition: 0.2s;" onclick="window.location='/search?name={{ p.name|urlencode }}&tag={{ p.tag }}'" onmouseover="this.style.background='rgba(255,255,255,0.04)'" onmouseout="this.style.background='transparent'">
+                            <td style="padding: 15px; border-bottom: 1px solid rgba(255,255,255,0.02); text-align: center;">
+                                <span style="font-size: 20px; font-weight: 900; font-style: italic; color: {% if p.rank == 1 %}#fbbf24{% elif p.rank == 2 %}#94a3b8{% elif p.rank == 3 %}#b45309{% else %}var(--text-muted){% endif %};">{{ p.rank }}</span>
+                            </td>
+                            <td style="padding: 15px; border-bottom: 1px solid rgba(255,255,255,0.02);">
+                                <b style="font-size: 16px;">{{ p.name }}</b> <span style="font-size: 12px; color: var(--text-muted);">#{{ p.tag }}</span>
+                                {% if p.hotstreak %}<span style="margin-left: 8px; font-size: 11px; background: rgba(239,68,68,0.2); color: #fca5a5; padding: 2px 7px; border-radius: 10px; border: 1px solid rgba(239,68,68,0.4);">🔥 연승</span>{% endif %}
+                                {% if p.veteran %}<span style="margin-left: 4px; font-size: 11px; background: rgba(139,92,246,0.2); color: #c4b5fd; padding: 2px 7px; border-radius: 10px; border: 1px solid rgba(139,92,246,0.4);">🏆 베테랑</span>{% endif %}
+                            </td>
+                            <td style="padding: 15px; border-bottom: 1px solid rgba(255,255,255,0.02); text-align: center;"><span style="background: rgba(239, 68, 68, 0.2); color: #fca5a5; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 800; border: 1px solid rgba(239, 68, 68, 0.4);">Challenger</span></td>
+                            <td style="padding: 15px; border-bottom: 1px solid rgba(255,255,255,0.02); text-align: center; font-weight: 800; color: var(--point-color);">{{ p.lp }}</td>
+                            <td style="padding: 15px; border-bottom: 1px solid rgba(255,255,255,0.02); text-align: center; font-weight: 600; color: white;">{{ p.winrate }}% <span style="font-size: 11px; color: var(--text-muted);">({{ p.win }}승 {{ p.lose }}패)</span></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% endif %}
+        </div>
+
+    {% elif page == 'champions' %}
+        <nav class="top-nav">
+            <a href="/" class="logo-wrapper"><span class="logo-sb">SB</span>.GG</a>
+            <div class="nav-search-wrapper">
+                <form action="/search" method="get" class="nav-search-box">
+                    <input type="text" name="name" style="width: 150px;" placeholder="소환사명 여러명 가능" required>
+                    <span style="color: #ccc; margin: 0 5px;">#</span>
+                    <input type="text" name="tag" style="width: 50px;" value="KR1">
+                    <button type="submit" class="search-btn" style="padding: 6px 16px; font-size: 13px;">검색</button>
+                </form>
+            </div>
+            <div style="width: 80px;"></div>
+        </nav>
+        <div class="main-container">
+            <div class="page-title">🏆 리그 오브 레전드 챔피언 도감 <span style="font-size: 14px; color: var(--text-muted); font-weight: 600;">(v{{ latest_version }})</span></div>
+            <div class="glass-panel" style="padding: 30px; text-align: center;">
+                <div style="font-size: 18px; font-weight: 800; margin-bottom: 10px;">데이터베이스 서버 준비 중 🛠️</div>
+                <div style="font-size: 14px; color: var(--text-muted); margin-bottom: 30px;">정확한 실시간 픽률, 승률, 밴률 통계는 시스템 구축 후 업데이트 될 예정입니다.</div>
+                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 20px;">
+                    {% for c_en, c_kr in all_champs.items() %}
+                    <div style="display: flex; flex-direction: column; align-items: center; gap: 8px;">
+                        <img src="https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/champion/{{ c_en }}.png" style="width: 100%; border-radius: 16px; border: var(--border-glass);">
+                        <span style="font-size: 13px; font-weight: 600; color: white;">{{ c_kr }}</span>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+
+    {% elif page == 'duo' %}
+        <nav class="top-nav">
+            <a href="/" class="logo-wrapper"><span class="logo-sb">SB</span>.GG</a>
+            <div class="nav-search-wrapper">
+                <form action="/search" method="get" class="nav-search-box">
+                    <input type="text" name="name" style="width: 150px;" placeholder="소환사명 여러명 가능" required>
+                    <span style="color: #ccc; margin: 0 5px;">#</span>
+                    <input type="text" name="tag" style="width: 50px;" value="KR1">
+                    <button type="submit" class="search-btn" style="padding: 6px 16px; font-size: 13px;">검색</button>
+                </form>
+            </div>
+            <div style="width: 80px;"></div>
+        </nav>
+        <div class="main-container">
+            <div class="page-title" style="justify-content: space-between;">
+                <div>🤝 듀오 찾기 <span style="font-size: 14px; color: var(--text-muted); font-weight: 600;">실시간 매칭 보드</span></div>
+                <button style="padding: 10px 20px; font-size: 14px; background: var(--win-color); color: white; border: none; border-radius: 8px; font-weight: 800; cursor: pointer;">+ 새 글 작성</button>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 15px;">
+                {% for post in duo_posts %}
+                <div class="glass-panel" style="padding: 20px; display: flex; align-items: center; gap: 20px; cursor: pointer; transition: 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.06)'" onmouseout="this.style.background='var(--bg-panel)'">
+                    <img src="https://opgg-static.akamaized.net/images/medals_new/{{ post.img }}.png" style="width: 70px; height: 70px; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.5));">
+                    <div style="flex-grow: 1;">
+                        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+                            <span style="background: rgba(255,255,255,0.1); color: white; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 800;">{{ post.role }}</span>
+                            <b style="font-size: 18px; color: white;">{{ post.title }}</b>
+                        </div>
+                        <div style="font-size: 14px; color: var(--text-muted); font-weight: 600;">
+                            {{ post.name }} <span style="font-size: 12px; opacity: 0.5;">#{{ post.tag }}</span> • {{ post.tier }}
+                        </div>
+                    </div>
+                    <div style="text-align: right; color: var(--text-muted); font-size: 12px; font-weight: 600;">
+                        {{ post.time }}<br>
+                        <button style="margin-top: 10px; padding: 8px 15px; color:white; background:var(--win-color); border:none; border-radius: 8px; font-weight: 800;">프로필 보기</button>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+
+    {% elif page == 'spectate' %}
+        <nav class="top-nav">
+            <a href="/" class="logo-wrapper"><span class="logo-sb">SB</span>.GG</a>
+            <div class="nav-search-wrapper">
+                <form action="/search" method="get" class="nav-search-box">
+                    <input type="text" name="name" style="width: 150px;" placeholder="소환사명 여러명 가능" required>
+                    <span style="color: #ccc; margin: 0 5px;">#</span>
+                    <input type="text" name="tag" style="width: 50px;" value="KR1">
+                    <button type="submit" class="search-btn" style="padding: 6px 16px; font-size: 13px;">검색</button>
+                </form>
+            </div>
+            <div style="width: 80px;"></div>
+        </nav>
+        <div class="main-container">
+            <div class="page-title">🔴 천상계 라이브 관전
+                <span style="font-size: 14px; color: var(--text-muted); font-weight: 600;">(솔로랭크 KR · 실시간)</span>
+                {% if from_cache %}<span style="font-size: 12px; color: var(--text-muted); font-weight: 400; margin-left: 10px;">🗃️ 캐시</span>{% endif %}
+                <a href="/spectate" style="font-size: 13px; margin-left: 12px; color: var(--point-color); font-weight: 700; text-decoration: none;">↺ 새로고침</a>
+            </div>
+            {% if not spectate_games %}
+            <div class="glass-panel" style="padding: 50px; text-align: center;">
+                <div style="font-size: 40px; margin-bottom: 15px;">🎮</div>
+                <div style="font-size: 18px; font-weight: 800; margin-bottom: 8px;">현재 진행 중인 천상계 게임이 없습니다</div>
+                <div style="font-size: 14px; color: var(--text-muted);">챌린저 상위권 플레이어들이 게임 중이 아닙니다. 잠시 후 새로고침 해보세요.</div>
+            </div>
+            {% else %}
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                {% for game in spectate_games %}
+                <div class="glass-panel" style="padding: 25px; position: relative; overflow: hidden;">
+                    <!-- LIVE 배지 -->
+                    <div style="position: absolute; top: 15px; right: 15px; background: rgba(239,68,68,0.2); color: #fca5a5; padding: 4px 12px; border-radius: 12px; font-size: 11px; font-weight: 800; border: 1px solid rgba(239,68,68,0.4); display: flex; align-items: center; gap: 5px;">
+                        <span style="width:6px; height:6px; background:#ef4444; border-radius:50%; animation: pulse 1.5s infinite;"></span> LIVE
+                    </div>
+                    <!-- 소환사 정보 -->
+                    <div style="margin-bottom: 4px;">
+                        <span style="font-size: 13px; font-weight: 800; color: var(--point-color);">{{ game.tier }}</span>
+                        <span style="font-size: 12px; color: var(--text-muted); margin-left: 8px;">{{ game.lp }}</span>
+                    </div>
+                    <div style="font-size: 16px; font-weight: 900; color: white; margin-bottom: 3px;">{{ game.summoner_name }}</div>
+                    <div style="font-size: 12px; color: var(--text-muted); font-weight: 600; margin-bottom: 18px;">⏱️ {{ game.time }} · {{ game.queue }}</div>
+                    <!-- 5v5 챔피언 -->
+                    <div style="background: rgba(0,0,0,0.3); padding: 15px; border-radius: 14px;">
+                        <!-- 블루팀 -->
+                        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
+                            <span style="font-size: 11px; font-weight: 800; color: var(--win-color); width: 40px; flex-shrink: 0;">블루</span>
+                            <div style="display: flex; gap: 6px;">
+                                {% for champ in game.blue_champs %}
+                                <img src="https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/champion/{{ champ }}.png"
+                                     title="{{ champ }}"
+                                     style="width: 38px; height: 38px; border-radius: 8px; border: 2px solid var(--win-color);">
+                                {% endfor %}
+                            </div>
+                        </div>
+                        <div style="border-top: 1px solid rgba(255,255,255,0.06); margin: 8px 0;"></div>
+                        <!-- 레드팀 -->
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span style="font-size: 11px; font-weight: 800; color: var(--lose-color); width: 40px; flex-shrink: 0;">레드</span>
+                            <div style="display: flex; gap: 6px;">
+                                {% for champ in game.red_champs %}
+                                <img src="https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/champion/{{ champ }}.png"
+                                     title="{{ champ }}"
+                                     style="width: 38px; height: 38px; border-radius: 8px; border: 2px solid var(--lose-color);">
+                                {% endfor %}
+                            </div>
+                        </div>
+                    </div>
+                    <a href="/search?name={{ game.summoner_name|urlencode }}&tag=KR1"
+                       style="display: block; width: 100%; margin-top: 15px; padding: 11px; font-size: 13px; background: rgba(255,255,255,0.08); color: white; border: none; border-radius: 8px; font-weight: 800; cursor: pointer; text-align: center; text-decoration: none; box-sizing: border-box;">
+                        📊 전적 보기 ➔
+                    </a>
+                </div>
+                {% endfor %}
+            </div>
+            {% endif %}
+        </div>
+
+    {% elif page == 'search' %}
+        <!-- ================= 5. 단일 전적 분석창 ================= -->
+        <nav class="top-nav">
+            <a href="/" class="logo-wrapper"><span class="logo-sb">SB</span>.GG</a>
+            
+            <div class="nav-search-wrapper">
+                <form action="/search" method="get" class="nav-search-box">
+                    <input type="text" name="name" style="width: 150px;" placeholder="소환사명 여러명 가능" required>
+                    <span style="color: #ccc; margin: 0 5px;">#</span>
+                    <input type="text" name="tag" style="width: 50px;" value="KR1">
+                    <button type="submit" class="search-btn" style="padding: 6px 16px; font-size: 13px;">검색</button>
+                </form>
+            </div>
+            
+            <div style="width: 80px;"></div>
+        </nav>
+
+        <div class="profile-banner" style="background-image: url('https://ddragon.leagueoflegends.com/cdn/img/champion/splash/{{ banner_champ }}_0.jpg');">
+            <div class="profile-content" style="padding-bottom: 0;">
+                <div class="profile-icon-wrap">
+                    <img class="profile-icon" src="https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/profileicon/{{ profile_icon_id }}.png">
+                    <div class="level-badge">Lv. {{ level }}</div>
+                </div>
+                <div style="padding-bottom: 20px;">
+                    <h1 style="margin:0 0 5px 0; font-size: 36px; font-weight: 900; letter-spacing:-1px; text-shadow: 0 4px 10px rgba(0,0,0,0.5); display: flex; align-items: center;">
+                        {{ name }} <span style="color: rgba(255,255,255,0.5); font-size: 20px; font-weight: 600; margin-left:5px;">#{{ tag }}</span>
+                        {% if live_game.isPlaying %}
+                        <div class="live-badge"><div class="live-dot"></div>현재 게임 중 ({{ live_game.minutes }}분)</div>
+                        {% endif %}
+                        <button id="favBtn" onclick="toggleFavorite('{{ name }}', '{{ tag }}', '{{ profile_icon_id }}', '{{ level }}')" style="background:none; border:none; cursor:pointer; font-size:30px; margin-left:15px; transition:0.2s; padding:0; outline:none;" title="즐겨찾기">☆</button>
+                    </h1>
+                    <div style="display: flex; align-items: center; font-size: 20px; font-weight: 800; text-shadow: 0 2px 5px rgba(0,0,0,0.5);">
+                        {% if tier_name != 'unranked' %}<img src="https://opgg-static.akamaized.net/images/medals_new/{{ tier_name }}.png" class="tier-icon">{% endif %}
+                        {{ tier_text }}
+                    </div>
+                    
+                    <div style="margin-top: 15px; display: flex; flex-direction: column; gap: 8px;">
+                        
+                        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                            {% for dt in deep_tags %}
+                            <div class="deep-tag" style="background: {{ dt.bg }}; color: {{ dt.color }}; border: 1px solid {{ dt.border }};">
+                                {{ dt.icon }} {{ dt.text }}
+                            </div>
+                            {% endfor %}
+                        </div>
+
+                        <div style="display: flex; gap: 10px; margin-top: 5px;">
+                            {% for m in masteries %}
+                            <div style="display: flex; align-items: center; gap: 6px; background: rgba(0,0,0,0.4); padding: 4px 12px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.1); backdrop-filter: blur(5px);">
+                                <img src="https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/champion/{{ m.champ_en }}.png" style="width: 20px; border-radius: 50%;">
+                                <span style="font-size: 13px; color: #fbbf24; font-weight: 800;">{{ m.points }}</span>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+
+        <div class="main-container">
+            {% if from_cache %}
+            <div class="cache-notice">
+                <span>⚡</span> 데이터베이스에 저장된 안전 캐시 데이터를 불러왔습니다. (초고속 로딩 완료)
+            </div>
+            {% endif %}
+
+            <div class="dashboard-wrapper">
+                <div class="queue-filter">
+                    <a href="/search?name={{ name }}&tag={{ tag }}&queue=all" class="queue-btn {% if not queue or queue == 'all' %}active{% endif %}">종합 랭크</a>
+                    <a href="/search?name={{ name }}&tag={{ tag }}&queue=420" class="queue-btn {% if queue == '420' %}active{% endif %}">솔로랭크</a>
+                    <a href="/search?name={{ name }}&tag={{ tag }}&queue=440" class="queue-btn {% if queue == '440' %}active{% endif %}">자유랭크</a>
+                </div>
+
+                {% if game_count > 0 %}
+                <div class="summary-dashboard">
+                    <div style="flex: 1; padding: 30px 25px; display: flex; flex-direction: column; justify-content: center; align-items: center; border-right: var(--border-glass);">
+                        <div style="font-size: 13px; color: var(--text-muted); font-weight:600; margin-bottom: 20px;">최근 {{ game_count }}게임 승률</div>
+                        <div style="position: relative; width: 110px; height: 110px;">
+                            <canvas id="winRateChart"></canvas>
+                            <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 22px; font-weight: 900; color: {% if win_rate >= 50 %}var(--win-color){% else %}var(--lose-color){% endif %};">{{ win_rate }}%</div>
+                        </div>
+                        <div style="font-size: 14px; font-weight: 800; margin-top: 20px;">
+                            <span style="color: var(--win-color);">{{ win_count }}승</span> <span style="color:var(--text-muted); font-weight:400; margin:0 5px;">/</span> <span style="color: var(--lose-color);">{{ lose_count }}패</span>
+                        </div>
+                        {% if streak_count and streak_count >= 2 %}
+                        <div style="margin-top:10px; display:inline-flex; align-items:center; gap:5px; padding:4px 14px; border-radius:20px; font-size:13px; font-weight:900;
+                            background:{% if streak_type == 'win' %}rgba(74,222,128,0.15){% else %}rgba(239,68,68,0.15){% endif %};
+                            color:{% if streak_type == 'win' %}#4ade80{% else %}#f87171{% endif %};
+                            border:1px solid {% if streak_type == 'win' %}rgba(74,222,128,0.4){% else %}rgba(239,68,68,0.4){% endif %};">
+                            {% if streak_type == 'win' %}🔥 {{ streak_count }}연승 중!{% else %}❄️ {{ streak_count }}연패 중{% endif %}
+                        </div>
+                        {% endif %}
+                    </div>
+                    
+                    <div style="flex: 1; padding: 30px 25px; display: flex; flex-direction: column; justify-content: center; align-items: center; border-right: var(--border-glass);">
+                        <div style="font-size: 13px; color: var(--text-muted); font-weight:600;">평균 KDA</div>
+                        <div style="font-size: 26px; font-weight: 900; margin: 12px 0 5px 0; letter-spacing: 1px;">{{ overall_kda.k }} <span style="color:var(--text-muted); font-weight:600; font-size:20px;">/</span> <span style="color:var(--point-color)">{{ overall_kda.d }}</span> <span style="color:var(--text-muted); font-weight:600; font-size:20px;">/</span> {{ overall_kda.a }}</div>
+                        <div style="font-size: 16px; color: var(--win-color); font-weight: 800;">{{ overall_kda.ratio }}:1</div>
+                        <div style="font-size: 14px; margin-top: 20px; color: var(--text-muted); font-weight:600;">
+                            팀 킬 관여율 <b style="color: white; font-size:16px;">{{ (matches|map(attribute='kp')|sum / game_count)|round|int }}%</b>
+                        </div>
+                    </div>
+
+                    <div style="flex: 1.5; padding: 30px 25px; display: flex; flex-direction: column; justify-content: center; align-items: flex-start; padding-left: 45px;">
+                        <div style="font-size: 13px; color: var(--text-muted); font-weight:600; margin-bottom: 20px;">최근 플레이한 챔피언</div>
+                        <div style="width: 100%;">
+                            {% for c in top_recent_champs %}
+                            <div style="display: flex; align-items: center; gap: 15px; width: 100%; margin-bottom: 15px;">
+                                <img src="https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/champion/{{ c.img }}.png" style="width: 38px; height: 38px; border-radius: 12px;">
+                                <div style="width: 50px; font-size: 14px; font-weight: 800; color: {% if c.win_rate >= 60 %}var(--win-color){% elif c.win_rate < 40 %}var(--lose-color){% else %}var(--text-main){% endif %};">{{ c.win_rate }}%</div>
+                                <div style="flex-grow: 1; height: 6px; background: rgba(255,255,255,0.05); border-radius: 3px; overflow: hidden; display: flex;"><div style="height: 100%; border-radius: 3px; width: {{ c.win_rate }}%; background-color: {% if c.win_rate >= 60 %}var(--win-color){% elif c.win_rate < 40 %}var(--lose-color){% else %}var(--text-muted){% endif %};"></div></div>
+                                <div style="width: 40px; text-align: right; font-size: 13px; font-weight:600; color: var(--text-muted);">{{ c.kda }}</div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="radar-grid">
+                <div class="radar-card glass-panel">
+                    <div class="section-title">종합 능력치</div>
+                    <div style="position: relative; height: 180px;"><canvas id="radarOverall"></canvas></div>
+                </div>
+                <div class="radar-card glass-panel">
+                    <div class="section-title">{{ primary_role.icon if primary_role else '🛡️' }} 주 라인 분석 {% if primary_role %}<span style="font-size: 13px; color: var(--text-muted); font-weight: 600;">({{ primary_role.name }})</span>{% endif %}</div>
+                    {% if primary_role %}
+                    <div style="position: relative; height: 180px;"><canvas id="radarPrimary"></canvas></div>
+                    {% endif %}
+                </div>
+                <div class="radar-card glass-panel">
+                    <div class="section-title">{{ secondary_role.icon if secondary_role else '⚔️' }} 부 라인 분석 {% if secondary_role %}<span style="font-size: 13px; color: var(--text-muted); font-weight: 600;">({{ secondary_role.name }})</span>{% endif %}</div>
+                    {% if secondary_role %}
+                    <div style="position: relative; height: 180px;"><canvas id="radarSecondary"></canvas></div>
+                    {% endif %}
+                </div>
+            </div>
+
+            {% else %}
+            <div class="glass-panel" style="text-align: center; padding: 60px 0; color: var(--text-muted); font-size: 16px; font-weight: 600;">선택한 게임 모드의 최근 전적이 없습니다.</div>
+            {% endif %}
+
+            <!-- ★ 모스트 챔피언 플레이스타일 분석 -->
+            {% if top_recent_champs %}
+            <div style="margin-top:24px;">
+                <div class="section-title" style="margin-bottom:14px;">🏆 모스트 챔피언 플레이스타일 분석</div>
+                <div style="display:grid; grid-template-columns:repeat({{ top_recent_champs|length }}, 1fr); gap:16px; margin-bottom:8px;">
+                {% for c in top_recent_champs %}
+                <div class="glass-panel" style="padding:22px 20px;">
+                    <!-- 챔피언 헤더 -->
+                    <div style="display:flex; align-items:center; gap:12px; margin-bottom:16px; padding-bottom:14px; border-bottom:1px solid rgba(255,255,255,0.07);">
+                        <a href="/champion/{{ c.img }}" style="flex-shrink:0;">
+                            <img src="https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/champion/{{ c.img }}.png"
+                                 style="width:52px; height:52px; border-radius:14px; border:2px solid {% if c.win_rate >= 60 %}rgba(74,222,128,0.6){% elif c.win_rate < 40 %}rgba(239,68,68,0.6){% else %}rgba(255,255,255,0.2){% endif %}; transition:0.2s;"
+                                 onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">
+                        </a>
+                        <div style="flex:1; min-width:0;">
+                            <div style="font-size:15px; font-weight:900; color:white; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ c.name }}</div>
+                            <div style="font-size:11px; color:var(--text-muted); margin-top:3px;">{{ c.count }}게임 플레이</div>
+                        </div>
+                        <div style="text-align:center; flex-shrink:0;">
+                            <div style="font-size:20px; font-weight:900; color:{% if c.win_rate >= 60 %}#4ade80{% elif c.win_rate < 40 %}#f87171{% else %}white{% endif %};">{{ c.win_rate }}%</div>
+                            <div style="font-size:10px; color:var(--text-muted); font-weight:600;">승률</div>
+                        </div>
+                    </div>
+
+                    <!-- 핵심 스탯 3개 -->
+                    <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin-bottom:14px;">
+                        <div style="background:rgba(255,255,255,0.04); padding:10px 6px; border-radius:10px; text-align:center; border:1px solid rgba(255,255,255,0.06);">
+                            <div style="font-size:15px; font-weight:900; color:white;">{{ c.kda }}</div>
+                            <div style="font-size:10px; color:var(--text-muted); margin-top:2px; font-weight:700;">KDA</div>
+                        </div>
+                        <div style="background:rgba(255,255,255,0.04); padding:10px 6px; border-radius:10px; text-align:center; border:1px solid rgba(255,255,255,0.06);">
+                            <div style="font-size:15px; font-weight:900; color:white;">{{ c.analysis.avg_kp }}%</div>
+                            <div style="font-size:10px; color:var(--text-muted); margin-top:2px; font-weight:700;">킬관여</div>
+                        </div>
+                        <div style="background:rgba(255,255,255,0.04); padding:10px 6px; border-radius:10px; text-align:center; border:1px solid rgba(255,255,255,0.06);">
+                            <div style="font-size:15px; font-weight:900; color:white;">{{ c.analysis.avg_cs_per_min }}</div>
+                            <div style="font-size:10px; color:var(--text-muted); margin-top:2px; font-weight:700;">CS/분</div>
+                        </div>
+                    </div>
+
+                    <!-- 플레이스타일 태그 -->
+                    {% if c.analysis.style_tags %}
+                    <div style="display:flex; flex-wrap:wrap; gap:5px; margin-bottom:14px;">
+                        {% for tag in c.analysis.style_tags %}
+                        <span style="font-size:10px; font-weight:900; padding:3px 9px; border-radius:20px; background:rgba(255,255,255,0.05); color:{{ tag.color }}; border:1px solid {{ tag.color }}55; letter-spacing:0.3px;">{{ tag.label }}</span>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+
+                    <!-- 피드백 카드 -->
+                    <div style="display:flex; flex-direction:column; gap:7px; margin-bottom:14px;">
+                        {% for fb in c.analysis.feedback %}
+                        <div style="display:flex; gap:9px; align-items:flex-start; padding:9px 11px; border-radius:10px;
+                            background:{% if fb.type == 'danger' %}rgba(239,68,68,0.08){% elif fb.type == 'warning' %}rgba(251,191,36,0.08){% elif fb.type == 'good' %}rgba(74,222,128,0.08){% else %}rgba(255,255,255,0.04){% endif %};
+                            border:1px solid {% if fb.type == 'danger' %}rgba(239,68,68,0.28){% elif fb.type == 'warning' %}rgba(251,191,36,0.28){% elif fb.type == 'good' %}rgba(74,222,128,0.28){% else %}rgba(255,255,255,0.08){% endif %};">
+                            <span style="font-size:15px; flex-shrink:0; line-height:1.3;">{{ fb.icon }}</span>
+                            <div>
+                                <div style="font-size:12px; font-weight:900; color:white; margin-bottom:2px;">{{ fb.title }}</div>
+                                <div style="font-size:11px; color:var(--text-muted); line-height:1.5;">{{ fb.desc }}</div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+
+                    <a href="/champion/{{ c.img }}" style="display:block; text-align:center; font-size:11px; color:var(--point-color); font-weight:800; text-decoration:none; padding:7px; border-radius:8px; background:rgba(244,63,94,0.08); border:1px solid rgba(244,63,94,0.2); transition:0.2s;" onmouseover="this.style.background='rgba(244,63,94,0.16)'" onmouseout="this.style.background='rgba(244,63,94,0.08)'">{{ c.name }} 메타·빌드 분석 →</a>
+                </div>
+                {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- ★ 그레이드 분포 -->
+            {% if grade_dist %}
+            <div class="glass-panel" style="padding:20px 24px; margin-top:16px;">
+                <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;">
+                    <div class="section-title" style="margin:0;">📊 그레이드 분포</div>
+                    <div style="font-size:12px; color:var(--text-muted); font-weight:600;">최근 {{ game_count }}게임 기준</div>
+                </div>
+                <div style="display:flex; align-items:flex-end; gap:8px; height:90px;">
+                    {% for grade in ['S+', 'S', 'A+', 'A', 'B+', 'B', 'C'] %}
+                    {% set cnt = grade_dist.get(grade, 0) %}
+                    {% set pct = ((cnt / game_count) * 100)|round|int if game_count > 0 else 0 %}
+                    {% set gs = grade_style_map.get(grade, grade_style_map['C']) %}
+                    <div style="flex:1; display:flex; flex-direction:column; align-items:center; gap:4px;">
+                        <div style="font-size:11px; font-weight:800; color:{{ gs.color }};">{% if cnt > 0 %}{{ cnt }}{% endif %}</div>
+                        {% set bar_h = ([pct, 5]|max * 0.55)|round|int %}
+                        <div style="width:100%; border-radius:5px 5px 0 0; background:{{ gs.bg }}; border:1px solid {{ gs.border }}; border-bottom:none; transition:0.3s; height:{{ bar_h }}px;" title="{{ grade }}: {{ cnt }}게임 ({{ pct }}%)"></div>
+                        <div style="font-size:12px; font-weight:900; color:{{ gs.color }};">{{ grade }}</div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- ★ YOUR.GG 스타일 개선 피드백 + 챔피언 추천 -->
+            {% if improvement_tips or champion_recs %}
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 20px;">
+                {% if improvement_tips %}
+                <div class="glass-panel" style="padding: 22px 25px;">
+                    <div class="section-title" style="margin-bottom: 16px;">🔍 플레이 개선 포인트</div>
+                    <div style="display: flex; flex-direction: column; gap: 12px;">
+                        {% for tip in improvement_tips %}
+                        <div style="display: flex; gap: 14px; align-items: flex-start; padding: 14px; border-radius: 12px;
+                            background: {% if tip.type == 'danger' %}rgba(239,68,68,0.08){% elif tip.type == 'warning' %}rgba(251,191,36,0.08){% elif tip.type == 'good' %}rgba(74,222,128,0.08){% else %}rgba(255,255,255,0.04){% endif %};
+                            border: 1px solid {% if tip.type == 'danger' %}rgba(239,68,68,0.25){% elif tip.type == 'warning' %}rgba(251,191,36,0.25){% elif tip.type == 'good' %}rgba(74,222,128,0.25){% else %}rgba(255,255,255,0.08){% endif %};">
+                            <div style="font-size: 22px; flex-shrink: 0; line-height: 1;">{{ tip.icon }}</div>
+                            <div>
+                                <div style="font-size: 14px; font-weight: 900; color: white; margin-bottom: 4px;">{{ tip.title }}</div>
+                                <div style="font-size: 12px; color: var(--text-muted); line-height: 1.6;">{{ tip.desc }}</div>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+                {% if champion_recs %}
+                <div class="glass-panel" style="padding: 22px 25px;">
+                    <div class="section-title" style="margin-bottom: 16px;">🎯 플레이 스타일 맞춤 챔피언</div>
+                    <div style="display: flex; flex-direction: column; gap: 12px;">
+                        {% for rec in champion_recs %}
+                        <a href="/champion/{{ rec.id }}" style="text-decoration: none; display: flex; gap: 14px; align-items: center; padding: 14px; border-radius: 12px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); transition: 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.07)'" onmouseout="this.style.background='rgba(255,255,255,0.03)'">
+                            <img src="https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/champion/{{ rec.id }}.png" style="width: 46px; height: 46px; border-radius: 12px; border: 2px solid rgba(255,255,255,0.15);">
+                            <div style="flex: 1;">
+                                <div style="font-size: 15px; font-weight: 900; color: white;">{{ rec.kr }}</div>
+                                <div style="font-size: 12px; color: var(--text-muted); margin-top: 3px;">{{ rec.role }} · {{ rec.reason }}</div>
+                            </div>
+                            <div style="color: var(--point-color); font-weight: 900;">➔</div>
+                        </a>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+            {% endif %}
+
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 24px; margin-bottom: 12px;">
+                <div class="section-title" style="margin: 0;">최근 전적</div>
+            </div>
+            
+            <div id="dynamic-champ-filters" class="champ-filter-container" style="display: none;"></div>
+
+            <div id="match-list-container">
+                {% set ajax = True %}
+                {% include 'index.html' %} 
+            </div>
+            
+            {% if game_count > 0 %}
+            <button id="btn-load-more" class="btn-load-more" onclick="loadMoreMatches()">더보기 (과거 20게임 추가)</button>
+            {% endif %}
+
+        </div>
+        
+        <button id="scrollTopBtn" class="scroll-top-btn" onclick="window.scrollTo({top: 0, behavior: 'smooth'})">▲</button>
+
+        <script>
+            let currentChampFilter = 'all';
+
+            function buildChampFilters() {
+                const wrappers = document.querySelectorAll('.match-item-wrapper');
+                if (wrappers.length === 0) return;
+
+                const champCounts = {};
+                const champNames = {};
+
+                wrappers.forEach(el => {
+                    const en = el.dataset.champ;
+                    const kr = el.dataset.champKr;
+                    if(!champCounts[en]) {
+                        champCounts[en] = 0;
+                        champNames[en] = kr;
+                    }
+                    champCounts[en]++;
+                });
+
+                const sortedChamps = Object.keys(champCounts).sort((a, b) => champCounts[b] - champCounts[a]);
+                const container = document.getElementById('dynamic-champ-filters');
+                
+                if(sortedChamps.length > 0) {
+                    container.style.display = 'flex';
+                    let html = `<div class="champ-filter-label">챔피언 필터 :</div>`;
+                    html += `<button class="champ-filter-btn ${currentChampFilter === 'all' ? 'active' : ''}" onclick="applyChampFilter('all')">전체보기</button>`;
+
+                    sortedChamps.forEach(en => {
+                        const isActive = currentChampFilter === en ? 'active' : '';
+                        html += `<div class="champ-filter-btn ${isActive}" onclick="applyChampFilter('${en}')" title="${champNames[en]} 필터">
+                                    <a href="/champion/${en}" title="${champNames[en]} 메타 분석 보기" onclick="event.stopPropagation()" style="display:flex; align-items:center; flex-shrink:0;">
+                                        <img src="https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/champion/${en}.png" style="transition:0.15s;" onmouseover="this.style.opacity='0.7'" onmouseout="this.style.opacity='1'">
+                                    </a>
+                                    <span class="cnt">${champCounts[en]}</span>
+                                 </div>`;
+                    });
+                    container.innerHTML = html;
+                }
+                
+                applyChampFilter(currentChampFilter);
+            }
+
+            function applyChampFilter(champEn) {
+                currentChampFilter = champEn;
+                
+                document.querySelectorAll('.match-item-wrapper').forEach(el => {
+                    if(champEn === 'all' || el.dataset.champ === champEn) {
+                        el.style.display = 'block';
+                    } else {
+                        el.style.display = 'none';
+                    }
+                });
+
+                const container = document.getElementById('dynamic-champ-filters');
+                if(container) {
+                    Array.from(container.children).forEach(btn => {
+                        if (btn.classList && btn.classList.contains('champ-filter-btn')) {
+                            if (btn.getAttribute('onclick').includes(`'${champEn}'`)) {
+                                btn.classList.add('active');
+                            } else {
+                                btn.classList.remove('active');
+                            }
+                        }
+                    });
+                }
+            }
+
+            function saveRecentSearch() {
+                const urlParams = new URLSearchParams(window.location.search);
+                const name = urlParams.get('name'); const tag = urlParams.get('tag') || 'KR1';
+                if(!name || name.includes(',')) return; 
+                let searches = JSON.parse(localStorage.getItem('sbgg_recent') || '[]');
+                searches = searches.filter(s => s.name !== name || s.tag !== tag);
+                searches.unshift({name, tag});
+                if(searches.length > 5) searches.pop(); 
+                localStorage.setItem('sbgg_recent', JSON.stringify(searches));
+            }
+
+            function toggleFavorite(name, tag, icon, level) {
+                let favs = JSON.parse(localStorage.getItem('sbgg_favs') || '[]');
+                const idx = favs.findIndex(f => f.name === name && f.tag === tag);
+                const btn = document.getElementById('favBtn');
+                if(idx > -1) {
+                    favs.splice(idx, 1);
+                    btn.innerText = '☆'; btn.style.color = '#8b949e'; btn.style.textShadow = 'none';
+                } else {
+                    favs.push({name, tag, icon, level});
+                    btn.innerText = '★'; btn.style.color = '#fbbf24'; btn.style.textShadow = '0 0 15px rgba(251, 191, 36, 0.6)';
+                }
+                localStorage.setItem('sbgg_favs', JSON.stringify(favs));
+            }
+
+            const winCtx = document.getElementById('winRateChart');
+            if (winCtx) {
+                new Chart(winCtx.getContext('2d'), {
+                    type: 'doughnut',
+                    data: { datasets: [{ data: [{{ win_count }}, {{ lose_count }}], backgroundColor: ['#3b82f6', '#ef4444'], borderWidth: 0, cutout: '75%', hoverOffset: 4 }] },
+                    options: { responsive: true, maintainAspectRatio: false, animation: { animateScale: true } }
+                });
+            }
+
+            const radarOptions = { responsive: true, maintainAspectRatio: false, scales: { r: { angleLines: { color: 'rgba(255, 255, 255, 0.05)' }, grid: { color: 'rgba(255, 255, 255, 0.05)' }, pointLabels: { color: '#8b949e', font: { size: 12, weight: '800', family: 'Pretendard' } }, ticks: { display: false, min: 0, max: 100 } } }, plugins: { legend: { display: false } } };
+            const radarLabels = ['전투', '성장', '시야', '생존', '오브젝트', '합류'];
+
+            const ctx0 = document.getElementById('radarOverall')?.getContext('2d');
+            if (ctx0) new Chart(ctx0, { type: 'radar', data: { labels: radarLabels, datasets: [{ data: {{ radar_data | tojson | safe }}, backgroundColor: 'rgba(139, 92, 246, 0.3)', borderColor: '#8b5cf6', pointBackgroundColor: '#fff', borderWidth: 2, fill: true }] }, options: radarOptions });
+
+            const ctx1 = document.getElementById('radarPrimary')?.getContext('2d');
+            if (ctx1) new Chart(ctx1, { type: 'radar', data: { labels: radarLabels, datasets: [{ data: {{ primary_role.radar | tojson | safe if primary_role else '[]' }}, backgroundColor: 'rgba(59, 130, 246, 0.3)', borderColor: '#3b82f6', pointBackgroundColor: '#fff', borderWidth: 2, fill: true }] }, options: radarOptions });
+
+            const ctx2 = document.getElementById('radarSecondary')?.getContext('2d');
+            if (ctx2) new Chart(ctx2, { type: 'radar', data: { labels: radarLabels, datasets: [{ data: {{ secondary_role.radar | tojson | safe if secondary_role else '[]' }}, backgroundColor: 'rgba(245, 158, 11, 0.3)', borderColor: '#f59e0b', pointBackgroundColor: '#fff', borderWidth: 2, fill: true }] }, options: radarOptions });
+
+            let currentStart = 20;
+            const targetPuuid = '{{ searched_puuid }}';
+            const targetQueue = '{{ queue or "all" }}';
+            
+            function loadMoreMatches() {
+                const btn = document.getElementById('btn-load-more');
+                btn.innerText = '전적을 불러오는 중...'; btn.disabled = true;
+
+                fetch(`/more_matches?puuid=${targetPuuid}&start=${currentStart}&queue=${targetQueue}`)
+                    .then(res => res.text())
+                    .then(html => {
+                        if(html.trim() === '') { btn.innerText = '더 이상 과거 전적이 없습니다.'; return; }
+                        document.getElementById('match-list-container').insertAdjacentHTML('beforeend', html);
+                        currentStart += 20; btn.innerText = '더보기 (과거 20게임 추가)'; btn.disabled = false;
+                        
+                        buildChampFilters();
+                    })
+                    .catch(err => { console.error(err); btn.innerText = '오류 발생. 잠시 후 다시 시도해주세요.'; btn.disabled = false; });
+            }
+            
+            window.onload = function() {
+                saveRecentSearch();
+                const urlParams = new URLSearchParams(window.location.search);
+                const name = urlParams.get('name'); const tag = urlParams.get('tag') || 'KR1';
+                if(name && !name.includes(',')) {
+                    let favs = JSON.parse(localStorage.getItem('sbgg_favs') || '[]');
+                    const btn = document.getElementById('favBtn');
+                    if(favs.some(f => f.name === name && f.tag === tag)) {
+                        if(btn) { btn.innerText = '★'; btn.style.color = '#fbbf24'; btn.style.textShadow = '0 0 15px rgba(251, 191, 36, 0.6)'; }
+                    } else { if(btn) { btn.style.color = '#8b949e'; } }
+                }
+                
+                if(document.getElementById('match-list-container') && document.getElementById('match-list-container').innerHTML.trim() !== "") {
+                    buildChampFilters();
+                } else if(document.getElementById('match-list-container')) {
+                    currentStart = 0; loadMoreMatches();
+                }
+            }
+
+            window.addEventListener('scroll', () => {
+                const btn = document.getElementById('scrollTopBtn');
+                if (btn) {
+                    if (window.scrollY > 300) btn.style.display = 'block';
+                    else btn.style.display = 'none';
+                }
+            });
+        </script>
+
+    {% elif page == 'meta' %}
+    <!-- ================= 챔피언 메타 분석 ================= -->
+    <nav class="top-nav">
+        <a href="/" class="logo-wrapper"><span class="logo-sb">SB</span>.GG</a>
+        <div class="nav-search-wrapper">
+            <form action="/search" method="get" class="nav-search-box">
+                <input type="text" name="name" style="width: 150px;" placeholder="소환사명 검색" required>
+                <span style="color: #ccc; margin: 0 5px;">#</span>
+                <input type="text" name="tag" style="width: 50px;" value="KR1">
+                <button type="submit" class="search-btn" style="padding: 6px 16px; font-size: 13px;">검색</button>
+            </form>
+        </div>
+        <div style="width: 80px;"></div>
+    </nav>
+    <div class="main-container">
+        <div class="page-title">📊 챔피언 메타 분석
+            <span style="font-size: 14px; color: var(--text-muted); font-weight: 600;">패치 {{ current_patch }} · KR 솔로랭크</span>
+        </div>
+
+        <!-- 랭크 티어 선택 -->
+        <div style="display: flex; gap: 6px; margin-bottom: 20px; flex-wrap: wrap; align-items: center;">
+            <span style="font-size: 12px; color: var(--text-muted); font-weight: 700; margin-right: 6px;">랭크 기준</span>
+            {% for rt_key, rt_label in rank_tier_labels.items() %}
+            <a href="/meta?rank={{ rt_key }}"
+               style="padding: 8px 18px; border-radius: 10px; font-weight: 800; font-size: 13px; text-decoration: none; transition: 0.2s;
+                      {% if rank_tier == rt_key %}background: var(--win-color); color: white; border: 1px solid var(--win-color);
+                      {% else %}background: rgba(255,255,255,0.04); color: var(--text-muted); border: 1px solid rgba(255,255,255,0.1);{% endif %}">
+                {{ rt_label }}
+            </a>
+            {% endfor %}
+        </div>
+
+        <!-- 라인 탭 -->
+        <div style="display: flex; gap: 6px; margin-bottom: 16px; flex-wrap: wrap;">
+            {% for role_en, role_name in role_kr.items() %}
+            <button onclick="showRole('{{ role_en }}')" id="tab-{{ role_en }}"
+               style="padding: 10px 22px; border-radius: 12px; font-weight: 800; font-size: 14px; cursor: pointer; transition: 0.2s; border: 1px solid rgba(255,255,255,0.1); color: var(--text-muted); background: rgba(255,255,255,0.03);">
+                {% if role_en == 'TOP' %}🪓{% elif role_en == 'JUNGLE' %}🌲{% elif role_en == 'MIDDLE' %}🪄{% elif role_en == 'BOTTOM' %}🏹{% else %}🛡️{% endif %} {{ role_name }}
+            </button>
+            {% endfor %}
+        </div>
+
+        <!-- 티어 필터 -->
+        <div style="display: flex; gap: 6px; margin-bottom: 24px; flex-wrap: wrap; align-items: center;">
+            <span style="font-size: 12px; color: var(--text-muted); font-weight: 700; margin-right: 6px;">티어 필터</span>
+            <button onclick="filterTier('ALL')" id="tierBtn-ALL"
+                style="padding: 6px 16px; border-radius: 8px; font-weight: 800; font-size: 12px; cursor: pointer; border: 1px solid rgba(255,255,255,0.2); background: rgba(255,255,255,0.08); color: white; transition:0.2s;">
+                전체
+            </button>
+            {% for tier_key, ts in numeric_tier_color.items() %}
+            <button onclick="filterTier('{{ tier_key }}')" id="tierBtn-{{ tier_key }}"
+                style="padding: 6px 14px; border-radius: 8px; font-weight: 900; font-size: 12px; cursor: pointer; border: 1px solid {{ ts.border }}; background: {{ ts.bg }}; color: {{ ts.color }}; transition:0.2s;">
+                {% if tier_key == 'OP' %}OP
+                {% else %}T{{ tier_key }}{% endif %}
+                <span style="font-size: 10px; opacity: 0.8;">({{ tier_counts.get(tier_key, 0) }})</span>
+            </button>
+            {% endfor %}
+        </div>
+
+        <!-- 챔피언 목록 (라인별) -->
+        {% for role_en, champs in champion_tiers.items() %}
+        <div id="role-{{ role_en }}" class="role-section" style="display: none;">
+            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px;" id="grid-{{ role_en }}">
+                {% for c in champs %}
+                <a href="/champion/{{ c.id }}" class="meta-card" data-tier="{{ c.tier }}"
+                   style="text-decoration: none; display: block; border-radius: 16px; border: 1px solid transparent; transition: 0.2s;"
+                   onmouseover="this.style.borderColor='{{ c.tier_style.border }}'; this.style.transform='translateY(-3px)';"
+                   onmouseout="this.style.borderColor='transparent'; this.style.transform='translateY(0)';">
+                    <div class="glass-panel" style="padding: 16px 18px; display: flex; gap: 14px; align-items: center; border-radius: 16px; border: none;">
+                        <div style="position: relative; flex-shrink: 0;">
+                            <img src="https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/champion/{{ c.id }}.png"
+                                 style="width: 56px; height: 56px; border-radius: 14px; border: 2px solid {{ c.tier_style.color }};"
+                                 onerror="this.src='https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/champion/Teemo.png'">
+                            {% if c.has_detail %}
+                            <div style="position:absolute; bottom:-4px; right:-4px; background:#3b82f6; color:white; font-size:9px; font-weight:900; padding:1px 5px; border-radius:5px; border:1px solid #60a5fa;">상세</div>
+                            {% endif %}
+                        </div>
+                        <div style="flex: 1; min-width: 0;">
+                            <div style="display: flex; align-items: center; gap: 7px; margin-bottom: 5px;">
+                                <span style="background: {{ c.tier_style.bg }}; color: {{ c.tier_style.color }}; border: 1px solid {{ c.tier_style.border }}; padding: 2px 9px; border-radius: 7px; font-size: 12px; font-weight: 900; flex-shrink:0;">{% if c.tier == 'OP' %}OP{% else %}T{{ c.tier }}{% endif %}</span>
+                                <b style="font-size: 15px; color: white; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ c.kr }}</b>
+                                <span style="font-size: 13px; font-weight: 900; color: {{ c.trend_color }}; flex-shrink:0;">{{ c.trend_icon }}</span>
+                            </div>
+                            <div style="display: flex; gap: 14px; font-size: 11px; color: var(--text-muted); margin-bottom: 6px;">
+                                <span>승률 <b style="color: {% if c.wr >= 52 %}#4ade80{% elif c.wr < 49 %}#f87171{% else %}#e2e8f0{% endif %};">{{ c.wr }}%</b></span>
+                                <span>픽률 <b style="color: #e2e8f0;">{{ c.pr }}%</b></span>
+                                <span>밴률 <b style="color: {% if c.br >= 15 %}#f87171{% else %}#e2e8f0{% endif %};">{{ c.br }}%</b></span>
+                            </div>
+                            <div>
+                                <span style="font-size: 10px; padding: 2px 7px; border-radius: 5px; font-weight: 800; background: rgba(255,255,255,0.04); color: {{ c.diff_color }}; border: 1px solid rgba(255,255,255,0.07);">난이도 {{ c.diff_label }}</span>
+                            </div>
+                        </div>
+                    </div>
+                </a>
+                {% endfor %}
+            </div>
+            <div id="empty-{{ role_en }}" style="display:none; text-align:center; padding:40px; color:var(--text-muted); font-size:14px;">
+                해당 티어에 챔피언이 없습니다.
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <script>
+        let currentRole = 'TOP';
+        let currentTier = 'ALL';
+
+        function showRole(role) {
+            currentRole = role;
+            document.querySelectorAll('.role-section').forEach(el => el.style.display = 'none');
+            document.querySelectorAll('[id^="tab-"]').forEach(el => {
+                el.style.background = 'rgba(255,255,255,0.03)';
+                el.style.color = 'var(--text-muted)';
+                el.style.borderColor = 'rgba(255,255,255,0.1)';
+            });
+            const section = document.getElementById('role-' + role);
+            const tab = document.getElementById('tab-' + role);
+            if (section) section.style.display = 'block';
+            if (tab) {
+                tab.style.background = 'var(--win-color)';
+                tab.style.color = 'white';
+                tab.style.borderColor = 'var(--win-color)';
+            }
+            applyTierFilter();
+        }
+
+        function filterTier(tier) {
+            currentTier = tier;
+            document.querySelectorAll('[id^="tierBtn-"]').forEach(el => {
+                el.style.opacity = '0.5';
+                el.style.transform = 'scale(0.95)';
+            });
+            const active = document.getElementById('tierBtn-' + tier);
+            if (active) { active.style.opacity = '1'; active.style.transform = 'scale(1)'; }
+            applyTierFilter();
+        }
+
+        function applyTierFilter() {
+            const section = document.getElementById('role-' + currentRole);
+            if (!section) return;
+            const cards = section.querySelectorAll('.meta-card');
+            let visible = 0;
+            cards.forEach(card => {
+                const show = currentTier === 'ALL' || card.dataset.tier === currentTier;
+                card.style.display = show ? 'block' : 'none';
+                if (show) visible++;
+            });
+            const emptyMsg = document.getElementById('empty-' + currentRole);
+            if (emptyMsg) emptyMsg.style.display = visible === 0 ? 'block' : 'none';
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            filterTier('ALL');
+            showRole('TOP');
+        });
+    </script>
+
+    {% elif page == 'champion' %}
+    <!-- ================= 챔피언 상세 분석 (LOL.PS 스타일) ================= -->
+    <nav class="top-nav">
+        <a href="/" class="logo-wrapper"><span class="logo-sb">SB</span>.GG</a>
+        <div class="nav-search-wrapper">
+            <form action="/search" method="get" class="nav-search-box">
+                <input type="text" name="name" style="width: 150px;" placeholder="소환사명 검색" required>
+                <span style="color: #ccc; margin: 0 5px;">#</span>
+                <input type="text" name="tag" style="width: 50px;" value="KR1">
+                <button type="submit" class="search-btn" style="padding: 6px 16px; font-size: 13px;">검색</button>
+            </form>
+        </div>
+        <div style="width: 80px;"></div>
+    </nav>
+
+    <!-- 챔피언 스플래시 배너 -->
+    <div style="position: relative; height: 280px; overflow: hidden; background-image: url('https://ddragon.leagueoflegends.com/cdn/img/champion/splash/{{ champ.id }}_0.jpg'); background-size: cover; background-position: center 20%;">
+        <div style="position: absolute; inset: 0; background: linear-gradient(to bottom, rgba(15,23,42,0.1) 0%, rgba(15,23,42,1) 100%);"></div>
+        <div class="profile-content" style="position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); width: 100%; max-width: 1080px; padding: 0 20px;">
+            <div style="display: flex; align-items: flex-end; gap: 24px;">
+                <img src="https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/champion/{{ champ.id }}.png"
+                     style="width: 90px; height: 90px; border-radius: 20px; border: 3px solid {{ champ.tier_style.color }}; box-shadow: 0 0 24px {{ champ.tier_style.border }};">
+                <div>
+                    <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 6px;">
+                        <h1 style="margin: 0; font-size: 34px; font-weight: 900;">{{ champ.kr }}</h1>
+                        <span style="background: {{ champ.tier_style.bg }}; color: {{ champ.tier_style.color }}; border: 1px solid {{ champ.tier_style.border }}; padding: 4px 14px; border-radius: 10px; font-size: 16px; font-weight: 900;">{{ champ.tier }}티어</span>
+                        <span style="font-size: 20px; font-weight: 900; color: {{ champ.trend_color }};">{{ champ.trend_icon }}</span>
+                    </div>
+                    <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                        <span style="background: rgba(255,255,255,0.1); padding: 4px 12px; border-radius: 8px; font-size: 13px; font-weight: 800;">{{ champ_role }}</span>
+                        <span style="background: rgba(255,255,255,0.06); padding: 4px 12px; border-radius: 8px; font-size: 13px; font-weight: 800; color: var(--text-muted);">{{ champ.style }}</span>
+                        <span style="padding: 4px 12px; border-radius: 8px; font-size: 13px; font-weight: 800; color: {{ champ.diff_color }}; background: rgba(255,255,255,0.05);">난이도 {{ champ.diff_label }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="main-container" style="margin-top: 30px;">
+        <!-- 핵심 지표 3개 -->
+        <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-bottom: 24px;">
+            <div class="glass-panel" style="padding: 22px; text-align: center;">
+                <div style="font-size: 13px; color: var(--text-muted); font-weight: 600; margin-bottom: 8px;">승률</div>
+                <div style="font-size: 30px; font-weight: 900; color: {% if champ.wr >= 52 %}#4ade80{% elif champ.wr < 49 %}#f87171{% else %}white{% endif %};">{{ champ.wr }}%</div>
+                <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">패치 {{ current_patch }}</div>
+            </div>
+            <div class="glass-panel" style="padding: 22px; text-align: center;">
+                <div style="font-size: 13px; color: var(--text-muted); font-weight: 600; margin-bottom: 8px;">픽률</div>
+                <div style="font-size: 30px; font-weight: 900; color: white;">{{ champ.pr }}%</div>
+                <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">솔로랭크 KR</div>
+            </div>
+            <div class="glass-panel" style="padding: 22px; text-align: center;">
+                <div style="font-size: 13px; color: var(--text-muted); font-weight: 600; margin-bottom: 8px;">밴률</div>
+                <div style="font-size: 30px; font-weight: 900; color: {% if champ.br >= 15 %}#f87171{% else %}white{% endif %};">{{ champ.br }}%</div>
+                <div style="font-size: 12px; color: var(--text-muted); margin-top: 4px;">솔로랭크 KR</div>
+            </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 20px;">
+            <!-- 빌드 추천 -->
+            <div>
+                <div class="glass-panel" style="padding: 24px; margin-bottom: 16px;">
+                    <div class="section-title" style="margin-bottom: 18px;">🛠️ 추천 빌드 ({{ current_patch }})</div>
+                    <div style="margin-bottom: 16px;">
+                        <div style="font-size: 12px; color: var(--text-muted); font-weight: 700; margin-bottom: 8px;">주문/보조 룬</div>
+                        <div style="display: flex; gap: 10px; align-items: center;">
+                            <div style="background: rgba(255,255,255,0.06); padding: 8px 16px; border-radius: 10px; font-size: 14px; font-weight: 800; border: 1px solid rgba(255,255,255,0.1);">🔑 {{ champ.rune_main }}</div>
+                            <div style="color: var(--text-muted); font-size: 16px;">+</div>
+                            <div style="background: rgba(255,255,255,0.04); padding: 8px 16px; border-radius: 10px; font-size: 14px; font-weight: 800; color: var(--text-muted); border: 1px solid rgba(255,255,255,0.08);">{{ champ.rune_sub }}</div>
+                        </div>
+                    </div>
+                    <div style="margin-bottom: 16px;">
+                        <div style="font-size: 12px; color: var(--text-muted); font-weight: 700; margin-bottom: 8px;">스킬 순서</div>
+                        <div style="display: flex; gap: 8px;">
+                            {% for sk in champ.skill_order.split('→') %}
+                            <div style="width: 40px; height: 40px; background: rgba(244,63,94,0.15); border: 1px solid rgba(244,63,94,0.4); border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 900; color: var(--point-color);">{{ sk }}</div>
+                            {% if not loop.last %}<div style="display:flex;align-items:center;color:var(--text-muted);font-size:14px;">→</div>{% endif %}
+                            {% endfor %}
+                        </div>
+                    </div>
+                    <div>
+                        <div style="font-size: 12px; color: var(--text-muted); font-weight: 700; margin-bottom: 10px;">코어 아이템 순서</div>
+                        <div style="display: flex; flex-direction: column; gap: 8px;">
+                            {% for item in champ['items'] %}
+                            <div style="display: flex; align-items: center; gap: 12px; padding: 10px 14px; background: rgba(255,255,255,0.03); border-radius: 10px; border: 1px solid rgba(255,255,255,0.07);">
+                                <span style="font-size: 12px; font-weight: 900; color: var(--text-muted); width: 18px;">{{ loop.index }}</span>
+                                <span style="font-size: 14px; font-weight: 800; color: white;">{{ item }}</span>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 플레이 팁 -->
+                <div class="glass-panel" style="padding: 24px;">
+                    <div class="section-title" style="margin-bottom: 14px;">💡 핵심 플레이 팁</div>
+                    <div style="font-size: 14px; color: var(--text-muted); line-height: 1.8; background: rgba(255,255,255,0.03); padding: 16px; border-radius: 12px; border-left: 3px solid var(--point-color);">
+                        {{ champ.tip }}
+                    </div>
+                </div>
+            </div>
+
+            <!-- 카운터/시너지 -->
+            <div>
+                <div class="glass-panel" style="padding: 24px; margin-bottom: 16px;">
+                    <div class="section-title" style="margin-bottom: 18px;">⚔️ 카운터 픽 (취약한 상대)</div>
+                    <div style="display: flex; flex-direction: column; gap: 10px;">
+                        {% for enemy in champ.weak_vs %}
+                        <a href="/champion/{{ enemy }}" style="text-decoration:none; display:flex; align-items: center; gap: 14px; padding: 12px 14px; background: rgba(239,68,68,0.06); border-radius: 12px; border: 1px solid rgba(239,68,68,0.2); transition:0.2s;" onmouseover="this.style.background='rgba(239,68,68,0.12)'" onmouseout="this.style.background='rgba(239,68,68,0.06)'">
+                            <img src="https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/champion/{{ enemy }}.png"
+                                 style="width: 40px; height: 40px; border-radius: 10px; border: 2px solid rgba(239,68,68,0.5);"
+                                 onerror="this.src='https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/champion/Teemo.png'">
+                            <div>
+                                <div style="font-size: 14px; font-weight: 800; color: white;">{{ enemy }}</div>
+                                <div style="font-size: 11px; color: #f87171; font-weight: 700; margin-top: 2px;">불리한 매치업 · 메타 분석 보기 →</div>
+                            </div>
+                        </a>
+                        {% endfor %}
+                    </div>
+                </div>
+
+                <div class="glass-panel" style="padding: 24px;">
+                    <div class="section-title" style="margin-bottom: 18px;">✅ 유리한 상대</div>
+                    <div style="display: flex; flex-direction: column; gap: 10px;">
+                        {% for ally in champ.strong_vs %}
+                        <a href="/champion/{{ ally }}" style="text-decoration:none; display:flex; align-items: center; gap: 14px; padding: 12px 14px; background: rgba(74,222,128,0.06); border-radius: 12px; border: 1px solid rgba(74,222,128,0.2); transition:0.2s;" onmouseover="this.style.background='rgba(74,222,128,0.12)'" onmouseout="this.style.background='rgba(74,222,128,0.06)'">
+                            <img src="https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/champion/{{ ally }}.png"
+                                 style="width: 40px; height: 40px; border-radius: 10px; border: 2px solid rgba(74,222,128,0.5);"
+                                 onerror="this.src='https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/champion/Teemo.png'">
+                            <div>
+                                <div style="font-size: 14px; font-weight: 800; color: white;">{{ ally }}</div>
+                                <div style="font-size: 11px; color: #4ade80; font-weight: 700; margin-top: 2px;">유리한 매치업 · 메타 분석 보기 →</div>
+                            </div>
+                        </a>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 소환사 검색 연동 -->
+        <div class="glass-panel" style="padding: 28px; margin-top: 24px;">
+            <div style="font-size: 15px; font-weight: 900; margin-bottom: 6px;">🔍 {{ champ.kr }} 플레이어 전적 분석</div>
+            <div style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px;">이 챔피언으로 플레이한 소환사의 전적과 플레이스타일을 분석합니다</div>
+            <form action="/search" method="get" style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                <input type="hidden" name="champ_filter" value="{{ champ.id }}">
+                <div style="display: flex; align-items: center; gap: 0; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.12); border-radius: 12px; overflow: hidden; flex: 1; min-width: 220px;">
+                    <input type="text" name="name" placeholder="소환사명" required
+                           style="background: transparent; border: none; outline: none; padding: 12px 14px; color: white; font-size: 14px; font-weight: 700; font-family: 'Pretendard'; flex: 1; min-width: 0;">
+                    <span style="color: rgba(255,255,255,0.3); padding: 0 4px; font-size: 16px;">#</span>
+                    <input type="text" name="tag" value="KR1"
+                           style="background: transparent; border: none; outline: none; padding: 12px 10px; color: rgba(255,255,255,0.6); font-size: 14px; font-weight: 700; font-family: 'Pretendard'; width: 60px;">
+                </div>
+                <button type="submit" style="background: var(--point-color); border: none; border-radius: 12px; padding: 12px 24px; color: white; font-size: 14px; font-weight: 900; cursor: pointer; font-family: 'Pretendard'; transition: 0.2s; white-space:nowrap;" onmouseover="this.style.opacity='0.85'" onmouseout="this.style.opacity='1'">전적 분석 →</button>
+            </form>
+        </div>
+
+        <div style="margin-top: 20px; text-align: center;">
+            <a href="/meta" style="color: var(--text-muted); font-size: 14px; font-weight: 700; text-decoration: none;">← 전체 메타 분석으로 돌아가기</a>
+        </div>
+    </div>
+
+    {% endif %}
+
+</body>
+</html>
