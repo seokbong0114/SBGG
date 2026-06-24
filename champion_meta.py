@@ -1152,3 +1152,258 @@ META_STATS = {
                                 "diamondplus":  {"wr":51.5,"pr": 3.0,"br": 5.0,"trend":"stable","difficulty":2},
                                 "masterplus":   {"wr":51.0,"pr": 2.8,"br": 4.8,"trend":"stable","difficulty":2}}},
 }
+
+# ═══════════════════════════════════════════════════════════════════════
+#  ★ 상황 대응형 유동적 아이템 빌드 최적화 엔진 (Phase 3 핵심 차별화 기능)
+# ═══════════════════════════════════════════════════════════════════════
+
+# ─── 챔피언 전투 속성 프로파일 ───
+# dmg: "AD"(물리) / "AP"(마법) / "AD/AP"(혼합) / "true"(고정)
+# tank: 하드 탱커(체력/방어 위주로 성장) 여부
+# cc:   강력한 군중제어기(기절/속박/에어본/속박/포박) 보유 여부
+# heal: 자체 회복/흡혈 등 지속력이 강한지 여부 (치유 감소 아이템 카운터 대상)
+# 누락된 키는 모두 False로 처리됩니다.
+CHAMP_PROFILE = {
+    # ── TOP / 탑 ──
+    "Aatrox": {"dmg": "AD", "cc": True, "heal": True},
+    "Camille": {"dmg": "AD", "cc": True},
+    "ChoGath": {"dmg": "AP", "tank": True, "cc": True, "heal": True},
+    "Darius": {"dmg": "AD", "heal": True},
+    "DrMundo": {"dmg": "AD", "tank": True, "heal": True},
+    "Fiora": {"dmg": "AD", "heal": True},
+    "Gangplank": {"dmg": "AD"},
+    "Garen": {"dmg": "AD"},
+    "Gnar": {"dmg": "AD", "cc": True},
+    "Gwen": {"dmg": "AP", "heal": True},
+    "Illaoi": {"dmg": "AD", "heal": True},
+    "Irelia": {"dmg": "AD", "cc": True, "heal": True},
+    "Jax": {"dmg": "AD", "cc": True},
+    "Jayce": {"dmg": "AD", "cc": True},
+    "Kayle": {"dmg": "AP"},
+    "Kennen": {"dmg": "AP", "cc": True},
+    "Kled": {"dmg": "AD"},
+    "KSante": {"dmg": "AD", "tank": True, "cc": True},
+    "Malphite": {"dmg": "AP", "tank": True, "cc": True},
+    "Maokai": {"dmg": "AP", "tank": True, "cc": True},
+    "Mordekaiser": {"dmg": "AP", "heal": True},
+    "Nasus": {"dmg": "AD", "tank": True, "heal": True},
+    "Olaf": {"dmg": "AD", "heal": True},
+    "Ornn": {"dmg": "AP", "tank": True, "cc": True},
+    "Pantheon": {"dmg": "AD", "cc": True},
+    "Poppy": {"dmg": "AD", "tank": True, "cc": True},
+    "Quinn": {"dmg": "AD"},
+    "Renekton": {"dmg": "AD", "cc": True, "heal": True},
+    "Riven": {"dmg": "AD", "cc": True},
+    "Rumble": {"dmg": "AP", "cc": True},
+    "Ryze": {"dmg": "AP"},
+    "Sett": {"dmg": "AD", "cc": True, "heal": True},
+    "Shen": {"dmg": "AD", "tank": True, "cc": True},
+    "Singed": {"dmg": "AP", "tank": True},
+    "Sion": {"dmg": "AD", "tank": True, "cc": True},
+    "TahmKench": {"dmg": "AP", "tank": True, "cc": True, "heal": True},
+    "Teemo": {"dmg": "AP"},
+    "Tryndamere": {"dmg": "AD", "heal": True},
+    "Urgot": {"dmg": "AD", "cc": True},
+    "Vladimir": {"dmg": "AP", "heal": True},
+    "Volibear": {"dmg": "AD", "tank": True, "cc": True, "heal": True},
+    "Yorick": {"dmg": "AD"},
+    "Aurora": {"dmg": "AP", "cc": True},
+    # ── JUNGLE / 정글 ──
+    "Amumu": {"dmg": "AP", "tank": True, "cc": True},
+    "BelVeth": {"dmg": "AD", "heal": True},
+    "Briar": {"dmg": "AD", "heal": True},
+    "Diana": {"dmg": "AP", "cc": True},
+    "Ekko": {"dmg": "AP", "cc": True},
+    "Elise": {"dmg": "AP", "cc": True},
+    "Evelynn": {"dmg": "AP", "cc": True},
+    "Fiddlesticks": {"dmg": "AP", "cc": True},
+    "Graves": {"dmg": "AD"},
+    "Gragas": {"dmg": "AP", "cc": True},
+    "Hecarim": {"dmg": "AD", "cc": True},
+    "Ivern": {"dmg": "AP", "cc": True, "heal": True},
+    "JarvanIV": {"dmg": "AD", "cc": True},
+    "Kayn": {"dmg": "AD", "heal": True},
+    "Khazix": {"dmg": "AD"},
+    "Kindred": {"dmg": "AD"},
+    "LeeSin": {"dmg": "AD", "cc": True},
+    "Lillia": {"dmg": "AP", "cc": True},
+    "MasterYi": {"dmg": "AD", "heal": True},
+    "Naafiri": {"dmg": "AD"},
+    "Nidalee": {"dmg": "AP", "heal": True},
+    "Nocturne": {"dmg": "AD"},
+    "Nunu": {"dmg": "AP", "tank": True, "cc": True, "heal": True},
+    "Rammus": {"dmg": "AD", "tank": True, "cc": True},
+    "RekSai": {"dmg": "AD", "cc": True, "heal": True},
+    "Rengar": {"dmg": "AD"},
+    "Sejuani": {"dmg": "AP", "tank": True, "cc": True},
+    "Shaco": {"dmg": "AD"},
+    "Shyvana": {"dmg": "AD", "heal": True},
+    "Skarner": {"dmg": "AD", "tank": True, "cc": True},
+    "Taliyah": {"dmg": "AP", "cc": True},
+    "Trundle": {"dmg": "AD", "heal": True},
+    "Udyr": {"dmg": "AD", "tank": True, "heal": True},
+    "Vi": {"dmg": "AD", "cc": True},
+    "Viego": {"dmg": "AD", "heal": True},
+    "Warwick": {"dmg": "AD", "tank": True, "cc": True, "heal": True},
+    "Wukong": {"dmg": "AD", "cc": True},
+    "XinZhao": {"dmg": "AD", "cc": True, "heal": True},
+    "Zac": {"dmg": "AP", "tank": True, "cc": True, "heal": True},
+    # ── MIDDLE / 미드 ──
+    "Ahri": {"dmg": "AP", "cc": True},
+    "Akali": {"dmg": "AP"},
+    "Akshan": {"dmg": "AD"},
+    "Anivia": {"dmg": "AP", "cc": True},
+    "Annie": {"dmg": "AP", "cc": True},
+    "AurelionSol": {"dmg": "AP", "cc": True},
+    "Azir": {"dmg": "AP", "cc": True},
+    "Cassiopeia": {"dmg": "AP", "cc": True},
+    "Corki": {"dmg": "AD"},
+    "Fizz": {"dmg": "AP"},
+    "Hwei": {"dmg": "AP", "cc": True},
+    "Kassadin": {"dmg": "AP", "cc": True},
+    "Katarina": {"dmg": "AP"},
+    "LeBlanc": {"dmg": "AP", "cc": True},
+    "Lissandra": {"dmg": "AP", "cc": True},
+    "Malzahar": {"dmg": "AP", "cc": True},
+    "Mel": {"dmg": "AP"},
+    "Naafiri": {"dmg": "AD"},
+    "Neeko": {"dmg": "AP", "cc": True},
+    "Orianna": {"dmg": "AP", "cc": True},
+    "Qiyana": {"dmg": "AD", "cc": True},
+    "Sylas": {"dmg": "AP", "cc": True, "heal": True},
+    "Syndra": {"dmg": "AP", "cc": True},
+    "Talon": {"dmg": "AD"},
+    "TwistedFate": {"dmg": "AP", "cc": True},
+    "Veigar": {"dmg": "AP", "cc": True},
+    "VelKoz": {"dmg": "AP", "cc": True},
+    "Vex": {"dmg": "AP", "cc": True},
+    "Viktor": {"dmg": "AP", "cc": True},
+    "Yasuo": {"dmg": "AD"},
+    "Yone": {"dmg": "AD", "cc": True},
+    "Zed": {"dmg": "AD"},
+    "Zoe": {"dmg": "AP", "cc": True},
+    "Galio": {"dmg": "AP", "tank": True, "cc": True},
+    "Swain": {"dmg": "AP", "cc": True, "heal": True},
+    # ── BOTTOM / 원딜 ──
+    "Aphelios": {"dmg": "AD"},
+    "Ashe": {"dmg": "AD", "cc": True},
+    "Caitlyn": {"dmg": "AD"},
+    "Draven": {"dmg": "AD"},
+    "Ezreal": {"dmg": "AD"},
+    "Jhin": {"dmg": "AD", "cc": True},
+    "Jinx": {"dmg": "AD"},
+    "Kaisa": {"dmg": "AD"},
+    "Kalista": {"dmg": "AD"},
+    "KogMaw": {"dmg": "AD"},
+    "Lucian": {"dmg": "AD"},
+    "MissFortune": {"dmg": "AD"},
+    "Nilah": {"dmg": "AD", "heal": True},
+    "Samira": {"dmg": "AD", "heal": True},
+    "Sivir": {"dmg": "AD"},
+    "Smolder": {"dmg": "AD"},
+    "Tristana": {"dmg": "AD"},
+    "Twitch": {"dmg": "AD"},
+    "Varus": {"dmg": "AD", "cc": True},
+    "Vayne": {"dmg": "AD"},
+    "Xayah": {"dmg": "AD", "cc": True},
+    "Zeri": {"dmg": "AD"},
+    "Ziggs": {"dmg": "AP"},
+    # ── UTILITY / 서폿 ──
+    "Alistar": {"dmg": "AP", "tank": True, "cc": True, "heal": True},
+    "Bard": {"dmg": "AP", "cc": True, "heal": True},
+    "Blitzcrank": {"dmg": "AP", "cc": True},
+    "Brand": {"dmg": "AP", "cc": True},
+    "Braum": {"dmg": "AP", "tank": True, "cc": True},
+    "Heimerdinger": {"dmg": "AP", "cc": True},
+    "Janna": {"dmg": "AP", "cc": True, "heal": True},
+    "Karma": {"dmg": "AP", "cc": True, "heal": True},
+    "Leona": {"dmg": "AP", "tank": True, "cc": True},
+    "Lulu": {"dmg": "AP", "cc": True, "heal": True},
+    "Lux": {"dmg": "AP", "cc": True},
+    "Milio": {"dmg": "AP", "cc": True, "heal": True},
+    "Morgana": {"dmg": "AP", "cc": True},
+    "Nami": {"dmg": "AP", "cc": True, "heal": True},
+    "Nautilus": {"dmg": "AP", "tank": True, "cc": True},
+    "Pyke": {"dmg": "AD", "cc": True},
+    "Rakan": {"dmg": "AP", "cc": True, "heal": True},
+    "RenataGlasc": {"dmg": "AP", "cc": True},
+    "Senna": {"dmg": "AD", "heal": True},
+    "Seraphine": {"dmg": "AP", "cc": True, "heal": True},
+    "Sona": {"dmg": "AP", "cc": True, "heal": True},
+    "Soraka": {"dmg": "AP", "cc": True, "heal": True},
+    "Thresh": {"dmg": "AP", "cc": True},
+    "Xerath": {"dmg": "AP", "cc": True},
+    "Yuumi": {"dmg": "AP", "heal": True},
+    "Zilean": {"dmg": "AP", "cc": True},
+    "Zyra": {"dmg": "AP", "cc": True},
+    "Rell": {"dmg": "AP", "tank": True, "cc": True},
+}
+
+DEFAULT_PROFILE = {"dmg": "AD", "tank": False, "cc": False, "heal": False}
+
+def get_champ_profile(champ_en, tags=None):
+    """챔피언 전투 속성 반환. CHAMP_PROFILE에 없으면 DDragon 태그로 추론."""
+    if champ_en in CHAMP_PROFILE:
+        p = {**DEFAULT_PROFILE, **CHAMP_PROFILE[champ_en]}
+        return p
+    # 태그 기반 폴백 추론
+    tags = tags or []
+    p = dict(DEFAULT_PROFILE)
+    if "Mage" in tags:
+        p["dmg"] = "AP"
+    elif "Marksman" in tags:
+        p["dmg"] = "AD"
+    elif "Tank" in tags:
+        p["dmg"] = "AP"; p["tank"] = True; p["cc"] = True
+    elif "Support" in tags:
+        p["dmg"] = "AP"; p["cc"] = True
+    else:  # Fighter, Assassin 등
+        p["dmg"] = "AD"
+    return p
+
+# ─── 카운터 아이템 데이터베이스 ───
+# 각 아이템: img(DDragon 아이템 ID), name(한글명)
+COUNTER_ITEMS = {
+    # 대(對) 탱커 — 물리 딜러용 (현재 체력 비례 피해 / 방어 관통)
+    "anti_tank_ad": [
+        {"img": "3153", "name": "몰락한 왕의 검"},
+        {"img": "6694", "name": "세릴다의 원한"},
+        {"img": "3036", "name": "도미닉 경의 인사"},
+    ],
+    # 대(對) 탱커 — 마법 딜러용 (마법 관통 / 비례 피해)
+    "anti_tank_ap": [
+        {"img": "4645", "name": "그림자불꽃"},
+        {"img": "3135", "name": "공허의 지팡이"},
+        {"img": "6653", "name": "리안드리의 고통"},
+    ],
+    # 대(對) 물리 — 방어/생존 아이템
+    "anti_ad": [
+        {"img": "3047", "name": "판금 장화"},
+        {"img": "3075", "name": "가시 갑옷"},
+        {"img": "3110", "name": "얼어붙은 심장"},
+        {"img": "3143", "name": "란두인의 예언"},
+    ],
+    # 대(對) 마법 — 마법 저항 아이템
+    "anti_ap": [
+        {"img": "3111", "name": "헤르메스의 발걸음"},
+        {"img": "3156", "name": "맬모셔스의 아귀"},
+        {"img": "3065", "name": "정령의 형상"},
+        {"img": "3102", "name": "밴시의 장막"},
+    ],
+    # 대(對) 치유 — 치유 감소(고통스러운 상처)
+    "anti_heal_ad": [
+        {"img": "3033", "name": "필멸자의 운명"},
+        {"img": "6609", "name": "화공 펑크 사슬검"},
+        {"img": "3074", "name": "굶주린 히드라"},
+    ],
+    "anti_heal_ap": [
+        {"img": "3165", "name": "모렐로노미콘"},
+        {"img": "3916", "name": "망각의 구"},
+    ],
+    # 대(對) 군중제어 — CC 해제/면역
+    "anti_cc": [
+        {"img": "3111", "name": "헤르메스의 발걸음"},
+        {"img": "3139", "name": "헤르메스의 시미터"},
+        {"img": "6035", "name": "은빛 여명"},
+    ],
+}

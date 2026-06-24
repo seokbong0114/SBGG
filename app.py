@@ -13,7 +13,8 @@ from champion_meta import (
     ROLE_KR, TIER_COLOR, TREND_ICON, TREND_COLOR,
     DIFFICULTY_LABEL, DIFFICULTY_COLOR,
     NUMERIC_TIER_COLOR, CHAMPION_ROLE_MAP, META_STATS,
-    DEFAULT_ROLE_STATS, calc_meta_tier, RANK_TIER_LABELS
+    DEFAULT_ROLE_STATS, calc_meta_tier, RANK_TIER_LABELS,
+    get_champ_profile, COUNTER_ITEMS
 )
 
 load_dotenv()
@@ -365,6 +366,16 @@ def get_match_details(puuid, start=0, count=20, queue=None):
             elif main_player_data['kda_ratio'] >= 4: main_player_data['feedback'] = "🔥 폼 미쳤다!"
             else: main_player_data['feedback'] = "👍 무난한 플레이"
 
+            # ★ 상황 대응형 아이템 빌드 분석 (상대 조합 기반)
+            enemy_team_id = 200 if main_player_data['teamId'] == 100 else 100
+            enemy_champs = [{'champ_en': p['champ_img'],
+                             'kr': CHAMP_KR_MAP.get(p['champ_img'], p['champ_img'])}
+                            for p in participants_details if p['teamId'] == enemy_team_id]
+            comp = analyze_enemy_comp(enemy_champs)
+            main_player_data['enemy_comp'] = comp
+            main_player_data['situational_build'] = recommend_situational_build(
+                main_player_data['champ_img'], main_player_data.get('role_en', ''), comp)
+
             matches.append(main_player_data)
 
         except Exception as e:
@@ -516,6 +527,105 @@ def analyze_champion_playstyle(stats):
         'style_tags': style_tags[:3],
         'feedback': feedback[:2],
     }
+
+# ═══════════════════════════════════════════════════════════════════════
+#  ★ 상황 대응형 유동적 아이템 빌드 최적화 엔진
+# ═══════════════════════════════════════════════════════════════════════
+
+def analyze_enemy_comp(enemy_champs):
+    """상대 팀 챔피언 영문명 리스트 → 조합 특성 분석.
+    enemy_champs: [{'champ_en': 'Sion', 'kr': '사이온'}, ...] 형태"""
+    profiles = []
+    for c in enemy_champs:
+        prof = get_champ_profile(c['champ_en'], CHAMP_TAGS.get(c['champ_en'], []))
+        profiles.append({**prof, 'champ_en': c['champ_en'], 'kr': c['kr']})
+
+    tanks  = [p for p in profiles if p['tank']]
+    heals  = [p for p in profiles if p['heal']]
+    cc     = [p for p in profiles if p['cc']]
+    ad     = [p for p in profiles if p['dmg'] in ('AD', 'AD/AP')]
+    ap     = [p for p in profiles if p['dmg'] in ('AP', 'AD/AP')]
+
+    total = max(1, len(profiles))
+    return {
+        'profiles': profiles,
+        'tank_names':  [p['kr'] for p in tanks],
+        'heal_names':  [p['kr'] for p in heals],
+        'cc_names':    [p['kr'] for p in cc],
+        'tank_count':  len(tanks),
+        'heal_count':  len(heals),
+        'cc_count':    len(cc),
+        'ad_count':    len(ad),
+        'ap_count':    len(ap),
+        # 위협 플래그
+        'heavy_tank':  len(tanks) >= 2,
+        'heavy_heal':  len(heals) >= 2,
+        'heavy_cc':    len(cc) >= 4,
+        'ad_dominant': len(ad) >= 4,
+        'ap_dominant': len(ap) >= 4,
+    }
+
+def recommend_situational_build(my_champ_en, my_role, comp):
+    """내 챔피언 딜 타입 + 상대 조합 → 상황별 우회 아이템 추천 + 데이터 근거.
+    반환: 추천 카드 리스트 (우선순위 순, 최대 3개)"""
+    my_prof = get_champ_profile(my_champ_en, CHAMP_TAGS.get(my_champ_en, []))
+    my_dmg = my_prof['dmg']
+    is_dealer = my_role in ('TOP', 'JUNGLE', 'MIDDLE', 'BOTTOM') and not my_prof['tank']
+    is_frontline = my_prof['tank'] or my_role == 'UTILITY'
+
+    recs = []
+
+    # 1) 상대 하드 탱커 다수 → 비례 피해/방어 관통 (딜러 한정)
+    if comp['heavy_tank'] and is_dealer:
+        names = ", ".join(comp['tank_names'][:3])
+        if my_dmg == 'AP':
+            items = COUNTER_ITEMS['anti_tank_ap']
+            reason = (f"상대 팀에 {names} 등 하드 탱커가 {comp['tank_count']}명 있습니다. "
+                      f"일반 주문력 빌드로는 단단한 앞라인을 녹이기 어렵습니다. "
+                      f"마법 관통과 현재 체력 비례 피해 아이템으로 우회해 탱커를 효율적으로 무력화하세요.")
+        else:
+            items = COUNTER_ITEMS['anti_tank_ad']
+            reason = (f"상대 팀에 {names} 등 체력을 두껍게 확보한 하드 탱커가 {comp['tank_count']}명 배치되어 있습니다. "
+                      f"치명타·고정 빌드를 고집하기보다 현재 체력 비례 피해와 방어 관통 아이템을 우회 코어로 채용하면 "
+                      f"상대 앞라인을 녹이는 딜링 효율이 극대화됩니다.")
+        recs.append({"priority": 1, "icon": "🛡️", "tag": "대(對) 탱커",
+                     "tag_color": "#fbbf24", "items": items, "reason": reason})
+
+    # 2) 상대 회복/지속력 다수 → 치유 감소
+    if comp['heavy_heal']:
+        names = ", ".join(comp['heal_names'][:3])
+        items = COUNTER_ITEMS['anti_heal_ap'] if my_dmg == 'AP' else COUNTER_ITEMS['anti_heal_ad']
+        reason = (f"상대 팀에 {names} 등 자체 회복·흡혈이 강한 챔피언이 {comp['heal_count']}명 있습니다. "
+                  f"치유 감소(고통스러운 상처) 아이템을 한 코어 앞당겨 구매하면 상대의 지속 교전력을 크게 깎을 수 있습니다.")
+        recs.append({"priority": 2, "icon": "🩸", "tag": "대(對) 회복",
+                     "tag_color": "#f87171", "items": items, "reason": reason})
+
+    # 3) 상대 AD/AP 편중 → 해당 저항 방어 아이템 (탱커/서폿/위협받는 모두)
+    if comp['ad_dominant'] and not (my_dmg == 'AD' and is_dealer and not is_frontline):
+        items = COUNTER_ITEMS['anti_ad']
+        reason = (f"상대 딜 구성이 물리 피해(AD) {comp['ad_count']}명으로 크게 편중되어 있습니다. "
+                  f"방어력 아이템을 한 개 이상 우선 채용하면 상대 주력 딜을 통째로 무력화할 수 있습니다. "
+                  f"특히 치명타가 많다면 랜듀인의 예언이 효과적입니다.")
+        recs.append({"priority": 3, "icon": "⚔️", "tag": "물리 방어",
+                     "tag_color": "#60a5fa", "items": items, "reason": reason})
+    elif comp['ap_dominant'] and not (my_dmg == 'AP' and is_dealer and not is_frontline):
+        items = COUNTER_ITEMS['anti_ap']
+        reason = (f"상대 딜 구성이 마법 피해(AP) {comp['ap_count']}명으로 크게 편중되어 있습니다. "
+                  f"마법 저항 아이템을 한 개 우선 확보하면 상대 폭딜을 안정적으로 버틸 수 있습니다.")
+        recs.append({"priority": 3, "icon": "🔮", "tag": "마법 방어",
+                     "tag_color": "#a78bfa", "items": items, "reason": reason})
+
+    # 4) 상대 강력한 CC 다수 → CC 해제/면역 (딜러에게 특히 치명적)
+    if comp['heavy_cc'] and is_dealer:
+        names = ", ".join(comp['cc_names'][:3])
+        items = COUNTER_ITEMS['anti_cc']
+        reason = (f"상대 팀에 {names} 등 강력한 군중제어기를 가진 챔피언이 {comp['cc_count']}명 있습니다. "
+                  f"한 번의 CC 연계에 즉사할 수 있으므로, 군중제어 해제 장신구·아이템으로 생존 변수를 확보하세요.")
+        recs.append({"priority": 4, "icon": "🌀", "tag": "대(對) CC",
+                     "tag_color": "#34d399", "items": items, "reason": reason})
+
+    recs.sort(key=lambda x: x['priority'])
+    return recs[:3]
 
 def generate_improvement_tips(matches, overall_kda, radar_array):
     tips = []

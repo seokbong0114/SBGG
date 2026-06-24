@@ -126,7 +126,26 @@
         summary:hover { background: rgba(255,255,255,0.06); color: white; }
         .summary-icon { display: inline-block; transition: transform 0.3s ease; }
         details[open] .summary-icon { transform: rotate(180deg); }
-        
+
+        /* ★ AI 상황별 빌드 분석 */
+        .ai-build-details { background: linear-gradient(135deg, rgba(251,191,36,0.06) 0%, rgba(0,0,0,0.3) 60%); border: 1px solid rgba(251,191,36,0.25); }
+        .ai-build-details summary { background: rgba(251,191,36,0.05); }
+        .ai-build-details summary:hover { background: rgba(251,191,36,0.12); }
+        .ai-build-body { padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; }
+        .enemy-comp-summary { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding-bottom: 12px; border-bottom: 1px solid rgba(255,255,255,0.07); }
+        .comp-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+        .comp-chip { font-size: 11px; font-weight: 800; padding: 3px 10px; border-radius: 7px; background: rgba(255,255,255,0.05); color: var(--text-muted); border: 1px solid rgba(255,255,255,0.08); }
+        .comp-chip.chip-alert { background: rgba(251,191,36,0.15); color: #fbbf24; border-color: rgba(251,191,36,0.4); }
+        .ai-rec-card { background: rgba(255,255,255,0.025); border: 1px solid rgba(255,255,255,0.07); border-radius: 12px; padding: 14px 16px; }
+        .ai-rec-header { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 10px; }
+        .ai-rec-icon { font-size: 18px; }
+        .ai-rec-tag { font-size: 12px; font-weight: 900; padding: 3px 10px; border-radius: 7px; border: 1px solid; }
+        .ai-rec-items { display: flex; gap: 8px; flex-wrap: wrap; margin-left: auto; }
+        .ai-rec-item { display: flex; align-items: center; gap: 5px; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.08); border-radius: 8px; padding: 3px 8px 3px 3px; }
+        .ai-rec-item img { width: 26px; height: 26px; border-radius: 6px; }
+        .ai-rec-item span { font-size: 11px; font-weight: 700; color: #e2e8f0; white-space: nowrap; }
+        .ai-rec-reason { font-size: 13px; line-height: 1.7; color: var(--text-muted); background: rgba(0,0,0,0.25); border-left: 3px solid #fbbf24; border-radius: 8px; padding: 10px 14px; }
+
         .scoreboard-container { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; padding: 15px; }
         
         .team-box { border-radius: 12px; padding: 15px; border: var(--border-glass); box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
@@ -270,9 +289,63 @@
                     </div>
                 </div>
             </details>
+
+            {% if match.situational_build is defined %}
+            <details class="ai-build-details">
+                <summary>
+                    <span class="summary-icon">▼</span>
+                    🎯 <b style="color:#fbbf24;">AI 상황별 빌드 분석</b>
+                    {% if match.situational_build %}
+                    <span style="font-size:11px; background:rgba(251,191,36,0.15); color:#fbbf24; border:1px solid rgba(251,191,36,0.35); border-radius:6px; padding:2px 8px; font-weight:800; margin-left:6px;">추천 {{ match.situational_build|length }}개</span>
+                    {% else %}
+                    <span style="font-size:11px; color:var(--text-muted); margin-left:6px;">표준 빌드 적합</span>
+                    {% endif %}
+                </summary>
+                <div class="ai-build-body">
+                    <!-- 상대 조합 요약 -->
+                    <div class="enemy-comp-summary">
+                        <span style="font-size:12px; color:var(--text-muted); font-weight:700;">상대 조합 분석</span>
+                        <div class="comp-chips">
+                            <span class="comp-chip">물리 {{ match.enemy_comp.ad_count }}</span>
+                            <span class="comp-chip">마법 {{ match.enemy_comp.ap_count }}</span>
+                            <span class="comp-chip {% if match.enemy_comp.heavy_tank %}chip-alert{% endif %}">탱커 {{ match.enemy_comp.tank_count }}</span>
+                            <span class="comp-chip {% if match.enemy_comp.heavy_heal %}chip-alert{% endif %}">회복 {{ match.enemy_comp.heal_count }}</span>
+                            <span class="comp-chip {% if match.enemy_comp.heavy_cc %}chip-alert{% endif %}">CC {{ match.enemy_comp.cc_count }}</span>
+                        </div>
+                    </div>
+
+                    {% if match.situational_build %}
+                    {% for rec in match.situational_build %}
+                    <div class="ai-rec-card">
+                        <div class="ai-rec-header">
+                            <span class="ai-rec-icon">{{ rec.icon }}</span>
+                            <span class="ai-rec-tag" style="color:{{ rec.tag_color }}; border-color:{{ rec.tag_color }}44; background:{{ rec.tag_color }}1a;">{{ rec.tag }}</span>
+                            <div class="ai-rec-items">
+                                {% for it in rec['items'] %}
+                                <div class="ai-rec-item" title="{{ it.name }}">
+                                    <img src="https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/item/{{ it.img }}.png" onerror="this.parentElement.style.display='none'">
+                                    <span>{{ it.name }}</span>
+                                </div>
+                                {% endfor %}
+                            </div>
+                        </div>
+                        <div class="ai-rec-reason">{{ rec.reason }}</div>
+                    </div>
+                    {% endfor %}
+                    {% else %}
+                    <div style="text-align:center; padding:20px; color:var(--text-muted); font-size:13px;">
+                        ✅ 상대 조합에 큰 변수가 없습니다. 챔피언 표준 코어 빌드로 충분히 대응 가능합니다.
+                    </div>
+                    {% endif %}
+                    <div style="font-size:10px; color:var(--text-muted); text-align:right; margin-top:8px; opacity:0.6;">
+                        ※ 상대 팀 조합과 최신 메타 데이터를 기반으로 SB.GG가 자동 연산한 우회 빌드 가이드입니다.
+                    </div>
+                </div>
+            </details>
+            {% endif %}
         </div>
         {% endfor %}
-        
+
     {% elif page == 'multi' %}
         <!-- ================= 멀티 서치 요약 대시보드 ================= -->
         <nav class="top-nav">
