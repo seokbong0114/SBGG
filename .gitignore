@@ -25,3 +25,7 @@ Thumbs.db
 # 테스트 스크립트 (개발용)
 test.py
 test_match.py
+
+# 로컬 실행 로그
+server.log
+*.log
