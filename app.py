@@ -122,6 +122,31 @@ def init_db():
         champ_en TEXT, role TEXT, seq TEXT,
         games INTEGER DEFAULT 0, wins INTEGER DEFAULT 0,
         PRIMARY KEY (champ_en, role, seq))''')
+    # 상세 룬 페이지 (키스톤+주룬3+보조룬2+샤드3 전체)
+    cursor.execute('''CREATE TABLE IF NOT EXISTS build_runepages (
+        champ_en TEXT, role TEXT, page TEXT, primary_style INTEGER, sub_style INTEGER,
+        games INTEGER DEFAULT 0, wins INTEGER DEFAULT 0,
+        PRIMARY KEY (champ_en, role, page))''')
+    # 추천 신발
+    cursor.execute('''CREATE TABLE IF NOT EXISTS build_boots (
+        champ_en TEXT, role TEXT, item_id TEXT,
+        games INTEGER DEFAULT 0, wins INTEGER DEFAULT 0,
+        PRIMARY KEY (champ_en, role, item_id))''')
+    # 시작 아이템 세트
+    cursor.execute('''CREATE TABLE IF NOT EXISTS build_starts (
+        champ_en TEXT, role TEXT, items TEXT,
+        games INTEGER DEFAULT 0, wins INTEGER DEFAULT 0,
+        PRIMARY KEY (champ_en, role, items))''')
+    # 레벨별 스킬 선택 (lol.ps 스타일 18레벨 스킬트리)
+    cursor.execute('''CREATE TABLE IF NOT EXISTS build_skill_levels (
+        champ_en TEXT, role TEXT, lvl INTEGER, slot INTEGER,
+        games INTEGER DEFAULT 0, wins INTEGER DEFAULT 0,
+        PRIMARY KEY (champ_en, role, lvl, slot))''')
+    # 카운터 라인 맞대결
+    cursor.execute('''CREATE TABLE IF NOT EXISTS build_matchups (
+        champ_en TEXT, role TEXT, opponent TEXT,
+        games INTEGER DEFAULT 0, wins INTEGER DEFAULT 0,
+        PRIMARY KEY (champ_en, role, opponent))''')
     # 타임라인 처리 완료 매치 (스킬/아이템순서 중복 방지)
     cursor.execute('''CREATE TABLE IF NOT EXISTS processed_timelines (
         match_id TEXT PRIMARY KEY, processed_at INTEGER)''')
@@ -182,17 +207,21 @@ def record_match_stats(m_res, match_id):
                            ON CONFLICT(champ_en, role) DO UPDATE SET games=games+1, wins=wins+?""",
                         (champ, role, win, win))
 
-            # 룬 (키스톤 + 주/보조 트리)
+            # 상세 룬 페이지 (키스톤+주룬3 | 보조룬2 | 샤드3)
             try:
-                styles = p.get('perks', {}).get('styles', [])
-                keystone = styles[0]['selections'][0]['perk']
-                primary = styles[0]['style']
-                sub = styles[1]['style']
-                cur.execute("""INSERT INTO build_runes (champ_en, role, keystone, primary_style, sub_style, games, wins)
+                perks = p.get('perks', {})
+                styles = perks['styles']
+                primary_sel = [s['perk'] for s in styles[0]['selections']]
+                sub_sel = [s['perk'] for s in styles[1]['selections']]
+                stat = perks.get('statPerks', {})
+                shards = [stat.get('offense'), stat.get('flex'), stat.get('defense')]
+                page = ",".join(str(x) for x in primary_sel) + "|" + \
+                       ",".join(str(x) for x in sub_sel) + "|" + \
+                       ",".join(str(x) for x in shards)
+                cur.execute("""INSERT INTO build_runepages (champ_en, role, page, primary_style, sub_style, games, wins)
                                VALUES (?,?,?,?,?,1,?)
-                               ON CONFLICT(champ_en, role, keystone, primary_style, sub_style)
-                               DO UPDATE SET games=games+1, wins=wins+?""",
-                            (champ, role, keystone, primary, sub, win, win))
+                               ON CONFLICT(champ_en, role, page) DO UPDATE SET games=games+1, wins=wins+?""",
+                            (champ, role, page, styles[0]['style'], styles[1]['style'], win, win))
             except (KeyError, IndexError, TypeError):
                 pass
 
@@ -204,13 +233,35 @@ def record_match_stats(m_res, match_id):
                                ON CONFLICT(champ_en, role, spells) DO UPDATE SET games=games+1, wins=wins+?""",
                             (champ, role, combo, win, win))
 
-            # 최종 아이템 중 코어(완성 전설) 아이템만 빈도 집계
+            # 최종 아이템 → 코어/신발 분리 빈도 집계
             for i in range(6):
                 iid = str(p.get(f'item{i}', 0))
-                if iid != '0' and iid in CORE_ITEMS:
+                if iid == '0':
+                    continue
+                if iid in BOOTS_ITEMS:
+                    cur.execute("""INSERT INTO build_boots (champ_en, role, item_id, games, wins) VALUES (?,?,?,1,?)
+                                   ON CONFLICT(champ_en, role, item_id) DO UPDATE SET games=games+1, wins=wins+?""",
+                                (champ, role, iid, win, win))
+                elif iid in CORE_ITEMS:
                     cur.execute("""INSERT INTO build_items (champ_en, role, item_id, games, wins) VALUES (?,?,?,1,?)
                                    ON CONFLICT(champ_en, role, item_id) DO UPDATE SET games=games+1, wins=wins+?""",
                                 (champ, role, iid, win, win))
+
+        # 카운터 라인 맞대결 (같은 라인 양 팀 챔피언 대결)
+        by_role = {}
+        for p in info.get('participants', []):
+            r = p.get('teamPosition', '')
+            if r in VALID_ROLES and p.get('championName'):
+                by_role.setdefault(r, []).append((p['championName'], p.get('teamId'), 1 if p.get('win') else 0))
+        for r, plist in by_role.items():
+            if len(plist) == 2 and plist[0][1] != plist[1][1]:
+                (ca, _, wa), (cb, _, wb) = plist
+                cur.execute("""INSERT INTO build_matchups (champ_en, role, opponent, games, wins) VALUES (?,?,?,1,?)
+                               ON CONFLICT(champ_en, role, opponent) DO UPDATE SET games=games+1, wins=wins+?""",
+                            (ca, r, cb, wa, wa))
+                cur.execute("""INSERT INTO build_matchups (champ_en, role, opponent, games, wins) VALUES (?,?,?,1,?)
+                               ON CONFLICT(champ_en, role, opponent) DO UPDATE SET games=games+1, wins=wins+?""",
+                            (cb, r, ca, wb, wb))
         # 밴
         for team in info.get('teams', []):
             for ban in team.get('bans', []):
@@ -232,7 +283,7 @@ def record_match_stats(m_res, match_id):
         print(f"통계 기록 에러 [{match_id}]: {e}")
         return False
 
-SKILL_LETTER = {1: "Q", 2: "W", 3: "E"}
+SKILL_LETTER = {1: "Q", 2: "W", 3: "E", 4: "R"}
 
 def record_timeline_stats(timeline, m_res, match_id):
     """타임라인에서 스킬 마스터 순서 + 코어 아이템 구매 순서를 수집.
@@ -252,8 +303,9 @@ def record_timeline_stats(timeline, m_res, match_id):
             if pid and role in VALID_ROLES and p.get('championName'):
                 pmeta[pid] = (p['championName'], role, 1 if p.get('win') else 0)
 
-        skill_seq = {pid: [] for pid in pmeta}    # 슬롯(1/2/3) 레벨업 순서
+        skill_seq = {pid: [] for pid in pmeta}    # 슬롯(1/2/3/4) 레벨업 순서 (전체 18레벨)
         item_seq = {pid: [] for pid in pmeta}     # 코어 아이템 구매 순서
+        start_items = {pid: set() for pid in pmeta}  # 시작 아이템 (초반 70초)
 
         for frame in timeline.get('info', {}).get('frames', []):
             for ev in frame.get('events', []):
@@ -263,33 +315,48 @@ def record_timeline_stats(timeline, m_res, match_id):
                 et = ev.get('type')
                 if et == 'SKILL_LEVEL_UP':
                     slot = ev.get('skillSlot')
-                    if slot in (1, 2, 3) and len(skill_seq[pid]) < 12:
+                    if slot in (1, 2, 3, 4) and len(skill_seq[pid]) < 18:
                         skill_seq[pid].append(slot)
                 elif et == 'ITEM_PURCHASED':
                     iid = str(ev.get('itemId', 0))
+                    ts = ev.get('timestamp', 0)
+                    if ts <= 70000 and iid in START_ITEMS:
+                        start_items[pid].add(iid)
                     if iid in CORE_ITEMS and iid not in item_seq[pid]:
                         item_seq[pid].append(iid)
 
         for pid, (champ, role, win) in pmeta.items():
-            # 스킬 마스터 순서: 초반 9개 포인트 중 슬롯별 빈도 → 우선순위
-            seq = skill_seq[pid][:9]
-            if seq:
+            full = skill_seq[pid]
+            # 스킬 마스터 순서(우선순위): Q/W/E 초반 9포인트 빈도
+            qwe = [s for s in full if s in (1, 2, 3)][:9]
+            if qwe:
                 counts = {}
-                for idx, slot in enumerate(seq):
+                for idx, slot in enumerate(qwe):
                     if slot not in counts:
-                        counts[slot] = [0, idx]  # [횟수, 첫등장]
+                        counts[slot] = [0, idx]
                     counts[slot][0] += 1
                 ordered = sorted(counts.keys(), key=lambda s: (-counts[s][0], counts[s][1]))
                 order_str = ">".join(SKILL_LETTER[s] for s in ordered)
                 cur.execute("""INSERT INTO build_skills (champ_en, role, skill_order, games, wins) VALUES (?,?,?,1,?)
                                ON CONFLICT(champ_en, role, skill_order) DO UPDATE SET games=games+1, wins=wins+?""",
                             (champ, role, order_str, win, win))
+            # 레벨별 스킬 (lol.ps 스타일 18레벨 트리)
+            for lvl, slot in enumerate(full, start=1):
+                cur.execute("""INSERT INTO build_skill_levels (champ_en, role, lvl, slot, games, wins) VALUES (?,?,?,?,1,?)
+                               ON CONFLICT(champ_en, role, lvl, slot) DO UPDATE SET games=games+1, wins=wins+?""",
+                            (champ, role, lvl, slot, win, win))
             # 코어 아이템 구매 순서: 앞 3개
             if item_seq[pid]:
                 seqstr = "-".join(item_seq[pid][:3])
                 cur.execute("""INSERT INTO build_item_order (champ_en, role, seq, games, wins) VALUES (?,?,?,1,?)
                                ON CONFLICT(champ_en, role, seq) DO UPDATE SET games=games+1, wins=wins+?""",
                             (champ, role, seqstr, win, win))
+            # 시작 아이템 세트
+            if start_items[pid]:
+                sset = "-".join(sorted(start_items[pid]))
+                cur.execute("""INSERT INTO build_starts (champ_en, role, items, games, wins) VALUES (?,?,?,1,?)
+                               ON CONFLICT(champ_en, role, items) DO UPDATE SET games=games+1, wins=wins+?""",
+                            (champ, role, sset, win, win))
 
         cur.execute("INSERT OR IGNORE INTO processed_timelines (match_id, processed_at) VALUES (?,?)",
                     (match_id, int(time.time())))
@@ -343,16 +410,29 @@ def get_champion_build(champ_en, preferred_role=None):
 
         build = {"role": role, "sample": sample}
 
-        # 룬 — 가장 인기있는 키스톤+트리 조합
-        rr = cur.execute("""SELECT keystone, primary_style, sub_style, games, wins FROM build_runes
+        def _rune(pid):
+            return {"icon": RUNE_MAP.get(pid), "name": RUNE_NAME.get(pid, "")}
+
+        # 상세 룬 — 가장 인기있는 전체 룬 페이지 (키스톤+주룬3 | 보조룬2 | 샤드3)
+        rp = cur.execute("""SELECT page, primary_style, sub_style, games, wins FROM build_runepages
                             WHERE champ_en=? AND role=? ORDER BY games DESC LIMIT 1""", (champ_en, role)).fetchone()
-        if rr:
-            build["runes"] = {
-                "keystone": {"icon": RUNE_MAP.get(rr[0]), "name": RUNE_NAME.get(rr[0], "")},
-                "primary":  {"icon": RUNE_MAP.get(rr[1]), "name": RUNE_NAME.get(rr[1], "")},
-                "sub":      {"icon": RUNE_MAP.get(rr[2]), "name": RUNE_NAME.get(rr[2], "")},
-                "games": rr[3], "wr": round(rr[4] / rr[3] * 100) if rr[3] else 0,
-            }
+        if rp:
+            try:
+                primary_part, sub_part, shard_part = rp[0].split("|")
+                primary_ids = [int(x) for x in primary_part.split(",") if x]
+                sub_ids = [int(x) for x in sub_part.split(",") if x]
+                shard_ids = [int(x) for x in shard_part.split(",") if x]
+                build["runes"] = {
+                    "primary_style": {"icon": RUNE_MAP.get(rp[1]), "name": RUNE_NAME.get(rp[1], "")},
+                    "sub_style": {"icon": RUNE_MAP.get(rp[2]), "name": RUNE_NAME.get(rp[2], "")},
+                    "keystone": _rune(primary_ids[0]) if primary_ids else None,
+                    "primary": [_rune(x) for x in primary_ids[1:]],
+                    "sub": [_rune(x) for x in sub_ids],
+                    "shards": [{"icon": shard_icon(s), "name": SHARD_INFO.get(s, ("",))[0]} for s in shard_ids],
+                    "games": rp[3], "wr": round(rp[4] / rp[3] * 100) if rp[3] else 0,
+                }
+            except (ValueError, IndexError):
+                pass
         # 소환사 주문
         sr = cur.execute("""SELECT spells, games, wins FROM build_spells
                             WHERE champ_en=? AND role=? ORDER BY games DESC LIMIT 1""", (champ_en, role)).fetchone()
@@ -363,26 +443,68 @@ def get_champion_build(champ_en, preferred_role=None):
                 if key:
                     spells.append({"icon": key, "name": SPELL_NAME.get(key, "")})
             build["spells"] = {"list": spells, "games": sr[1], "wr": round(sr[2] / sr[1] * 100) if sr[1] else 0}
-        # 코어 아이템 — 상위 6개 빈도
+        # 시작 아이템 세트
+        st = cur.execute("""SELECT items, games, wins FROM build_starts
+                            WHERE champ_en=? AND role=? ORDER BY games DESC LIMIT 1""", (champ_en, role)).fetchone()
+        if st:
+            build["starts"] = {"list": [{"id": i, "name": ITEM_NAME.get(i, "")} for i in st[0].split("-")],
+                               "games": st[1], "wr": round(st[2] / st[1] * 100) if st[1] else 0}
+        # 추천 신발 — 상위 1개
+        bt = cur.execute("""SELECT item_id, games, wins FROM build_boots
+                            WHERE champ_en=? AND role=? ORDER BY games DESC LIMIT 1""", (champ_en, role)).fetchone()
+        if bt:
+            build["boots"] = {"id": bt[0], "name": ITEM_NAME.get(bt[0], ""),
+                              "games": bt[1], "wr": round(bt[2] / bt[1] * 100) if bt[1] else 0}
+        # 코어 아이템 빈도 (상위 6개)
         items = cur.execute("""SELECT item_id, games, wins FROM build_items
                                WHERE champ_en=? AND role=? ORDER BY games DESC LIMIT 6""", (champ_en, role)).fetchall()
         build["items"] = [{"id": it[0], "name": ITEM_NAME.get(it[0], ""),
                            "wr": round(it[2] / it[1] * 100) if it[1] else 0, "games": it[1]} for it in items]
-        # 스킬 마스터 순서
+        # 상위 3개 코어 빌드(3코어 순서)
+        top_builds = cur.execute("""SELECT seq, games, wins FROM build_item_order
+                                    WHERE champ_en=? AND role=? ORDER BY games DESC LIMIT 3""", (champ_en, role)).fetchall()
+        build["top_builds"] = [{
+            "list": [{"id": i, "name": ITEM_NAME.get(i, "")} for i in tb[0].split("-")],
+            "games": tb[1], "wr": round(tb[2] / tb[1] * 100) if tb[1] else 0
+        } for tb in top_builds]
+        # 스킬 마스터 순서(우선순위)
         sk = cur.execute("""SELECT skill_order, games, wins FROM build_skills
                             WHERE champ_en=? AND role=? ORDER BY games DESC LIMIT 1""", (champ_en, role)).fetchone()
         if sk:
             build["skill_order"] = {"order": sk[0].split(">"), "games": sk[1], "wr": round(sk[2] / sk[1] * 100) if sk[1] else 0}
-        # 코어 아이템 구매 순서
-        io = cur.execute("""SELECT seq, games, wins FROM build_item_order
-                            WHERE champ_en=? AND role=? ORDER BY games DESC LIMIT 1""", (champ_en, role)).fetchone()
-        if io:
-            build["item_order"] = {"list": [{"id": i, "name": ITEM_NAME.get(i, "")} for i in io[0].split("-")],
-                                   "games": io[1], "wr": round(io[2] / io[1] * 100) if io[1] else 0}
+        # 레벨별 스킬트리 (lol.ps 스타일) — 각 레벨에서 가장 많이 찍은 슬롯
+        lvl_rows = cur.execute("""SELECT lvl, slot, games FROM build_skill_levels
+                                  WHERE champ_en=? AND role=?""", (champ_en, role)).fetchall()
+        if lvl_rows:
+            best = {}  # lvl → (slot, games)
+            for lvl, slot, games in lvl_rows:
+                if lvl not in best or games > best[lvl][1]:
+                    best[lvl] = (slot, games)
+            build["skill_levels"] = {lvl: SKILL_LETTER.get(best[lvl][0]) for lvl in best}
         conn.close()
         return build
     except Exception as e:
         print(f"빌드 산출 에러 [{champ_en}]: {e}")
+        return None
+
+def get_champion_counters(champ_en, role, min_games=3):
+    """라인 맞대결 승률 기반 카운터(취약)/유리 상대 산출."""
+    try:
+        conn = sqlite3.connect(DB_FILE)
+        rows = conn.execute("""SELECT opponent, games, wins FROM build_matchups
+                               WHERE champ_en=? AND role=? AND games>=? ORDER BY games DESC""",
+                            (champ_en, role, min_games)).fetchall()
+        conn.close()
+        matchups = [{"id": r[0], "kr": CHAMP_KR_MAP.get(r[0], r[0]),
+                     "games": r[1], "wr": round(r[2] / r[1] * 100)} for r in rows]
+        if not matchups:
+            return None
+        weak = sorted(matchups, key=lambda x: x["wr"])[:3]            # 승률 낮은 = 취약
+        strong = sorted(matchups, key=lambda x: -x["wr"])[:3]         # 승률 높은 = 유리
+        return {"weak": [m for m in weak if m["wr"] < 50],
+                "strong": [m for m in strong if m["wr"] >= 50]}
+    except Exception as e:
+        print(f"카운터 산출 에러 [{champ_en}]: {e}")
         return None
 
 # 앱 시작 시 DB 초기화 실행
@@ -415,17 +537,43 @@ try:
     item_data = requests.get(f"https://ddragon.leagueoflegends.com/cdn/{LATEST_VERSION}/data/ko_KR/item.json", **req_opts).json()['data']
     ITEM_NAME = {iid: v['name'] for iid, v in item_data.items()}
     CORE_ITEMS = set()   # 완성 전설/신화 아이템 id (코어템 후보)
+    BOOTS_ITEMS = set()  # 완성 신발 id
+    START_ITEMS = set()  # 시작 아이템 후보 (저가 스타터 + 물약)
     for iid, v in item_data.items():
         gold = v.get('gold', {})
-        if (gold.get('purchasable') and gold.get('total', 0) >= 2000
-                and not v.get('into') and v.get('maps', {}).get('11')
-                and not v.get('requiredAlly')):
+        tags = v.get('tags', [])
+        on_sr = v.get('maps', {}).get('11')
+        if not on_sr:
+            continue
+        # 신발: 2티어/3티어 모두 (2티어는 3티어로 into 되므로 into 조건 제외)
+        if "Boots" in tags and gold.get('purchasable') and gold.get('total', 0) >= 600:
+            BOOTS_ITEMS.add(iid)
+        elif (gold.get('purchasable') and gold.get('total', 0) >= 2000
+                and not v.get('into') and not v.get('requiredAlly')):
             CORE_ITEMS.add(iid)
+        # 시작 아이템: 저가(0<총액<=500) 스타터/물약 (장신구 제외)
+        if gold.get('purchasable') and 0 < gold.get('total', 0) <= 500 and "Trinket" not in tags:
+            START_ITEMS.add(iid)
+    # 스탯 샤드 (DDragon 미제공 → CommunityDragon 아이콘 + 한글명 하드코딩)
+    SHARD_INFO = {
+        5008: ("적응형 능력치", "statmodsadaptiveforceicon.png"),
+        5005: ("공격 속도",     "statmodsattackspeedicon.png"),
+        5007: ("스킬 가속",     "statmodscdrscalingicon.png"),
+        5010: ("이동 속도",     "statmodsmovementspeedicon.png"),
+        5011: ("체력",          "statmodshealthplusicon.png"),
+        5013: ("강인함·둔화 저항","statmodstenacityicon.png"),
+        5001: ("체력 비례 성장", "statmodshealthscalingicon.png"),
+    }
 except Exception as e:
     print(f"라이엇 데이터 로드 실패 (안전 모드 실행): {e}")
     LATEST_VERSION = "14.12.1"
     CHAMP_KR_MAP, CHAMP_KEYS, SPELL_MAP, RUNE_MAP, CHAMP_TAGS = {}, {}, {}, {}, {}
     SPELL_NAME, RUNE_NAME, ITEM_NAME, CORE_ITEMS = {}, {}, {}, set()
+    BOOTS_ITEMS, START_ITEMS, SHARD_INFO = set(), set(), {}
+
+def shard_icon(shard_id):
+    info = SHARD_INFO.get(shard_id)
+    return f"https://raw.communitydragon.org/latest/game/assets/perks/statmods/{info[1]}" if info else ""
 
 # 패치 라벨을 DDragon 최신 버전에서 자동 도출 ("16.13.1" → "16.13")
 # → 화면에 표시되는 패치 번호가 실제 데이터 출처와 항상 일치
@@ -1566,11 +1714,14 @@ def champion_page(champ_id):
     skills = get_champion_detail(canonical_id)
     # 5) 실측 추천 빌드 (룬/스펠/아이템/스킬순서) — 수집 데이터 기반
     champ_build = get_champion_build(canonical_id, champ_role)
+    # 6) 카운터 라인 맞대결 (실측 승률 기반)
+    build_role = champ_build['role'] if champ_build else champ_role
+    champ_counters = get_champion_counters(canonical_id, build_role)
 
     return render_template('index.html', page='champion', champ=styled,
                            champ_role=ROLE_KR.get(champ_role, champ_role),
                            champ_role_en=champ_role, has_build=has_build, skills=skills,
-                           champ_build=champ_build, role_kr=ROLE_KR,
+                           champ_build=champ_build, champ_counters=champ_counters, role_kr=ROLE_KR,
                            latest_version=LATEST_VERSION, current_patch=CURRENT_PATCH)
 
 @app.route('/search')
