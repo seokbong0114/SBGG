@@ -190,7 +190,11 @@
         .skill-name { font-size: 11px; font-weight: 700; color: #e2e8f0; text-align: center; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 88px; }
 
         /* 최근 전적 보러가기 카드 */
-        .recent-jump-card { cursor: pointer; transition: 0.2s; border: 1px solid rgba(255,255,255,0.06); }
+        /* backdrop-filter 제거: 스크롤로 화면을 벗어났다 돌아올 때 Chrome이
+           backdrop-filter 레이어를 즉시 repaint하지 못해 칸이 잠깐 사라지는 버그 방지.
+           동일 RGB의 불투명 배경(#1e293b)으로 대체하여 외형은 그대로 유지. */
+        .recent-jump-card { cursor: pointer; transition: 0.2s; border: 1px solid rgba(255,255,255,0.06);
+            background: #1e293b; backdrop-filter: none; -webkit-backdrop-filter: none; }
         .recent-jump-card:hover { transform: translateY(-2px); border-color: rgba(244,63,94,0.35); box-shadow: 0 8px 24px rgba(244,63,94,0.12); }
         .recent-jump-card:hover .recent-jump-arrow { animation: jumpBounce 0.6s infinite; }
         @keyframes jumpBounce { 0%,100% { transform: translateY(0); } 50% { transform: translateY(5px); } }
