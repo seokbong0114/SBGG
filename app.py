@@ -1017,13 +1017,10 @@ def get_live_challenger_games():
         for entry in entries[:20]:
             if len(live_games) >= 6:
                 break
-            summoner_id = entry.get('summonerId', '')
-            if not summoner_id:
+            # 챌린저 엔트리는 puuid를 직접 제공 (summonerId 미제공)
+            puuid = entry.get('puuid', '')
+            if not puuid:
                 continue
-            s_res = riot_get(f"https://kr.api.riotgames.com/lol/summoner/v4/summoners/{summoner_id}")
-            if s_res.status_code != 200:
-                continue
-            puuid = s_res.json().get('puuid', '')
             g_res = riot_get(f"https://kr.api.riotgames.com/lol/spectator/v5/active-games/by-puuid/{puuid}")
             if g_res.status_code != 200:
                 continue
@@ -1038,8 +1035,19 @@ def get_live_challenger_games():
             participants = game.get('participants', [])
             blue = [p for p in participants if p['teamId'] == 100]
             red  = [p for p in participants if p['teamId'] == 200]
+            # puuid → 라이엇 ID 해석 (게임당 1회, 최대 6회)
+            disp_name, disp_tag = "챌린저", "KR1"
+            try:
+                acc = riot_get(f"https://asia.api.riotgames.com/riot/account/v1/accounts/by-puuid/{puuid}")
+                if acc.status_code == 200:
+                    aj = acc.json()
+                    disp_name = aj.get('gameName', '챌린저')
+                    disp_tag = aj.get('tagLine', 'KR1')
+            except Exception:
+                pass
             live_games.append({
-                "summoner_name": entry.get('summonerName', '챌린저'),
+                "summoner_name": disp_name,
+                "summoner_tag": disp_tag,
                 "lp": f"{entry['leaguePoints']:,} LP",
                 "tier": "CHALLENGER",
                 "queue": QUEUE_MAP.get(game.get('gameQueueConfigId', 0), "랭크"),
