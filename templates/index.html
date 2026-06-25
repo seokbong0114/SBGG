@@ -189,6 +189,20 @@
         .skill-key { position: absolute; bottom: -6px; right: -6px; background: var(--point-color); color: white; font-size: 11px; font-weight: 900; width: 20px; height: 20px; border-radius: 6px; display: flex; align-items: center; justify-content: center; border: 2px solid var(--bg-panel); }
         .skill-name { font-size: 11px; font-weight: 700; color: #e2e8f0; text-align: center; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 88px; }
 
+        /* 추천 빌드 (실측 아이콘) */
+        .build-label { font-size: 12px; color: var(--text-muted); font-weight: 700; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
+        .build-wr { font-size: 11px; color: #4ade80; font-weight: 800; background: rgba(74,222,128,0.1); padding: 1px 7px; border-radius: 5px; }
+        .rune-main { display: flex; align-items: center; gap: 10px; background: rgba(244,63,94,0.08); border: 1px solid rgba(244,63,94,0.25); border-radius: 12px; padding: 8px 14px 8px 8px; }
+        .rune-main img { width: 44px; height: 44px; }
+        .rune-nm { font-size: 14px; font-weight: 900; color: white; }
+        .rune-tree { font-size: 11px; color: var(--text-muted); font-weight: 700; margin-top: 2px; }
+        .rune-sub { display: flex; align-items: center; gap: 8px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.1); border-radius: 12px; padding: 8px 14px; }
+        .rune-sub img { width: 28px; height: 28px; }
+        .rune-sub span { font-size: 13px; font-weight: 800; color: var(--text-muted); }
+        .skill-pri { position: relative; width: 40px; height: 40px; border-radius: 10px; overflow: visible; border: 1px solid rgba(244,63,94,0.4); background: rgba(244,63,94,0.12); }
+        .skill-pri img { width: 100%; height: 100%; border-radius: 10px; display: block; }
+        .skill-pri-key { position: absolute; bottom: -5px; right: -5px; background: var(--point-color); color: white; font-size: 10px; font-weight: 900; width: 18px; height: 18px; border-radius: 5px; display: flex; align-items: center; justify-content: center; border: 2px solid var(--bg-panel); }
+
         /* 로그인 / 회원가입 */
         .auth-wrap { flex: 1; display: flex; align-items: center; justify-content: center; padding: 40px 20px; }
         .auth-card { width: 100%; max-width: 400px; padding: 36px 32px; }
@@ -1760,54 +1774,95 @@
             <!-- 빌드 추천 -->
             <div>
                 <div class="glass-panel" style="padding: 24px; margin-bottom: 16px;">
-                    <div class="section-title" style="margin-bottom: 18px;">🛠️ 추천 빌드 ({{ current_patch }})</div>
-                    {% if has_build %}
-                    <div style="margin-bottom: 16px;">
-                        <div style="font-size: 12px; color: var(--text-muted); font-weight: 700; margin-bottom: 8px;">주문/보조 룬</div>
-                        <div style="display: flex; gap: 10px; align-items: center;">
-                            <div style="background: rgba(255,255,255,0.06); padding: 8px 16px; border-radius: 10px; font-size: 14px; font-weight: 800; border: 1px solid rgba(255,255,255,0.1);">🔑 {{ champ.rune_main }}</div>
-                            <div style="color: var(--text-muted); font-size: 16px;">+</div>
-                            <div style="background: rgba(255,255,255,0.04); padding: 8px 16px; border-radius: 10px; font-size: 14px; font-weight: 800; color: var(--text-muted); border: 1px solid rgba(255,255,255,0.08);">{{ champ.rune_sub }}</div>
+                    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom: 18px;">
+                        <div class="section-title" style="margin:0;">🛠️ 추천 빌드</div>
+                        {% if champ_build %}
+                        <span style="font-size: 11px; background: rgba(74,222,128,0.12); color: #4ade80; border: 1px solid rgba(74,222,128,0.3); border-radius: 6px; padding: 3px 9px; font-weight: 800;">실측 {{ champ_build.sample }}게임 · {{ role_kr.get(champ_build.role, champ_build.role) }}</span>
+                        {% endif %}
+                    </div>
+
+                    {% if champ_build %}
+                    <!-- 룬 -->
+                    {% if champ_build.runes %}
+                    <div style="margin-bottom: 20px;">
+                        <div class="build-label">룬 <span class="build-wr">승률 {{ champ_build.runes.wr }}%</span></div>
+                        <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+                            <div class="rune-main">
+                                <img src="https://ddragon.leagueoflegends.com/cdn/img/{{ champ_build.runes.keystone.icon }}" title="{{ champ_build.runes.keystone.name }}" onerror="this.style.display='none'">
+                                <div><div class="rune-nm">{{ champ_build.runes.keystone.name }}</div><div class="rune-tree" style="display:flex; align-items:center; gap:4px;"><img src="https://ddragon.leagueoflegends.com/cdn/img/{{ champ_build.runes.primary.icon }}" style="width:16px;height:16px;" onerror="this.style.display='none'">{{ champ_build.runes.primary.name }}</div></div>
+                            </div>
+                            <div style="color: var(--text-muted); font-size: 18px; font-weight: 300;">+</div>
+                            <div class="rune-sub">
+                                <img src="https://ddragon.leagueoflegends.com/cdn/img/{{ champ_build.runes.sub.icon }}" title="{{ champ_build.runes.sub.name }}" onerror="this.style.display='none'">
+                                <span>{{ champ_build.runes.sub.name }}</span>
+                            </div>
                         </div>
                     </div>
-                    <div style="margin-bottom: 16px;">
-                        <div style="font-size: 12px; color: var(--text-muted); font-weight: 700; margin-bottom: 8px;">스킬 마스터 순서</div>
+                    {% endif %}
+
+                    <!-- 소환사 주문 -->
+                    {% if champ_build.spells and champ_build.spells.list %}
+                    <div style="margin-bottom: 20px;">
+                        <div class="build-label">소환사 주문 <span class="build-wr">승률 {{ champ_build.spells.wr }}%</span></div>
                         <div style="display: flex; gap: 8px;">
-                            {% for sk in champ.skill_order.split('→') %}
-                            <div style="width: 40px; height: 40px; background: rgba(244,63,94,0.15); border: 1px solid rgba(244,63,94,0.4); border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 16px; font-weight: 900; color: var(--point-color);">{{ sk }}</div>
-                            {% if not loop.last %}<div style="display:flex;align-items:center;color:var(--text-muted);font-size:14px;">→</div>{% endif %}
+                            {% for sp in champ_build.spells.list %}
+                            <img src="https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/spell/{{ sp.icon }}.png" title="{{ sp.name }}" style="width:40px; height:40px; border-radius:10px; border:1px solid rgba(255,255,255,0.12);" onerror="this.style.display='none'">
                             {% endfor %}
                         </div>
                     </div>
+                    {% endif %}
+
+                    <!-- 스킬 마스터 순서 -->
+                    {% if champ_build.skill_order %}
+                    <div style="margin-bottom: 20px;">
+                        <div class="build-label">스킬 마스터 순서 <span class="build-wr">승률 {{ champ_build.skill_order.wr }}%</span></div>
+                        <div style="display: flex; gap: 6px; align-items: center;">
+                            {% for letter in champ_build.skill_order.order %}
+                            <div class="skill-pri">
+                                {% if skills %}{% for sp in skills.spells %}{% if sp.key == letter %}<img src="{{ sp.img }}" onerror="this.style.opacity=0">{% endif %}{% endfor %}{% endif %}
+                                <span class="skill-pri-key">{{ letter }}</span>
+                            </div>
+                            {% if not loop.last %}<span style="color:var(--text-muted); font-size:13px;">›</span>{% endif %}
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <!-- 코어 아이템 구매 순서 -->
+                    {% if champ_build.item_order and champ_build.item_order.list %}
+                    <div style="margin-bottom: 18px;">
+                        <div class="build-label">코어 빌드 순서 <span class="build-wr">승률 {{ champ_build.item_order.wr }}%</span></div>
+                        <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
+                            {% for it in champ_build.item_order.list %}
+                            <img src="https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/item/{{ it.id }}.png" title="{{ it.name }}" style="width:44px; height:44px; border-radius:10px; border:1px solid rgba(255,255,255,0.12);" onerror="this.style.display='none'">
+                            {% if not loop.last %}<span style="color:var(--text-muted); font-size:14px;">›</span>{% endif %}
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <!-- 자주 가는 코어 아이템 -->
+                    {% if champ_build['items'] %}
                     <div>
-                        <div style="font-size: 12px; color: var(--text-muted); font-weight: 700; margin-bottom: 10px;">코어 아이템 순서</div>
-                        <div style="display: flex; flex-direction: column; gap: 8px;">
-                            {% for item in champ['items'] %}
-                            <div style="display: flex; align-items: center; gap: 12px; padding: 10px 14px; background: rgba(255,255,255,0.03); border-radius: 10px; border: 1px solid rgba(255,255,255,0.07);">
-                                <span style="font-size: 12px; font-weight: 900; color: var(--text-muted); width: 18px;">{{ loop.index }}</span>
-                                <span style="font-size: 14px; font-weight: 800; color: white;">{{ item }}</span>
+                        <div class="build-label">자주 채용하는 코어 아이템</div>
+                        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+                            {% for it in champ_build['items'] %}
+                            <div style="text-align:center;">
+                                <img src="https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/item/{{ it.id }}.png" title="{{ it.name }} (승률 {{ it.wr }}%)" style="width:42px; height:42px; border-radius:10px; border:1px solid rgba(255,255,255,0.1);" onerror="this.parentElement.style.display='none'">
+                                <div style="font-size:10px; color:{% if it.wr >= 52 %}#4ade80{% elif it.wr < 48 %}#f87171{% else %}var(--text-muted){% endif %}; font-weight:800; margin-top:3px;">{{ it.wr }}%</div>
                             </div>
                             {% endfor %}
                         </div>
                     </div>
+                    {% endif %}
                     {% else %}
                     <div style="text-align: center; padding: 24px 12px; color: var(--text-muted);">
-                        <div style="font-size: 34px; margin-bottom: 10px;">🧪</div>
-                        <div style="font-size: 14px; font-weight: 800; color: #e2e8f0; margin-bottom: 6px;">정밀 빌드 데이터 준비 중</div>
-                        <div style="font-size: 12px; line-height: 1.6;">이 챔피언의 룬·스킬 순서·코어 아이템 추천은<br>최신 패치 통계 수집 후 순차적으로 제공됩니다.<br>위 <b style="color:#93c5fd;">스킬 구성</b>은 공식 최신 데이터입니다.</div>
+                        <div style="font-size: 34px; margin-bottom: 10px;">📡</div>
+                        <div style="font-size: 14px; font-weight: 800; color: #e2e8f0; margin-bottom: 6px;">빌드 데이터 수집 중</div>
+                        <div style="font-size: 12px; line-height: 1.6;">실제 매치에서 룬·스펠·아이템·스킬 순서를 수집하고 있습니다.<br>표본이 쌓이면 <b style="color:#4ade80;">실측 추천 빌드</b>가 자동으로 표시됩니다.<br>위 <b style="color:#93c5fd;">스킬 구성</b>은 공식 최신 데이터입니다.</div>
                     </div>
                     {% endif %}
                 </div>
-
-                <!-- 플레이 팁 -->
-                {% if champ.tip %}
-                <div class="glass-panel" style="padding: 24px;">
-                    <div class="section-title" style="margin-bottom: 14px;">💡 핵심 플레이 팁</div>
-                    <div style="font-size: 14px; color: var(--text-muted); line-height: 1.8; background: rgba(255,255,255,0.03); padding: 16px; border-radius: 12px; border-left: 3px solid var(--point-color);">
-                        {{ champ.tip }}
-                    </div>
-                </div>
-                {% endif %}
             </div>
 
             <!-- 카운터/시너지 -->
@@ -1847,11 +1902,18 @@
                     </div>
                 </div>
                 {% else %}
+                <div class="glass-panel" style="padding: 24px; margin-bottom: 16px;">
+                    <div class="section-title" style="margin-bottom: 16px;">⚔️ 카운터 상성</div>
+                    <div style="text-align: center; padding: 18px 12px; color: var(--text-muted);">
+                        <div style="font-size: 30px; margin-bottom: 10px;">📊</div>
+                        <div style="font-size: 13px; line-height: 1.7;">라인 맞대결 승률을 실제 매치에서<br>수집하여 신뢰도 높은 카운터·시너지<br>상성을 제공할 예정입니다.</div>
+                    </div>
+                </div>
                 <div class="glass-panel" style="padding: 24px;">
-                    <div class="section-title" style="margin-bottom: 14px;">⚔️ 상성 정보</div>
-                    <div style="text-align: center; padding: 20px 12px; color: var(--text-muted);">
-                        <div style="font-size: 30px; margin-bottom: 8px;">📊</div>
-                        <div style="font-size: 13px; line-height: 1.7;">카운터·시너지 상성 데이터는<br>최신 패치 매치 통계 수집 후 제공됩니다.</div>
+                    <div class="section-title" style="margin-bottom: 16px;">💡 핵심 플레이 팁</div>
+                    <div style="text-align: center; padding: 18px 12px; color: var(--text-muted);">
+                        <div style="font-size: 30px; margin-bottom: 10px;">✍️</div>
+                        <div style="font-size: 13px; line-height: 1.7;">검증된 콤보·운영 팁을<br>전문 에디터가 큐레이션하여<br>순차적으로 업데이트합니다.</div>
                     </div>
                 </div>
                 {% endif %}
