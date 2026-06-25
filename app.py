@@ -833,7 +833,7 @@ def _first_num(burn):
     except (ValueError, IndexError):
         return 0.0
 
-def get_match_details(puuid, start=0, count=20, queue=None):
+def get_match_details(puuid, start=0, count=20, queue=None, collect_stats=True):
     url = f"https://asia.api.riotgames.com/lol/match/v5/matches/by-puuid/{puuid}/ids?start={start}&count={count}"
     url += f"&queue={queue}" if queue and queue != 'all' else "&type=ranked"
         
@@ -863,7 +863,9 @@ def get_match_details(puuid, start=0, count=20, queue=None):
             game_type = QUEUE_MAP.get(queue_id, "기타 랭크")
 
             # ★ 피기백 통계 수집: 이미 가져온 매치를 통계 DB에 누적 (추가 API 호출 없음)
-            record_match_stats(m_res, m_id)
+            # 페이지네이션(더보기)에서는 생략 → 느린 무료 서버에서 타임아웃(502) 방지
+            if collect_stats:
+                record_match_stats(m_res, m_id)
 
             main_player_data, participants_details, max_damage, max_cs, max_cspm = None, [], 0, 0, 0
 
@@ -1992,7 +1994,7 @@ def more_matches():
     puuid = request.args.get('puuid')
     start = int(request.args.get('start', 20))
     queue = request.args.get('queue', 'all')
-    matches, _, _, _, _, _, _, _, _, _, _, _, _, _, _ = get_match_details(puuid, start, 20, queue)
+    matches, _, _, _, _, _, _, _, _, _, _, _, _, _, _ = get_match_details(puuid, start, 20, queue, collect_stats=False)
     return render_template('index.html', page='search', matches=matches, ajax=True, searched_puuid=puuid, latest_version=LATEST_VERSION)
 
 @app.route('/growth')
