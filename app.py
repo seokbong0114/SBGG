@@ -512,7 +512,11 @@ init_db()
 
 try:
     req_opts = {"timeout": 3}
-    LATEST_VERSION = requests.get("https://ddragon.leagueoflegends.com/api/versions.json", **req_opts).json()[0]
+    _versions = requests.get("https://ddragon.leagueoflegends.com/api/versions.json", **req_opts).json()
+    LATEST_VERSION = _versions[0]
+    # 직전 패치(major.minor가 다른) 최신 버전 — 패치 변화 비교용
+    _cur_mm = ".".join(LATEST_VERSION.split(".")[:2])
+    PREV_VERSION = next((v for v in _versions if ".".join(v.split(".")[:2]) != _cur_mm), None)
     champ_data = requests.get(f"https://ddragon.leagueoflegends.com/cdn/{LATEST_VERSION}/data/ko_KR/champion.json", **req_opts).json()['data']
     CHAMP_KR_MAP = {val['id']: val['name'] for key, val in champ_data.items()}
     CHAMP_KEYS = {str(val['key']): val['id'] for key, val in champ_data.items()}
@@ -567,6 +571,7 @@ try:
 except Exception as e:
     print(f"라이엇 데이터 로드 실패 (안전 모드 실행): {e}")
     LATEST_VERSION = "14.12.1"
+    PREV_VERSION = None
     CHAMP_KR_MAP, CHAMP_KEYS, SPELL_MAP, RUNE_MAP, CHAMP_TAGS = {}, {}, {}, {}, {}
     SPELL_NAME, RUNE_NAME, ITEM_NAME, CORE_ITEMS = {}, {}, {}, set()
     BOOTS_ITEMS, START_ITEMS, SHARD_INFO = set(), set(), {}
@@ -753,6 +758,80 @@ def get_champion_detail(champ_id):
     except Exception as e:
         print(f"챔피언 상세 로드 에러 [{champ_id}]: {e}")
         return None
+
+# 패치 변화 비교용 — 기본 스탯 한글명 + 버프 방향(값↑이 버프면 +1, 값↓이 버프면 -1)
+STAT_KR = {
+    "hp": "체력", "hpregen": "체력 재생", "mp": "마나", "mpregen": "마나 재생",
+    "armor": "방어구", "spellblock": "마법 저항", "attackdamage": "공격력",
+    "attackspeed": "공격 속도", "movespeed": "이동 속도", "attackrange": "사거리",
+    "crit": "치명타", "hpperlevel": "레벨당 체력", "armorperlevel": "레벨당 방어구",
+    "attackdamageperlevel": "레벨당 공격력",
+}
+STAT_BUFF_DIR = {k: 1 for k in STAT_KR}  # 대부분 값↑ = 버프
+
+def get_champion_patch_changes(champ_en):
+    """현재/직전 패치 DDragon 데이터를 비교해 버프/너프 자동 감지. 챔피언·패치 단위 캐시."""
+    if not PREV_VERSION:
+        return None
+    cache_key = f"patchdiff#{champ_en}#{LATEST_VERSION}"
+    cached, _ = db_read(cache_key)
+    if cached:
+        return json.loads(cached)
+    try:
+        def fetch(ver):
+            r = requests.get(f"https://ddragon.leagueoflegends.com/cdn/{ver}/data/ko_KR/champion/{champ_en}.json", timeout=5)
+            return r.json()['data'][champ_en] if r.status_code == 200 else None
+        cur_d, prev_d = fetch(LATEST_VERSION), fetch(PREV_VERSION)
+        changes = []
+        if cur_d and prev_d:
+            # 기본 스탯 비교
+            cs, ps = cur_d.get('stats', {}), prev_d.get('stats', {})
+            for key, kr in STAT_KR.items():
+                cv, pv = cs.get(key), ps.get(key)
+                if cv is None or pv is None or abs(cv - pv) < 1e-6:
+                    continue
+                up = cv > pv
+                is_buff = up if STAT_BUFF_DIR.get(key, 1) == 1 else not up
+                changes.append({"type": "buff" if is_buff else "nerf",
+                                "text": f"{kr} {round(pv,1)} → {round(cv,1)}"})
+            # 스킬 비교 (쿨다운/마나코스트는 라벨 명확)
+            cspells = {s['id']: s for s in cur_d.get('spells', [])}
+            pspells = {s['id']: s for s in prev_d.get('spells', [])}
+            keys = ['Q', 'W', 'E', 'R']
+            for idx, sp in enumerate(cur_d.get('spells', [])):
+                slot = keys[idx] if idx < 4 else '?'
+                ps_sp = pspells.get(sp['id'])
+                if not ps_sp:
+                    continue
+                # 쿨다운
+                cc, pc = sp.get('cooldownBurn'), ps_sp.get('cooldownBurn')
+                if cc and pc and cc != pc:
+                    changes.append({"type": "buff" if _first_num(cc) < _first_num(pc) else "nerf",
+                                    "text": f"{slot} 쿨다운 {pc} → {cc}초"})
+                # 코스트
+                ck, pk = sp.get('costBurn'), ps_sp.get('costBurn')
+                if ck and pk and ck != pk and ck not in ('0', 'No Cost'):
+                    changes.append({"type": "buff" if _first_num(ck) < _first_num(pk) else "nerf",
+                                    "text": f"{slot} 소모값 {pk} → {ck}"})
+                # 효과 수치(데미지 등) 변경 — 방향 단정 어려워 중립 표기
+                if sp.get('effectBurn') != ps_sp.get('effectBurn'):
+                    changes.append({"type": "adjust", "text": f"{slot} 스킬 효과 수치 변경"})
+            # 패시브 설명 변경
+            if cur_d.get('passive', {}).get('description') != prev_d.get('passive', {}).get('description'):
+                changes.append({"type": "adjust", "text": "패시브 변경"})
+        result = {"changes": changes, "prev_patch": ".".join(PREV_VERSION.split(".")[:2])}
+        db_write(cache_key, result, int(time.time()))
+        return result
+    except Exception as e:
+        print(f"패치 비교 에러 [{champ_en}]: {e}")
+        return None
+
+def _first_num(burn):
+    """'60/90/120' 또는 '12/11/10/9/8' 같은 burn 문자열의 첫 숫자."""
+    try:
+        return float(str(burn).split("/")[0])
+    except (ValueError, IndexError):
+        return 0.0
 
 def get_match_details(puuid, start=0, count=20, queue=None):
     url = f"https://asia.api.riotgames.com/lol/match/v5/matches/by-puuid/{puuid}/ids?start={start}&count={count}"
@@ -1779,6 +1858,16 @@ def search():
     improvement_tips = generate_improvement_tips(matches, overall_kda, overall_radar)
     champion_recs = recommend_champions(overall_radar)
 
+    # ★ 모스트 챔피언 맞춤 패치 변화 (DDragon 버전 비교)
+    patch_changes = []
+    for tc in top_recent_champs[:5]:
+        pc = get_champion_patch_changes(tc['img'])
+        patch_changes.append({
+            "img": tc['img'], "name": tc['name'],
+            "changes": (pc.get('changes', []) if pc else []),
+            "prev_patch": (pc.get('prev_patch') if pc else None),
+        })
+
     grade_order = ['S+', 'S', 'A+', 'A', 'B+', 'B', 'C']
     grade_dist = {g: sum(1 for m in matches if m.get('grade') == g) for g in grade_order}
 
@@ -1808,6 +1897,7 @@ def search():
         "grade_dist": grade_dist, "grade_style_map": GRADE_STYLE,
         "streak_count": streak_count, "streak_type": streak_type,
         "repeat_encounters": repeat_encounters,
+        "patch_changes": patch_changes, "current_patch": CURRENT_PATCH,
     }
 
     # 3. 새로운 데이터를 DB에 JSON 문자열 형태로 저장/갱신
@@ -1904,6 +1994,38 @@ def more_matches():
     queue = request.args.get('queue', 'all')
     matches, _, _, _, _, _, _, _, _, _, _, _, _, _, _ = get_match_details(puuid, start, 20, queue)
     return render_template('index.html', page='search', matches=matches, ajax=True, searched_puuid=puuid, latest_version=LATEST_VERSION)
+
+@app.route('/growth')
+def growth():
+    """과거(21~40게임) vs 현재(최근 20게임) 레이더 비교 + 추세 피드백. AJAX 전용."""
+    puuid = request.args.get('puuid', '')
+    queue = request.args.get('queue', 'all')
+    try:
+        present = [float(x) for x in request.args.get('present', '').split(',') if x != '']
+    except ValueError:
+        present = []
+    if not puuid or len(present) != 6:
+        return jsonify({"ok": False, "msg": "잘못된 요청"}), 400
+
+    res = get_match_details(puuid, 20, 20, queue)  # 21~40번째 게임
+    past = res[1]  # overall_radar
+    past_count = res[9]
+    if not past or past_count < 3:
+        return jsonify({"ok": False, "msg": "비교할 과거 전적이 부족합니다 (20게임 이상 필요)."})
+
+    labels = ['전투', '성장', '시야', '생존', '오브젝트', '합류']
+    trend = []
+    deltas = []
+    for i in range(6):
+        pv, cv = past[i], present[i]
+        delta = round(cv - pv)
+        pct = round((cv - pv) / pv * 100) if pv > 0 else 0
+        deltas.append(pct)
+        direction = "up" if delta > 1 else ("down" if delta < -1 else "flat")
+        trend.append({"axis": labels[i], "delta": delta, "pct": pct, "dir": direction})
+    avg = round(sum(deltas) / 6)
+    return jsonify({"ok": True, "past": past, "present": present, "trend": trend,
+                    "summary_pct": avg, "past_count": past_count})
 
 @app.route('/feedback', methods=['POST'])
 def feedback():

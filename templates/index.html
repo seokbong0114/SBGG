@@ -1175,8 +1175,14 @@
             
             <div class="radar-grid">
                 <div class="radar-card glass-panel">
-                    <div class="section-title">종합 능력치</div>
+                    <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+                        <div class="section-title" style="margin:0;">종합 능력치</div>
+                        {% if game_count >= 5 %}
+                        <button id="growthBtn" onclick="loadGrowth()" style="font-size:11px; font-weight:800; padding:5px 10px; border-radius:8px; border:1px solid rgba(139,92,246,0.4); background:rgba(139,92,246,0.12); color:#c4b5fd; cursor:pointer; transition:0.2s;">📈 성장 궤적</button>
+                        {% endif %}
+                    </div>
                     <div style="position: relative; height: 180px;"><canvas id="radarOverall"></canvas></div>
+                    <div id="growthTrend" style="display:none; margin-top:10px;"></div>
                 </div>
                 <div class="radar-card glass-panel">
                     <div class="section-title">{{ primary_role.icon if primary_role else '🛡️' }} 주 라인 분석 {% if primary_role %}<span style="font-size: 13px; color: var(--text-muted); font-weight: 600;">({{ primary_role.name }})</span>{% endif %}</div>
@@ -1194,6 +1200,44 @@
 
             {% else %}
             <div class="glass-panel" style="text-align: center; padding: 60px 0; color: var(--text-muted); font-size: 16px; font-weight: 600;">선택한 게임 모드의 최근 전적이 없습니다.</div>
+            {% endif %}
+
+            <!-- ★ 모스트 챔피언 맞춤 패치 변화 -->
+            {% if patch_changes %}
+            <div class="glass-panel" style="padding: 22px 24px; margin-top: 24px;">
+                <div style="display:flex; align-items:center; gap:10px; margin-bottom:6px;">
+                    <div class="section-title" style="margin:0;">🔔 내 챔피언 패치 변화</div>
+                    <span style="font-size:11px; background:rgba(244,63,94,0.15); color:#fda4af; border:1px solid rgba(244,63,94,0.3); border-radius:6px; padding:2px 8px; font-weight:800;">패치 {{ current_patch }}</span>
+                </div>
+                <div style="font-size:12px; color:var(--text-muted); margin-bottom:16px;">모스트 챔피언에게 이번 패치에서 일어난 변화만 요약했습니다.</div>
+                <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(260px, 1fr)); gap:12px;">
+                    {% for pc in patch_changes %}
+                    <div style="background:rgba(255,255,255,0.025); border:1px solid rgba(255,255,255,0.07); border-radius:12px; padding:14px;">
+                        <a href="/champion/{{ pc.img }}" style="text-decoration:none; display:flex; align-items:center; gap:10px; margin-bottom:10px;">
+                            <img src="https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/champion/{{ pc.img }}.png" style="width:36px; height:36px; border-radius:9px;" onerror="this.style.display='none'">
+                            <b style="font-size:14px; color:white;">{{ pc.name }}</b>
+                        </a>
+                        {% if pc.changes %}
+                        <div style="display:flex; flex-direction:column; gap:6px;">
+                            {% for ch in pc.changes[:5] %}
+                            <div style="display:flex; align-items:center; gap:8px; font-size:12px;">
+                                <span style="flex-shrink:0; font-size:10px; font-weight:900; padding:1px 7px; border-radius:5px;
+                                    {% if ch.type=='buff' %}background:rgba(74,222,128,0.15); color:#4ade80; border:1px solid rgba(74,222,128,0.3);
+                                    {% elif ch.type=='nerf' %}background:rgba(239,68,68,0.15); color:#f87171; border:1px solid rgba(239,68,68,0.3);
+                                    {% else %}background:rgba(251,191,36,0.12); color:#fbbf24; border:1px solid rgba(251,191,36,0.3);{% endif %}">
+                                    {% if ch.type=='buff' %}버프{% elif ch.type=='nerf' %}너프{% else %}조정{% endif %}</span>
+                                <span style="color:#cbd5e1;">{{ ch.text }}</span>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        {% else %}
+                        <div style="font-size:12px; color:var(--text-muted);">이번 패치 변동 없음</div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+                <div style="font-size:10px; color:var(--text-muted); text-align:right; margin-top:10px; opacity:0.6;">※ DDragon 패치 데이터 자동 비교 (수치 변경 기준 · 리워크/문구 변경은 별도)</div>
+            </div>
             {% endif %}
 
             <!-- ★ 모스트 챔피언 플레이스타일 분석 -->
@@ -1471,8 +1515,10 @@
             const radarOptions = { responsive: true, maintainAspectRatio: false, scales: { r: { angleLines: { color: 'rgba(255, 255, 255, 0.05)' }, grid: { color: 'rgba(255, 255, 255, 0.05)' }, pointLabels: { color: '#8b949e', font: { size: 12, weight: '800', family: 'Pretendard' } }, ticks: { display: false, min: 0, max: 100 } } }, plugins: { legend: { display: false } } };
             const radarLabels = ['전투', '성장', '시야', '생존', '오브젝트', '합류'];
 
+            const presentRadar = {{ radar_data | tojson | safe }};
+            let overallChart = null;
             const ctx0 = document.getElementById('radarOverall')?.getContext('2d');
-            if (ctx0) new Chart(ctx0, { type: 'radar', data: { labels: radarLabels, datasets: [{ data: {{ radar_data | tojson | safe }}, backgroundColor: 'rgba(139, 92, 246, 0.3)', borderColor: '#8b5cf6', pointBackgroundColor: '#fff', borderWidth: 2, fill: true }] }, options: radarOptions });
+            if (ctx0) overallChart = new Chart(ctx0, { type: 'radar', data: { labels: radarLabels, datasets: [{ label: '현재', data: presentRadar, backgroundColor: 'rgba(139, 92, 246, 0.3)', borderColor: '#8b5cf6', pointBackgroundColor: '#fff', borderWidth: 2, fill: true }] }, options: radarOptions });
 
             const ctx1 = document.getElementById('radarPrimary')?.getContext('2d');
             if (ctx1) new Chart(ctx1, { type: 'radar', data: { labels: radarLabels, datasets: [{ data: {{ primary_role.radar | tojson | safe if primary_role else '[]' }}, backgroundColor: 'rgba(59, 130, 246, 0.3)', borderColor: '#3b82f6', pointBackgroundColor: '#fff', borderWidth: 2, fill: true }] }, options: radarOptions });
@@ -1483,7 +1529,42 @@
             let currentStart = 20;
             const targetPuuid = '{{ searched_puuid }}';
             const targetQueue = '{{ queue or "all" }}';
-            
+
+            let growthLoaded = false;
+            function loadGrowth() {
+                const btn = document.getElementById('growthBtn');
+                const box = document.getElementById('growthTrend');
+                if (growthLoaded) { box.style.display = box.style.display === 'none' ? 'block' : 'none'; return; }
+                btn.innerText = '분석 중...'; btn.disabled = true;
+                fetch(`/growth?puuid=${targetPuuid}&queue=${targetQueue}&present=${presentRadar.join(',')}`)
+                    .then(r => r.json())
+                    .then(d => {
+                        btn.disabled = false;
+                        if (!d.ok) { btn.innerText = '📈 성장 궤적'; box.style.display='block'; box.innerHTML = `<div style="font-size:12px;color:var(--text-muted);text-align:center;padding:8px;">${d.msg||'데이터 부족'}</div>`; return; }
+                        growthLoaded = true; btn.innerText = '📈 과거/현재';
+                        // 과거 데이터셋 오버레이
+                        if (overallChart) {
+                            overallChart.data.datasets.push({ label: '과거', data: d.past,
+                                backgroundColor: 'rgba(148,163,184,0.12)', borderColor: '#94a3b8',
+                                borderDash: [5,4], pointBackgroundColor: '#94a3b8', borderWidth: 2, fill: true });
+                            overallChart.update();
+                        }
+                        // 추세 칩
+                        const sColor = d.summary_pct > 0 ? '#4ade80' : (d.summary_pct < 0 ? '#f87171' : '#94a3b8');
+                        const sIcon = d.summary_pct > 0 ? '▲' : (d.summary_pct < 0 ? '▼' : '–');
+                        let html = `<div style="text-align:center; font-size:13px; font-weight:900; margin-bottom:10px; color:${sColor};">종합 폼 ${sIcon} ${d.summary_pct>0?'+':''}${d.summary_pct}% <span style="font-size:10px;color:var(--text-muted);font-weight:600;">(최근 20 vs 직전 ${d.past_count}게임)</span></div>`;
+                        html += '<div style="display:flex; flex-wrap:wrap; gap:6px; justify-content:center;">';
+                        d.trend.forEach(t => {
+                            const c = t.dir==='up'?'#4ade80':(t.dir==='down'?'#f87171':'#94a3b8');
+                            const a = t.dir==='up'?'↑':(t.dir==='down'?'↓':'–');
+                            html += `<span style="font-size:11px;font-weight:800;padding:3px 9px;border-radius:7px;background:${c}1a;color:${c};border:1px solid ${c}44;">${t.axis} ${a}${t.pct>0?'+':''}${t.pct}%</span>`;
+                        });
+                        html += '</div>';
+                        box.innerHTML = html; box.style.display = 'block';
+                    })
+                    .catch(() => { btn.disabled=false; btn.innerText='📈 성장 궤적'; });
+            }
+
             function loadMoreMatches() {
                 const btn = document.getElementById('btn-load-more');
                 btn.innerText = '전적을 불러오는 중...'; btn.disabled = true;
