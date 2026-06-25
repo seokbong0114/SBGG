@@ -189,6 +189,13 @@
         .skill-key { position: absolute; bottom: -6px; right: -6px; background: var(--point-color); color: white; font-size: 11px; font-weight: 900; width: 20px; height: 20px; border-radius: 6px; display: flex; align-items: center; justify-content: center; border: 2px solid var(--bg-panel); }
         .skill-name { font-size: 11px; font-weight: 700; color: #e2e8f0; text-align: center; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 88px; }
 
+        /* 듀오 찾기 게시판 */
+        .duo-label { display:block; font-size: 11px; font-weight: 800; color: var(--text-muted); margin-bottom: 6px; }
+        .duo-input { width: 100%; box-sizing: border-box; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.12); border-radius: 10px; padding: 10px 12px; color: white; font-size: 13px; font-weight: 700; font-family: 'Pretendard'; outline: none; transition: 0.2s; }
+        .duo-input:focus { border-color: var(--point-color); background: rgba(255,255,255,0.08); }
+        .duo-input option { background: #1e293b; color: white; }
+        .duo-card:hover { border-color: rgba(255,255,255,0.14) !important; transform: translateY(-2px); }
+
         /* 최근 전적 보러가기 카드 */
         /* backdrop-filter 제거: 스크롤로 화면을 벗어났다 돌아올 때 Chrome이
            backdrop-filter 레이어를 즉시 repaint하지 못해 칸이 잠깐 사라지는 버그 방지.
@@ -766,29 +773,107 @@
         <div class="main-container">
             <div class="page-title" style="justify-content: space-between;">
                 <div>🤝 듀오 찾기 <span style="font-size: 14px; color: var(--text-muted); font-weight: 600;">실시간 매칭 보드</span></div>
-                <button style="padding: 10px 20px; font-size: 14px; background: var(--win-color); color: white; border: none; border-radius: 8px; font-weight: 800; cursor: pointer;">+ 새 글 작성</button>
+                <button onclick="toggleDuoForm()" id="duoWriteBtn" style="padding: 10px 20px; font-size: 14px; background: var(--point-color); color: white; border: none; border-radius: 10px; font-weight: 800; cursor: pointer; transition:0.2s;">+ 새 글 작성</button>
             </div>
-            <div style="display: flex; flex-direction: column; gap: 15px;">
-                {% for post in duo_posts %}
-                <div class="glass-panel" style="padding: 20px; display: flex; align-items: center; gap: 20px; cursor: pointer; transition: 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.06)'" onmouseout="this.style.background='var(--bg-panel)'">
-                    <img src="https://opgg-static.akamaized.net/images/medals_new/{{ post.img }}.png" style="width: 70px; height: 70px; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.5));">
-                    <div style="flex-grow: 1;">
-                        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
-                            <span style="background: rgba(255,255,255,0.1); color: white; padding: 4px 10px; border-radius: 12px; font-size: 11px; font-weight: 800;">{{ post.role }}</span>
-                            <b style="font-size: 18px; color: white;">{{ post.title }}</b>
+
+            <!-- 글 작성 폼 (토글) -->
+            <div id="duoForm" class="glass-panel" style="display:none; padding: 24px; margin-bottom: 20px;">
+                <form action="/duo/create" method="post">
+                    <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; margin-bottom: 14px;">
+                        <div>
+                            <label class="duo-label">소환사명</label>
+                            <input type="text" name="name" required placeholder="소환사명" class="duo-input">
                         </div>
-                        <div style="font-size: 14px; color: var(--text-muted); font-weight: 600;">
-                            {{ post.name }} <span style="font-size: 12px; opacity: 0.5;">#{{ post.tag }}</span> • {{ post.tier }}
+                        <div>
+                            <label class="duo-label">태그</label>
+                            <input type="text" name="tag" value="KR1" class="duo-input">
+                        </div>
+                        <div>
+                            <label class="duo-label">티어</label>
+                            <select name="tier" required class="duo-input">
+                                {% for t in tier_options %}<option value="{{ t }}">{{ t }}</option>{% endfor %}
+                            </select>
                         </div>
                     </div>
-                    <div style="text-align: right; color: var(--text-muted); font-size: 12px; font-weight: 600;">
-                        {{ post.time }}<br>
-                        <button style="margin-top: 10px; padding: 8px 15px; color:white; background:var(--win-color); border:none; border-radius: 8px; font-weight: 800;">프로필 보기</button>
+                    <div style="display:grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 14px; margin-bottom: 14px;">
+                        <div>
+                            <label class="duo-label">내 라인</label>
+                            <select name="my_role" class="duo-input">
+                                {% for r in role_options %}<option value="{{ r }}">{{ r }}</option>{% endfor %}
+                            </select>
+                        </div>
+                        <div>
+                            <label class="duo-label">찾는 라인</label>
+                            <select name="find_role" class="duo-input">
+                                {% for r in role_options %}<option value="{{ r }}">{{ r }}</option>{% endfor %}
+                            </select>
+                        </div>
+                        <div>
+                            <label class="duo-label">큐 타입</label>
+                            <select name="queue_type" class="duo-input">
+                                {% for q in queue_options %}<option value="{{ q }}">{{ q }}</option>{% endfor %}
+                            </select>
+                        </div>
+                        <div>
+                            <label class="duo-label">마이크</label>
+                            <select name="mic" class="duo-input">
+                                <option value="상관없음">상관없음</option>
+                                <option value="마이크 필수">마이크 필수</option>
+                                <option value="마이크 안함">마이크 안함</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div style="margin-bottom: 16px;">
+                        <label class="duo-label">한 줄 소개</label>
+                        <input type="text" name="message" required maxlength="200" placeholder="예: 다이아 빡겜 듀오 구합니다. 같이 티어 올려요!" class="duo-input">
+                    </div>
+                    <div style="display:flex; gap:10px; justify-content:flex-end;">
+                        <button type="button" onclick="toggleDuoForm()" style="padding:10px 20px; background:rgba(255,255,255,0.06); color:var(--text-muted); border:1px solid rgba(255,255,255,0.1); border-radius:10px; font-weight:800; cursor:pointer;">취소</button>
+                        <button type="submit" style="padding:10px 24px; background:var(--point-color); color:white; border:none; border-radius:10px; font-weight:900; cursor:pointer;">등록하기</button>
+                    </div>
+                </form>
+            </div>
+
+            {% if not duo_posts %}
+            <div class="glass-panel" style="padding: 50px; text-align: center;">
+                <div style="font-size: 40px; margin-bottom: 15px;">🫂</div>
+                <div style="font-size: 18px; font-weight: 800; margin-bottom: 8px;">아직 등록된 듀오 글이 없습니다</div>
+                <div style="font-size: 14px; color: var(--text-muted);">첫 번째 듀오 모집 글을 작성해보세요!</div>
+            </div>
+            {% else %}
+            <div style="display: flex; flex-direction: column; gap: 12px;">
+                {% for post in duo_posts %}
+                <div class="glass-panel duo-card" style="padding: 18px 20px; display: flex; align-items: center; gap: 18px; transition: 0.2s;">
+                    <img src="https://opgg-static.akamaized.net/images/medals_new/{{ post.img }}.png" style="width: 58px; height: 58px; filter: drop-shadow(0 4px 6px rgba(0,0,0,0.5)); flex-shrink:0;" onerror="this.style.visibility='hidden'">
+                    <div style="flex-grow: 1; min-width:0;">
+                        <div style="display: flex; align-items: center; gap: 7px; margin-bottom: 7px; flex-wrap:wrap;">
+                            <span style="background: rgba(244,63,94,0.15); color: #fda4af; padding: 3px 9px; border-radius: 8px; font-size: 11px; font-weight: 800; border:1px solid rgba(244,63,94,0.25);">{{ post.queue_type }}</span>
+                            <span style="background: rgba(59,130,246,0.15); color: #93c5fd; padding: 3px 9px; border-radius: 8px; font-size: 11px; font-weight: 800; border:1px solid rgba(59,130,246,0.25);">{{ post.my_role }} → {{ post.find_role }}</span>
+                            {% if post.mic and post.mic != '상관없음' %}<span style="background: rgba(255,255,255,0.06); color: var(--text-muted); padding: 3px 9px; border-radius: 8px; font-size: 11px; font-weight: 800;">🎤 {{ post.mic }}</span>{% endif %}
+                        </div>
+                        <b style="font-size: 16px; color: white; display:block; margin-bottom:5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{{ post.message }}</b>
+                        <div style="font-size: 13px; color: var(--text-muted); font-weight: 600;">
+                            <b style="color:#e2e8f0;">{{ post.name }}</b> <span style="font-size: 11px; opacity: 0.5;">#{{ post.tag }}</span> · {{ post.tier }}
+                        </div>
+                    </div>
+                    <div style="text-align: right; flex-shrink:0;">
+                        <div style="color: var(--text-muted); font-size: 12px; font-weight: 600; margin-bottom:8px;">{{ post.time }}</div>
+                        <a href="/search?name={{ post.name|urlencode }}&tag={{ post.tag }}" style="display:inline-block; padding: 8px 16px; color:white; background:var(--win-color); border:none; border-radius: 8px; font-weight: 800; font-size:12px; text-decoration:none; transition:0.2s;" onmouseover="this.style.opacity='0.85'" onmouseout="this.style.opacity='1'">전적 보기</a>
                     </div>
                 </div>
                 {% endfor %}
             </div>
+            {% endif %}
         </div>
+        <script>
+            function toggleDuoForm() {
+                const f = document.getElementById('duoForm');
+                const open = f.style.display === 'none' || !f.style.display;
+                f.style.display = open ? 'block' : 'none';
+                document.getElementById('duoWriteBtn').innerText = open ? '✕ 닫기' : '+ 새 글 작성';
+                if (open) f.scrollIntoView({behavior:'smooth', block:'nearest'});
+            }
+        </script>
 
     {% elif page == 'spectate' %}
         <nav class="top-nav">

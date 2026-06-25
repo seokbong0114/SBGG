@@ -78,6 +78,16 @@ def init_db():
             match_id TEXT PRIMARY KEY, processed_at INTEGER
         )
     ''')
+    # 듀오 찾기 게시판
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS duo_posts (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            name TEXT, tag TEXT, tier TEXT,
+            my_role TEXT, find_role TEXT,
+            queue_type TEXT, mic TEXT, message TEXT,
+            created_at INTEGER
+        )
+    ''')
     conn.commit()
     conn.close()
 
@@ -1354,15 +1364,68 @@ def leaderboard():
 def champions():
     return render_template('index.html', page='champions', all_champs=CHAMP_KR_MAP, latest_version=LATEST_VERSION)
 
+TIER_IMG_MAP = {
+    "아이언": "iron", "브론즈": "bronze", "실버": "silver", "골드": "gold",
+    "플래티넘": "platinum", "에메랄드": "emerald", "다이아몬드": "diamond",
+    "마스터": "master", "그랜드마스터": "grandmaster", "챌린저": "challenger",
+}
+DUO_ROLES = ["전체", "탑", "정글", "미드", "원딜", "서포터"]
+DUO_QUEUES = ["솔로랭크", "자유랭크", "일반", "칼바람"]
+
+def _time_ago(ts):
+    diff = int(time.time()) - ts
+    if diff < 60: return "방금 전"
+    if diff < 3600: return f"{diff // 60}분 전"
+    if diff < 86400: return f"{diff // 3600}시간 전"
+    return f"{diff // 86400}일 전"
+
 @app.route('/duo')
 def duo():
-    duo_posts = [
-        {"tier": "다이아몬드", "img": "diamond", "role": "BOTTOM", "name": "석봉", "tag": "Bong", "title": "다이아 빡겜 서포터 구합니다. 마이크 필수", "time": "방금 전"},
-        {"tier": "골드", "img": "gold", "role": "JUNGLE", "name": "배달해드림", "tag": "KR1", "title": "골드 즐겜러 구해요 아무나 오세요", "time": "15분 전"},
-        {"tier": "플래티넘", "img": "platinum", "role": "MIDDLE", "name": "페이커", "tag": "T1", "title": "플레 탈출하실 정글러 모십니다", "time": "1시간 전"},
-        {"tier": "에메랄드", "img": "emerald", "role": "TOP", "name": "탑신병자", "tag": "KR2", "title": "탑 위주 게임. 시팅 안 해줘도 됨", "time": "2시간 전"}
-    ]
-    return render_template('index.html', page='duo', duo_posts=duo_posts)
+    posts = []
+    try:
+        conn = sqlite3.connect(DB_FILE)
+        rows = conn.execute("""SELECT name, tag, tier, my_role, find_role, queue_type, mic, message, created_at
+                               FROM duo_posts ORDER BY created_at DESC LIMIT 50""").fetchall()
+        conn.close()
+        for r in rows:
+            posts.append({
+                "name": r[0], "tag": r[1], "tier": r[2], "img": TIER_IMG_MAP.get(r[2], "unranked"),
+                "my_role": r[3], "find_role": r[4], "queue_type": r[5], "mic": r[6],
+                "message": r[7], "time": _time_ago(r[8]),
+            })
+    except Exception as e:
+        print(f"듀오 목록 조회 에러: {e}")
+    return render_template('index.html', page='duo', duo_posts=posts,
+                           tier_options=list(TIER_IMG_MAP.keys()),
+                           role_options=DUO_ROLES, queue_options=DUO_QUEUES)
+
+@app.route('/duo/create', methods=['POST'])
+def duo_create():
+    f = request.form
+    name = (f.get('name') or '').strip()
+    tag = (f.get('tag') or 'KR1').strip().lstrip('#')
+    tier = (f.get('tier') or '').strip()
+    my_role = (f.get('my_role') or '전체').strip()
+    find_role = (f.get('find_role') or '전체').strip()
+    queue_type = (f.get('queue_type') or '솔로랭크').strip()
+    mic = (f.get('mic') or '상관없음').strip()
+    message = (f.get('message') or '').strip()[:200]
+
+    if not name or not tier or not message:
+        return redirect('/duo?error=missing')
+    if tier not in TIER_IMG_MAP:
+        tier = "언랭"
+    try:
+        conn = sqlite3.connect(DB_FILE)
+        conn.execute("""INSERT INTO duo_posts (name, tag, tier, my_role, find_role, queue_type, mic, message, created_at)
+                        VALUES (?,?,?,?,?,?,?,?,?)""",
+                     (name, tag, tier, my_role, find_role, queue_type, mic, message, int(time.time())))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"듀오 글 작성 에러: {e}")
+        return redirect('/duo?error=save')
+    return redirect('/duo')
 
 @app.route('/spectate')
 def spectate():
