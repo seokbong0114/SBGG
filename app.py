@@ -345,9 +345,9 @@ def record_timeline_stats(timeline, m_res, match_id):
                 cur.execute("""INSERT INTO build_skill_levels (champ_en, role, lvl, slot, games, wins) VALUES (?,?,?,?,1,?)
                                ON CONFLICT(champ_en, role, lvl, slot) DO UPDATE SET games=games+1, wins=wins+?""",
                             (champ, role, lvl, slot, win, win))
-            # 코어 아이템 구매 순서: 앞 3개
+            # 코어 아이템 구매 순서: 앞 4개 (4코어 타임라인)
             if item_seq[pid]:
-                seqstr = "-".join(item_seq[pid][:3])
+                seqstr = "-".join(item_seq[pid][:4])
                 cur.execute("""INSERT INTO build_item_order (champ_en, role, seq, games, wins) VALUES (?,?,?,1,?)
                                ON CONFLICT(champ_en, role, seq) DO UPDATE SET games=games+1, wins=wins+?""",
                             (champ, role, seqstr, win, win))
@@ -409,58 +409,84 @@ def get_champion_build(champ_en, preferred_role=None):
             conn.close(); return None
 
         build = {"role": role, "sample": sample}
+        ALT_MIN = 3  # 고승률 변형 최소 표본
+        WR = "(CAST(wins AS REAL)/games) DESC, games DESC"
 
-        def _rune(pid):
-            return {"icon": RUNE_MAP.get(pid), "name": RUNE_NAME.get(pid, "")}
-
-        # 상세 룬 — 가장 인기있는 전체 룬 페이지 (키스톤+주룬3 | 보조룬2 | 샤드3)
-        rp = cur.execute("""SELECT page, primary_style, sub_style, games, wins FROM build_runepages
-                            WHERE champ_en=? AND role=? ORDER BY games DESC LIMIT 1""", (champ_en, role)).fetchone()
-        if rp:
+        # ── 인게임 풀 트리 룬 뷰 빌더 ──
+        def rune_view(row):
+            if not row:
+                return None
+            page, ps, ss, games, wins = row
             try:
-                primary_part, sub_part, shard_part = rp[0].split("|")
-                primary_ids = [int(x) for x in primary_part.split(",") if x]
-                sub_ids = [int(x) for x in sub_part.split(",") if x]
-                shard_ids = [int(x) for x in shard_part.split(",") if x]
-                build["runes"] = {
-                    "primary_style": {"icon": RUNE_MAP.get(rp[1]), "name": RUNE_NAME.get(rp[1], "")},
-                    "sub_style": {"icon": RUNE_MAP.get(rp[2]), "name": RUNE_NAME.get(rp[2], "")},
-                    "keystone": _rune(primary_ids[0]) if primary_ids else None,
-                    "primary": [_rune(x) for x in primary_ids[1:]],
-                    "sub": [_rune(x) for x in sub_ids],
-                    "shards": [{"icon": shard_icon(s), "name": SHARD_INFO.get(s, ("",))[0]} for s in shard_ids],
-                    "games": rp[3], "wr": round(rp[4] / rp[3] * 100) if rp[3] else 0,
-                }
+                pp, sp, shp = page.split("|")
+                pids = set(int(x) for x in pp.split(",") if x)
+                sids = set(int(x) for x in sp.split(",") if x)
+                shard_ids = [int(x) for x in shp.split(",") if x]
             except (ValueError, IndexError):
-                pass
-        # 소환사 주문
-        sr = cur.execute("""SELECT spells, games, wins FROM build_spells
-                            WHERE champ_en=? AND role=? ORDER BY games DESC LIMIT 1""", (champ_en, role)).fetchone()
-        if sr:
-            spells = []
-            for sid in sr[0].split("-"):
-                key = SPELL_MAP.get(sid)
-                if key:
-                    spells.append({"icon": key, "name": SPELL_NAME.get(key, "")})
-            build["spells"] = {"list": spells, "games": sr[1], "wr": round(sr[2] / sr[1] * 100) if sr[1] else 0}
-        # 시작 아이템 세트
-        st = cur.execute("""SELECT items, games, wins FROM build_starts
-                            WHERE champ_en=? AND role=? ORDER BY games DESC LIMIT 1""", (champ_en, role)).fetchone()
-        if st:
-            build["starts"] = {"list": [{"id": i, "name": ITEM_NAME.get(i, "")} for i in st[0].split("-")],
-                               "games": st[1], "wr": round(st[2] / st[1] * 100) if st[1] else 0}
-        # 추천 신발 — 상위 1개
-        bt = cur.execute("""SELECT item_id, games, wins FROM build_boots
-                            WHERE champ_en=? AND role=? ORDER BY games DESC LIMIT 1""", (champ_en, role)).fetchone()
-        if bt:
-            build["boots"] = {"id": bt[0], "name": ITEM_NAME.get(bt[0], ""),
-                              "games": bt[1], "wr": round(bt[2] / bt[1] * 100) if bt[1] else 0}
+                return None
+            def render(tree, sel, skip_key):
+                if not tree:
+                    return None
+                rows = tree["slots"][1:] if skip_key else tree["slots"]
+                return {"name": tree["name"], "icon": tree["icon"],
+                        "slots": [[{**r, "selected": r["id"] in sel, "desc": RUNE_DESC.get(r["id"], "")} for r in row]
+                                  for row in rows]}
+            return {
+                "primary": render(RUNE_TREES.get(ps), pids, False),
+                "sub": render(RUNE_TREES.get(ss), sids, True),
+                "shards": [{"icon": shard_icon(s), "name": SHARD_INFO.get(s, ("",))[0]} for s in shard_ids],
+                "games": games, "wr": round(wins / games * 100) if games else 0,
+            }
+        def spell_view(row):
+            if not row:
+                return None
+            spells = [{"icon": SPELL_MAP.get(s), "name": SPELL_NAME.get(SPELL_MAP.get(s), "")}
+                      for s in row[0].split("-") if SPELL_MAP.get(s)]
+            return {"list": spells, "games": row[1], "wr": round(row[2] / row[1] * 100) if row[1] else 0}
+        def boots_view(row):
+            if not row:
+                return None
+            return {"id": row[0], "name": ITEM_NAME.get(row[0], ""), "games": row[1],
+                    "wr": round(row[2] / row[1] * 100) if row[1] else 0}
+        def start_view(row):
+            if not row:
+                return None
+            return {"list": [{"id": i, "name": ITEM_NAME.get(i, "")} for i in row[0].split("-")],
+                    "games": row[1], "wr": round(row[2] / row[1] * 100) if row[1] else 0}
+
+        def q(table, cols, order, min_g=0):
+            return cur.execute(f"""SELECT {cols} FROM {table} WHERE champ_en=? AND role=? AND games>=?
+                                   ORDER BY {order} LIMIT 1""", (champ_en, role, min_g)).fetchone()
+
+        # 인기(판수) vs 고승률(표본 충족 중 최고 승률) — 2가지 셋업
+        rune_pop = q("build_runepages", "page,primary_style,sub_style,games,wins", "games DESC")
+        rune_hi  = q("build_runepages", "page,primary_style,sub_style,games,wins", WR, ALT_MIN)
+        spell_pop = q("build_spells", "spells,games,wins", "games DESC")
+        spell_hi  = q("build_spells", "spells,games,wins", WR, ALT_MIN)
+        boots_pop = q("build_boots", "item_id,games,wins", "games DESC")
+        boots_hi  = q("build_boots", "item_id,games,wins", WR, ALT_MIN)
+        start_pop = q("build_starts", "items,games,wins", "games DESC")
+        start_hi  = q("build_starts", "items,games,wins", WR, ALT_MIN)
+
+        setup_pop = {"label": "인기 빌드", "sub": "가장 많이 채용",
+                     "runes": rune_view(rune_pop), "spells": spell_view(spell_pop),
+                     "boots": boots_view(boots_pop), "starts": start_view(start_pop)}
+        setup_hi = {"label": "고승률 빌드", "sub": "승률 최상위",
+                    "runes": rune_view(rune_hi), "spells": spell_view(spell_hi),
+                    "boots": boots_view(boots_hi), "starts": start_view(start_hi)}
+        # 2위 셋업이 1위와 의미있게 다른 경우에만 추가 노출
+        has_alt = (rune_hi and rune_pop and rune_hi[0] != rune_pop[0]) or \
+                  (spell_hi and spell_pop and spell_hi[0] != spell_pop[0]) or \
+                  (boots_hi and boots_pop and boots_hi[0] != boots_pop[0]) or \
+                  (start_hi and start_pop and start_hi[0] != start_pop[0])
+        build["setups"] = [setup_pop, setup_hi] if has_alt else [setup_pop]
+
         # 코어 아이템 빈도 (상위 6개)
         items = cur.execute("""SELECT item_id, games, wins FROM build_items
                                WHERE champ_en=? AND role=? ORDER BY games DESC LIMIT 6""", (champ_en, role)).fetchall()
         build["items"] = [{"id": it[0], "name": ITEM_NAME.get(it[0], ""),
                            "wr": round(it[2] / it[1] * 100) if it[1] else 0, "games": it[1]} for it in items]
-        # 상위 3개 코어 빌드(3코어 순서)
+        # 상위 3개 코어 빌드(최대 4코어 순서)
         top_builds = cur.execute("""SELECT seq, games, wins FROM build_item_order
                                     WHERE champ_en=? AND role=? ORDER BY games DESC LIMIT 3""", (champ_en, role)).fetchall()
         build["top_builds"] = [{
@@ -510,82 +536,139 @@ def get_champion_counters(champ_en, role, min_games=3):
 # 앱 시작 시 DB 초기화 실행
 init_db()
 
-try:
-    req_opts = {"timeout": 3}
-    _versions = requests.get("https://ddragon.leagueoflegends.com/api/versions.json", **req_opts).json()
-    LATEST_VERSION = _versions[0]
-    # 직전 패치(major.minor가 다른) 최신 버전 — 패치 변화 비교용
-    _cur_mm = ".".join(LATEST_VERSION.split(".")[:2])
-    PREV_VERSION = next((v for v in _versions if ".".join(v.split(".")[:2]) != _cur_mm), None)
-    champ_data = requests.get(f"https://ddragon.leagueoflegends.com/cdn/{LATEST_VERSION}/data/ko_KR/champion.json", **req_opts).json()['data']
-    CHAMP_KR_MAP = {val['id']: val['name'] for key, val in champ_data.items()}
-    CHAMP_KEYS = {str(val['key']): val['id'] for key, val in champ_data.items()}
-    CHAMP_TAGS = {val['id']: val.get('tags', []) for key, val in champ_data.items()} 
-    
-    spell_data = requests.get(f"https://ddragon.leagueoflegends.com/cdn/{LATEST_VERSION}/data/ko_KR/summoner.json", **req_opts).json()['data']
-    SPELL_MAP = {str(val['key']): val['id'] for key, val in spell_data.items()}
-    SPELL_NAME = {val['id']: val['name'] for key, val in spell_data.items()}  # id(key)→한글명
+# ═══════════════════════════════════════════════════════════════════════
+#  ★ DDragon 데이터 + 자동 패치 업데이트 파이프라인 (요구사항 5)
+# ═══════════════════════════════════════════════════════════════════════
+# 전역 데이터 (load_ddragon으로 갱신) — 새 패치 시 자동 최신화
+LATEST_VERSION = "14.12.1"; PREV_VERSION = None
+CHAMP_KR_MAP, CHAMP_KEYS, CHAMP_TAGS = {}, {}, {}
+SPELL_MAP, SPELL_NAME = {}, {}
+RUNE_MAP, RUNE_NAME, RUNE_DESC, RUNE_TREES = {}, {}, {}, {}
+ITEM_NAME, ITEM_DESC = {}, {}
+CORE_ITEMS, BOOTS_ITEMS, START_ITEMS = set(), set(), set()
+SHARD_INFO = {  # 스탯 샤드 (DDragon 미제공 → CommunityDragon 아이콘 + 한글명)
+    5008: ("적응형 능력치", "statmodsadaptiveforceicon.png"),
+    5005: ("공격 속도",     "statmodsattackspeedicon.png"),
+    5007: ("스킬 가속",     "statmodscdrscalingicon.png"),
+    5010: ("이동 속도",     "statmodsmovementspeedicon.png"),
+    5011: ("체력",          "statmodshealthplusicon.png"),
+    5013: ("강인함·둔화 저항","statmodstenacityicon.png"),
+    5001: ("체력 비례 성장", "statmodshealthscalingicon.png"),
+}
+_ddragon_version_loaded = None
+_last_patch_check = 0
+PATCH_CHECK_INTERVAL = 3600  # 패치 확인 주기(초) — 요청 시 스로틀 체크
 
-    rune_data = requests.get(f"https://ddragon.leagueoflegends.com/cdn/{LATEST_VERSION}/data/ko_KR/runesReforged.json", **req_opts).json()
-    RUNE_MAP = {}        # 룬/트리 id → 아이콘 경로
-    RUNE_NAME = {}       # 룬/트리 id → 한글명
-    for tree in rune_data:
-        RUNE_MAP[tree['id']] = tree['icon']
-        RUNE_NAME[tree['id']] = tree['name']
-        for slot in tree['slots']:
-            for rune in slot['runes']:
-                RUNE_MAP[rune['id']] = rune['icon']
-                RUNE_NAME[rune['id']] = rune['name']
+def _striptags(t):
+    return re.sub(r'<[^>]+>', '', t or '').strip()
 
-    # 아이템 메타데이터 — 이름 + 코어(완성 전설) 아이템 판별
-    item_data = requests.get(f"https://ddragon.leagueoflegends.com/cdn/{LATEST_VERSION}/data/ko_KR/item.json", **req_opts).json()['data']
-    ITEM_NAME = {iid: v['name'] for iid, v in item_data.items()}
-    CORE_ITEMS = set()   # 완성 전설/신화 아이템 id (코어템 후보)
-    BOOTS_ITEMS = set()  # 완성 신발 id
-    START_ITEMS = set()  # 시작 아이템 후보 (저가 스타터 + 물약)
-    for iid, v in item_data.items():
-        gold = v.get('gold', {})
-        tags = v.get('tags', [])
-        on_sr = v.get('maps', {}).get('11')
-        if not on_sr:
-            continue
-        # 신발: 2티어/3티어 모두 (2티어는 3티어로 into 되므로 into 조건 제외)
-        if "Boots" in tags and gold.get('purchasable') and gold.get('total', 0) >= 600:
-            BOOTS_ITEMS.add(iid)
-        elif (gold.get('purchasable') and gold.get('total', 0) >= 2000
-                and not v.get('into') and not v.get('requiredAlly')):
-            CORE_ITEMS.add(iid)
-        # 시작 아이템: 저가(0<총액<=500) 스타터/물약 (장신구 제외)
-        if gold.get('purchasable') and 0 < gold.get('total', 0) <= 500 and "Trinket" not in tags:
-            START_ITEMS.add(iid)
-    # 스탯 샤드 (DDragon 미제공 → CommunityDragon 아이콘 + 한글명 하드코딩)
-    SHARD_INFO = {
-        5008: ("적응형 능력치", "statmodsadaptiveforceicon.png"),
-        5005: ("공격 속도",     "statmodsattackspeedicon.png"),
-        5007: ("스킬 가속",     "statmodscdrscalingicon.png"),
-        5010: ("이동 속도",     "statmodsmovementspeedicon.png"),
-        5011: ("체력",          "statmodshealthplusicon.png"),
-        5013: ("강인함·둔화 저항","statmodstenacityicon.png"),
-        5001: ("체력 비례 성장", "statmodshealthscalingicon.png"),
-    }
-except Exception as e:
-    print(f"라이엇 데이터 로드 실패 (안전 모드 실행): {e}")
-    LATEST_VERSION = "14.12.1"
-    PREV_VERSION = None
-    CHAMP_KR_MAP, CHAMP_KEYS, SPELL_MAP, RUNE_MAP, CHAMP_TAGS = {}, {}, {}, {}, {}
-    SPELL_NAME, RUNE_NAME, ITEM_NAME, CORE_ITEMS = {}, {}, {}, set()
-    BOOTS_ITEMS, START_ITEMS, SHARD_INFO = set(), set(), {}
+def load_ddragon():
+    """DDragon 최신 데이터를 전부 (재)로드. 새 패치 감지 시 ensure_current_patch에서 재호출."""
+    global LATEST_VERSION, PREV_VERSION, CURRENT_PATCH, CHAMP_KR_MAP, CHAMP_KEYS, CHAMP_TAGS
+    global SPELL_MAP, SPELL_NAME, RUNE_MAP, RUNE_NAME, RUNE_DESC, RUNE_TREES
+    global ITEM_NAME, ITEM_DESC, CORE_ITEMS, BOOTS_ITEMS, START_ITEMS, _ddragon_version_loaded
+    try:
+        ro = {"timeout": 5}
+        versions = requests.get("https://ddragon.leagueoflegends.com/api/versions.json", **ro).json()
+        latest = versions[0]
+        cur_mm = ".".join(latest.split(".")[:2])
+        LATEST_VERSION = latest
+        PREV_VERSION = next((v for v in versions if ".".join(v.split(".")[:2]) != cur_mm), None)
+        CURRENT_PATCH = cur_mm
+        base = f"https://ddragon.leagueoflegends.com/cdn/{latest}/data/ko_KR"
+
+        champ_data = requests.get(f"{base}/champion.json", **ro).json()['data']
+        CHAMP_KR_MAP = {v['id']: v['name'] for v in champ_data.values()}
+        CHAMP_KEYS = {str(v['key']): v['id'] for v in champ_data.values()}
+        CHAMP_TAGS = {v['id']: v.get('tags', []) for v in champ_data.values()}
+
+        spell_data = requests.get(f"{base}/summoner.json", **ro).json()['data']
+        SPELL_MAP = {str(v['key']): v['id'] for v in spell_data.values()}
+        SPELL_NAME = {v['id']: v['name'] for v in spell_data.values()}
+
+        # 룬 — 아이콘/이름/설명 + 전체 트리 구조(인게임 풀 트리용)
+        rune_data = requests.get(f"{base}/runesReforged.json", **ro).json()
+        rmap, rname, rdesc, rtrees = {}, {}, {}, {}
+        for tree in rune_data:
+            rmap[tree['id']] = tree['icon']; rname[tree['id']] = tree['name']
+            slots = []
+            for slot in tree['slots']:
+                row = []
+                for rune in slot['runes']:
+                    rmap[rune['id']] = rune['icon']; rname[rune['id']] = rune['name']
+                    rdesc[rune['id']] = _striptags(rune.get('shortDesc') or rune.get('longDesc') or '')
+                    row.append({'id': rune['id'], 'icon': rune['icon'], 'name': rune['name']})
+                slots.append(row)
+            rtrees[tree['id']] = {'id': tree['id'], 'name': tree['name'], 'icon': tree['icon'], 'slots': slots}
+        RUNE_MAP, RUNE_NAME, RUNE_DESC, RUNE_TREES = rmap, rname, rdesc, rtrees
+
+        # 아이템 — 이름/설명 + 코어/신발/시작 판별
+        item_data = requests.get(f"{base}/item.json", **ro).json()['data']
+        iname, idesc, core, boots, starts = {}, {}, set(), set(), set()
+        for iid, v in item_data.items():
+            iname[iid] = v['name']
+            idesc[iid] = _striptags(v.get('plaintext') or v.get('description') or '')
+            gold = v.get('gold', {}); tags = v.get('tags', [])
+            if not v.get('maps', {}).get('11'):
+                continue
+            if "Boots" in tags and gold.get('purchasable') and gold.get('total', 0) >= 600:
+                boots.add(iid)
+            elif (gold.get('purchasable') and gold.get('total', 0) >= 2000
+                    and not v.get('into') and not v.get('requiredAlly')):
+                core.add(iid)
+            if gold.get('purchasable') and 0 < gold.get('total', 0) <= 500 and "Trinket" not in tags:
+                starts.add(iid)
+        ITEM_NAME, ITEM_DESC, CORE_ITEMS, BOOTS_ITEMS, START_ITEMS = iname, idesc, core, boots, starts
+
+        _ddragon_version_loaded = latest
+        print(f"DDragon 로드 완료: {latest} (패치 {cur_mm})")
+        return True
+    except Exception as e:
+        print(f"DDragon 로드 실패: {e}")
+        return False
+
+load_ddragon()  # 앱 시작 시 초기 로드
+
+def reset_stats_if_new_patch():
+    """수집 통계가 이전 패치 것이면 초기화 (새 패치 메타 재수집)."""
+    try:
+        conn = sqlite3.connect(DB_FILE)
+        row = conn.execute("SELECT value FROM stats_meta WHERE key='collected_patch'").fetchone()
+        if (row[0] if row else None) != CURRENT_PATCH:
+            for t in ['champion_stats','champion_bans','processed_matches','build_runes','build_runepages',
+                      'build_spells','build_items','build_boots','build_starts','build_skills',
+                      'build_skill_levels','build_item_order','build_matchups','processed_timelines']:
+                try: conn.execute(f"DELETE FROM {t}")
+                except Exception: pass
+            conn.execute("DELETE FROM stats_meta WHERE key='total_games'")
+            conn.execute("REPLACE INTO stats_meta (key, value) VALUES ('collected_patch', ?)", (CURRENT_PATCH,))
+            conn.commit()
+            print(f"패치 변경 감지 → 빌드 통계 초기화 (현재 패치 {CURRENT_PATCH})")
+        conn.close()
+    except Exception as e:
+        print(f"패치 통계 초기화 에러: {e}")
+
+def ensure_current_patch():
+    """요청 시 호출(스로틀). 새 패치 감지 시 DDragon 재로드 + 통계 초기화."""
+    global _last_patch_check
+    now = time.time()
+    if now - _last_patch_check < PATCH_CHECK_INTERVAL:
+        return
+    _last_patch_check = now
+    try:
+        versions = requests.get("https://ddragon.leagueoflegends.com/api/versions.json", timeout=4).json()
+        if versions and versions[0] != _ddragon_version_loaded:
+            print(f"새 패치 감지: {_ddragon_version_loaded} → {versions[0]} · 데이터 자동 갱신")
+            if load_ddragon():
+                reset_stats_if_new_patch()
+    except Exception as e:
+        print(f"패치 확인 에러: {e}")
+
+reset_stats_if_new_patch()  # 시작 시 패치 정합성 보장
 
 def shard_icon(shard_id):
     info = SHARD_INFO.get(shard_id)
     return f"https://raw.communitydragon.org/latest/game/assets/perks/statmods/{info[1]}" if info else ""
-
-# 패치 라벨을 DDragon 최신 버전에서 자동 도출 ("16.13.1" → "16.13")
-# → 화면에 표시되는 패치 번호가 실제 데이터 출처와 항상 일치
-try:
-    CURRENT_PATCH = ".".join(LATEST_VERSION.split(".")[:2])
-except Exception:
-    pass  # 실패 시 champion_meta.py의 기본값 유지
 
 ROLE_MAP = {"TOP": "탑", "JUNGLE": "정글", "MIDDLE": "미드", "BOTTOM": "원딜", "UTILITY": "서포터", "": "기타", "Invalid": "기타"}
 ROLE_ICON = {"TOP": "🪓", "JUNGLE": "🌲", "MIDDLE": "🪄", "BOTTOM": "🏹", "UTILITY": "🛡️", "": "🎲", "Invalid": "🎲"}
@@ -1668,6 +1751,7 @@ def build_champion_meta(rank_tier="emeraldplus"):
 
 @app.route('/meta')
 def meta():
+    ensure_current_patch()  # 새 패치 자동 감지·갱신 (스로틀)
     rank_tier = request.args.get("rank", "emeraldplus")
     if rank_tier not in RANK_TIER_LABELS:
         rank_tier = "emeraldplus"
@@ -1727,6 +1811,7 @@ def collect():
 
 @app.route('/champion/<champ_id>')
 def champion_page(champ_id):
+    ensure_current_patch()  # 새 패치 자동 감지·갱신 (스로틀)
     # 1) DDragon 정식 챔피언 ID로 정규화 (대소문자 보정)
     canonical_id = next((cid for cid in CHAMP_KR_MAP if cid.lower() == champ_id.lower()), None)
     if not canonical_id and champ_id in CHAMP_KR_MAP:
@@ -1807,9 +1892,10 @@ def champion_page(champ_id):
 
 @app.route('/search')
 def search():
+    ensure_current_patch()  # 새 패치 자동 감지·갱신 (스로틀)
     raw_name = request.args.get('name', '').strip()
     tag = request.args.get('tag', 'KR1').strip()
-    queue = request.args.get('queue', 'all') 
+    queue = request.args.get('queue', 'all')
     
     split_chars = [",", "\n", "\r\n"]
     for char in split_chars:

@@ -193,19 +193,34 @@
         /* 추천 빌드 (실측 아이콘) */
         .build-label { font-size: 12px; color: var(--text-muted); font-weight: 700; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
         .build-wr { font-size: 11px; color: #4ade80; font-weight: 800; background: rgba(74,222,128,0.1); padding: 1px 7px; border-radius: 5px; }
-        /* 상세 룬 */
-        .rune-detail { display: flex; gap: 16px; flex-wrap: wrap; }
-        .rune-col { background: rgba(255,255,255,0.025); border: 1px solid rgba(255,255,255,0.07); border-radius: 14px; padding: 14px; flex: 1; min-width: 180px; }
-        .rune-tree-head { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+        /* 인기/고승률 탭 */
+        .build-tabs { display: flex; gap: 8px; margin-bottom: 18px; }
+        .build-tab { flex: 1; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); border-radius: 12px; padding: 10px; cursor: pointer; font-family: 'Pretendard'; color: var(--text-muted); font-weight: 900; font-size: 14px; transition: 0.2s; display: flex; flex-direction: column; gap: 2px; align-items: center; }
+        .build-tab span { font-size: 10px; font-weight: 600; opacity: 0.7; }
+        .build-tab.active { background: rgba(244,63,94,0.12); border-color: rgba(244,63,94,0.4); color: white; }
+        /* 인게임 풀 트리 룬 */
+        .rune-tree-view { display: flex; gap: 14px; flex-wrap: wrap; }
+        .rune-tree-col { background: rgba(0,0,0,0.22); border: 1px solid rgba(255,255,255,0.06); border-radius: 14px; padding: 14px 16px; flex: 1; min-width: 200px; }
+        .rune-tree-col.sub { background: rgba(0,0,0,0.12); }
+        .rune-tree-head { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; padding-bottom: 10px; border-bottom: 1px solid rgba(255,255,255,0.06); }
         .rune-tree-head img { width: 22px; height: 22px; }
-        .rune-tree-head span { font-size: 13px; font-weight: 900; color: white; }
-        .rune-row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-        .rune-pick { width: 38px; height: 38px; border-radius: 50%; background: rgba(0,0,0,0.35); display: flex; align-items: center; justify-content: center; }
-        .rune-pick img { width: 32px; height: 32px; }
-        .rune-pick.keystone { width: 48px; height: 48px; background: rgba(244,63,94,0.12); border: 1px solid rgba(244,63,94,0.35); }
-        .rune-pick.keystone img { width: 42px; height: 42px; }
-        .rune-shard { width: 26px; height: 26px; border-radius: 50%; background: rgba(0,0,0,0.35); border: 1px solid rgba(255,255,255,0.12); display: flex; align-items: center; justify-content: center; }
+        .rune-tree-head span { font-size: 13px; font-weight: 900; color: #e2e8f0; }
+        .rune-slot-row { display: flex; gap: 10px; align-items: center; justify-content: center; padding: 7px 0; }
+        .rune-slot-row.keystone-row { padding-bottom: 12px; margin-bottom: 4px; border-bottom: 1px dashed rgba(255,255,255,0.07); }
+        .rune-opt { width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center; justify-content: center; opacity: 0.28; filter: grayscale(0.6); transition: 0.18s; cursor: help; }
+        .rune-opt img { width: 100%; height: 100%; }
+        .rune-opt.ks { width: 42px; height: 42px; }
+        .rune-opt.sel { opacity: 1; filter: none; background: rgba(244,63,94,0.14); box-shadow: 0 0 0 2px var(--point-color); }
+        .rune-opt.ks.sel { box-shadow: 0 0 0 2px var(--point-color), 0 0 14px rgba(244,63,94,0.5); }
+        .rune-shard-row { display: flex; gap: 10px; justify-content: center; margin-top: 12px; padding-top: 12px; border-top: 1px dashed rgba(255,255,255,0.07); }
+        .rune-shard { width: 26px; height: 26px; border-radius: 50%; background: rgba(244,63,94,0.12); box-shadow: 0 0 0 2px var(--point-color); display: flex; align-items: center; justify-content: center; cursor: help; }
         .rune-shard img { width: 20px; height: 20px; border-radius: 50%; }
+        .build-ico { width: 40px; height: 40px; border-radius: 10px; border: 1px solid rgba(255,255,255,0.12); cursor: help; }
+        /* 글래스모피즘 커스텀 툴팁 */
+        #gtip { position: fixed; z-index: 9999; max-width: 260px; background: rgba(20,27,45,0.92); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); border: 1px solid rgba(244,63,94,0.35); border-radius: 12px; padding: 10px 13px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); pointer-events: none; opacity: 0; transform: translateY(6px) scale(0.97); transition: opacity 0.16s ease, transform 0.16s ease; }
+        #gtip.show { opacity: 1; transform: translateY(0) scale(1); }
+        #gtip .gtip-name { font-size: 13px; font-weight: 900; color: #fff; margin-bottom: 3px; }
+        #gtip .gtip-desc { font-size: 11px; line-height: 1.55; color: #cbd5e1; }
         /* 레벨별 스킬트리 (lol.ps 스타일) */
         .skill-grid { display: flex; flex-direction: column; gap: 4px; overflow-x: auto; max-width: 100%; padding-bottom: 4px; }
         /* 빌드 그리드 자식이 좁은 화면에서 줄어들 수 있게 (내부 스크롤 동작) */
@@ -1883,96 +1898,107 @@
                     </div>
 
                     {% if champ_build %}
-                    <!-- 상세 룬 -->
-                    {% if champ_build.runes %}
-                    <div style="margin-bottom: 22px;">
-                        <div class="build-label">룬 <span class="build-wr">승률 {{ champ_build.runes.wr }}% · {{ champ_build.runes.games }}게임</span></div>
-                        <div class="rune-detail">
-                            <!-- 주 룬 -->
-                            <div class="rune-col">
-                                <div class="rune-tree-head">
-                                    <img src="https://ddragon.leagueoflegends.com/cdn/img/{{ champ_build.runes.primary_style.icon }}" onerror="this.style.display='none'">
-                                    <span>{{ champ_build.runes.primary_style.name }}</span>
+                    {% set setups = champ_build.setups %}
+                    <!-- 인기/고승률 탭 -->
+                    {% if setups|length > 1 %}
+                    <div class="build-tabs">
+                        {% for su in setups %}
+                        <button class="build-tab {% if loop.first %}active{% endif %}" onclick="switchSetup(this, {{ loop.index0 }})">
+                            {{ su.label }}<span>{{ su.sub }}</span>
+                        </button>
+                        {% endfor %}
+                    </div>
+                    {% endif %}
+
+                    {% for su in setups %}
+                    <div class="setup-content" data-setup="{{ loop.index0 }}" style="{% if not loop.first %}display:none;{% endif %}">
+                        <!-- 인게임 풀 트리 룬 -->
+                        {% if su.runes %}
+                        <div style="margin-bottom: 22px;">
+                            <div class="build-label">룬 <span class="build-wr">승률 {{ su.runes.wr }}% · {{ su.runes.games }}게임</span></div>
+                            <div class="rune-tree-view">
+                                {% if su.runes.primary %}
+                                <div class="rune-tree-col">
+                                    <div class="rune-tree-head"><img src="https://ddragon.leagueoflegends.com/cdn/img/{{ su.runes.primary.icon }}" onerror="this.style.display='none'"><span>{{ su.runes.primary.name }}</span></div>
+                                    {% for row in su.runes.primary.slots %}
+                                    {% set ks_row = loop.first %}
+                                    <div class="rune-slot-row {% if ks_row %}keystone-row{% endif %}">
+                                        {% for r in row %}
+                                        <div class="rune-opt {% if ks_row %}ks{% endif %} {% if r.selected %}sel{% endif %}" data-tip="{{ r.name }}" data-tipdesc="{{ r.desc }}">
+                                            <img src="https://ddragon.leagueoflegends.com/cdn/img/{{ r.icon }}" onerror="this.style.display='none'">
+                                        </div>
+                                        {% endfor %}
+                                    </div>
+                                    {% endfor %}
                                 </div>
-                                <div class="rune-row">
-                                    {% if champ_build.runes.keystone %}
-                                    <div class="rune-pick keystone" title="{{ champ_build.runes.keystone.name }}">
-                                        <img src="https://ddragon.leagueoflegends.com/cdn/img/{{ champ_build.runes.keystone.icon }}" onerror="this.style.display='none'">
+                                {% endif %}
+                                {% if su.runes.sub %}
+                                <div class="rune-tree-col sub">
+                                    <div class="rune-tree-head"><img src="https://ddragon.leagueoflegends.com/cdn/img/{{ su.runes.sub.icon }}" onerror="this.style.display='none'"><span>{{ su.runes.sub.name }}</span></div>
+                                    {% for row in su.runes.sub.slots %}
+                                    <div class="rune-slot-row">
+                                        {% for r in row %}
+                                        <div class="rune-opt {% if r.selected %}sel{% endif %}" data-tip="{{ r.name }}" data-tipdesc="{{ r.desc }}">
+                                            <img src="https://ddragon.leagueoflegends.com/cdn/img/{{ r.icon }}" onerror="this.style.display='none'">
+                                        </div>
+                                        {% endfor %}
+                                    </div>
+                                    {% endfor %}
+                                    {% if su.runes.shards %}
+                                    <div class="rune-shard-row">
+                                        {% for s in su.runes.shards %}
+                                        <div class="rune-shard sel" data-tip="{{ s.name }}"><img src="{{ s.icon }}" onerror="this.style.display='none'"></div>
+                                        {% endfor %}
                                     </div>
                                     {% endif %}
-                                    {% for r in champ_build.runes.primary %}
-                                    <div class="rune-pick" title="{{ r.name }}"><img src="https://ddragon.leagueoflegends.com/cdn/img/{{ r.icon }}" onerror="this.style.display='none'"></div>
-                                    {% endfor %}
-                                </div>
-                            </div>
-                            <!-- 보조 룬 + 샤드 -->
-                            <div class="rune-col">
-                                <div class="rune-tree-head">
-                                    <img src="https://ddragon.leagueoflegends.com/cdn/img/{{ champ_build.runes.sub_style.icon }}" onerror="this.style.display='none'">
-                                    <span>{{ champ_build.runes.sub_style.name }}</span>
-                                </div>
-                                <div class="rune-row">
-                                    {% for r in champ_build.runes.sub %}
-                                    <div class="rune-pick" title="{{ r.name }}"><img src="https://ddragon.leagueoflegends.com/cdn/img/{{ r.icon }}" onerror="this.style.display='none'"></div>
-                                    {% endfor %}
-                                </div>
-                                {% if champ_build.runes.shards %}
-                                <div class="rune-row" style="margin-top:8px;">
-                                    {% for s in champ_build.runes.shards %}
-                                    <div class="rune-shard" title="{{ s.name }}"><img src="{{ s.icon }}" onerror="this.style.display='none'"></div>
-                                    {% endfor %}
                                 </div>
                                 {% endif %}
                             </div>
                         </div>
-                    </div>
-                    {% endif %}
-
-                    <!-- 소환사 주문 + 추천 신발 -->
-                    <div style="display:flex; gap:24px; flex-wrap:wrap; margin-bottom: 22px;">
-                        {% if champ_build.spells and champ_build.spells.list %}
-                        <div>
-                            <div class="build-label">소환사 주문 <span class="build-wr">{{ champ_build.spells.wr }}%</span></div>
-                            <div style="display: flex; gap: 8px;">
-                                {% for sp in champ_build.spells.list %}
-                                <img src="https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/spell/{{ sp.icon }}.png" title="{{ sp.name }}" style="width:40px; height:40px; border-radius:10px; border:1px solid rgba(255,255,255,0.12);" onerror="this.style.display='none'">
-                                {% endfor %}
-                            </div>
-                        </div>
                         {% endif %}
-                        {% if champ_build.boots %}
-                        <div>
-                            <div class="build-label">추천 신발 <span class="build-wr">{{ champ_build.boots.wr }}%</span></div>
-                            <div style="display:flex; align-items:center; gap:8px;">
-                                <img src="https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/item/{{ champ_build.boots.id }}.png" title="{{ champ_build.boots.name }}" style="width:40px; height:40px; border-radius:10px; border:1px solid rgba(255,255,255,0.12);" onerror="this.style.display='none'">
-                                <span style="font-size:12px; font-weight:700; color:#e2e8f0;">{{ champ_build.boots.name }}</span>
-                            </div>
-                        </div>
-                        {% endif %}
-                    </div>
 
-                    <!-- 시작 아이템 -->
-                    {% if champ_build.starts and champ_build.starts.list %}
-                    <div style="margin-bottom: 22px;">
-                        <div class="build-label">시작 아이템 <span class="build-wr">{{ champ_build.starts.wr }}%</span></div>
-                        <div style="display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
-                            {% for it in champ_build.starts.list %}
-                            <img src="https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/item/{{ it.id }}.png" title="{{ it.name }}" style="width:38px; height:38px; border-radius:9px; border:1px solid rgba(255,255,255,0.1);" onerror="this.style.display='none'">
-                            {% endfor %}
+                        <!-- 소환사 주문 + 신발 + 시작템 -->
+                        <div style="display:flex; gap:28px; flex-wrap:wrap; margin-bottom: 4px;">
+                            {% if su.spells and su.spells.list %}
+                            <div>
+                                <div class="build-label">소환사 주문 <span class="build-wr">{{ su.spells.wr }}%</span></div>
+                                <div style="display:flex; gap:8px;">
+                                    {% for sp in su.spells.list %}
+                                    <img class="build-ico" src="https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/spell/{{ sp.icon }}.png" data-tip="{{ sp.name }}" onerror="this.style.display='none'">
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            {% endif %}
+                            {% if su.boots %}
+                            <div>
+                                <div class="build-label">추천 신발 <span class="build-wr">{{ su.boots.wr }}%</span></div>
+                                <img class="build-ico" src="https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/item/{{ su.boots.id }}.png" data-tip="{{ su.boots.name }}" onerror="this.style.display='none'">
+                            </div>
+                            {% endif %}
+                            {% if su.starts and su.starts.list %}
+                            <div>
+                                <div class="build-label">시작 아이템 <span class="build-wr">{{ su.starts.wr }}%</span></div>
+                                <div style="display:flex; gap:6px;">
+                                    {% for it in su.starts.list %}
+                                    <img class="build-ico" src="https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/item/{{ it.id }}.png" data-tip="{{ it.name }}" onerror="this.style.display='none'">
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            {% endif %}
                         </div>
                     </div>
-                    {% endif %}
+                    {% endfor %}
 
                     <!-- 상위 3개 코어 빌드 (3코어 순서) -->
                     {% if champ_build.top_builds %}
                     <div style="margin-bottom: 22px;">
-                        <div class="build-label">코어 빌드 순서 <span style="font-size:10px; color:var(--text-muted); font-weight:600;">인기 상위 3</span></div>
+                        <div class="build-label">코어 빌드 순서 <span style="font-size:10px; color:var(--text-muted); font-weight:600;">인기 상위 3 · 최대 4코어</span></div>
                         <div style="display:flex; flex-direction:column; gap:8px;">
                             {% for tb in champ_build.top_builds %}
                             <div style="display:flex; align-items:center; gap:8px; background:rgba(255,255,255,0.025); border:1px solid rgba(255,255,255,0.06); border-radius:10px; padding:8px 12px;">
                                 <span style="font-size:11px; font-weight:900; color:var(--text-muted); width:16px;">{{ loop.index }}</span>
                                 {% for it in tb.list %}
-                                <img src="https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/item/{{ it.id }}.png" title="{{ it.name }}" style="width:38px; height:38px; border-radius:9px; border:1px solid rgba(255,255,255,0.1);" onerror="this.style.display='none'">
+                                <img class="build-ico" src="https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/item/{{ it.id }}.png" data-tip="{{ it.name }}" onerror="this.style.display='none'">
                                 {% if not loop.last %}<span style="color:var(--text-muted); font-size:12px;">›</span>{% endif %}
                                 {% endfor %}
                                 <span style="margin-left:auto; font-size:11px; font-weight:800; color:{% if tb.wr >= 52 %}#4ade80{% elif tb.wr < 48 %}#f87171{% else %}var(--text-muted){% endif %};">{{ tb.wr }}%</span>
@@ -2231,5 +2257,44 @@
 
     {% endif %}
 
+    <div id="gtip"><div class="gtip-name"></div><div class="gtip-desc"></div></div>
+    <script>
+        // 인기/고승률 셋업 탭 전환
+        function switchSetup(btn, idx) {
+            document.querySelectorAll('.build-tab').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            document.querySelectorAll('.setup-content').forEach(el => {
+                el.style.display = (el.dataset.setup == idx) ? 'block' : 'none';
+            });
+        }
+        // 글래스모피즘 커스텀 툴팁 (data-tip / data-tipdesc)
+        (function() {
+            const tip = document.getElementById('gtip');
+            const nm = tip.querySelector('.gtip-name'), ds = tip.querySelector('.gtip-desc');
+            let active = null;
+            function move(e) {
+                let x = e.clientX + 14, y = e.clientY + 16;
+                const r = tip.getBoundingClientRect();
+                if (x + r.width > window.innerWidth - 8) x = e.clientX - r.width - 14;
+                if (y + r.height > window.innerHeight - 8) y = e.clientY - r.height - 16;
+                tip.style.left = x + 'px'; tip.style.top = y + 'px';
+            }
+            document.addEventListener('mouseover', e => {
+                const t = e.target.closest('[data-tip]');
+                if (!t) return;
+                active = t;
+                nm.textContent = t.getAttribute('data-tip') || '';
+                const d = t.getAttribute('data-tipdesc') || '';
+                ds.textContent = d; ds.style.display = d ? 'block' : 'none';
+                tip.classList.add('show'); move(e);
+            });
+            document.addEventListener('mousemove', e => { if (active) move(e); });
+            document.addEventListener('mouseout', e => {
+                if (active && (!e.relatedTarget || !active.contains(e.relatedTarget))) {
+                    active = null; tip.classList.remove('show');
+                }
+            });
+        })();
+    </script>
 </body>
 </html>
