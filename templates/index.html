@@ -25,7 +25,8 @@
 
         .top-nav { position: sticky; top: 0; z-index: 1000; background-color: rgba(15, 23, 42, 0.75); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); padding: 15px 40px; display: flex; align-items: center; justify-content: space-between; border-bottom: var(--border-glass); transition: 0.3s; }
         .logo-wrapper { font-family: 'Montserrat', sans-serif; font-size: 28px; text-decoration: none; display: flex; align-items: center; cursor: pointer; color: white; letter-spacing: -1px; z-index: 2; }
-        .logo-sb { background: linear-gradient(135deg, #f43f5e, #8b5cf6); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-weight: 900; }
+        .logo-sb { background: linear-gradient(115deg, #fb7185 0%, #f43f5e 45%, #8b5cf6 100%); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; font-weight: 900; display: inline-block; transform: skewX(-12deg); letter-spacing: -1px; filter: drop-shadow(0 2px 5px rgba(139,92,246,0.4)); }
+        .home-title .logo-sb { transform: skewX(-13deg); letter-spacing: -4px; filter: drop-shadow(0 4px 14px rgba(139,92,246,0.45)); }
         
         .home-search-wrapper { position: relative; max-width: 700px; width: 100%; margin: 0 auto; }
         .home-search-box { background-color: rgba(255,255,255,0.05); border-radius: 30px; padding: 8px 8px 8px 30px; display: flex; align-items: center; border: var(--border-glass); backdrop-filter: blur(20px); box-shadow: 0 8px 32px rgba(0,0,0,0.5); transition: 0.3s; }
@@ -520,7 +521,7 @@
     {% elif page == 'multi' %}
         <!-- ================= 멀티 서치 요약 대시보드 ================= -->
         <nav class="top-nav">
-            <a href="/" class="logo-wrapper"><span class="logo-sb">SB</span>.GG</a>
+            <a href="/" class="logo-wrapper"><span class="logo-sb">Z</span></a>
             <div class="nav-search-wrapper">
                 <form action="/search" method="get" class="nav-search-box">
                     <input type="text" name="name" style="width: 150px;" placeholder="소환사명 여러명 가능" required>
@@ -575,7 +576,7 @@
     {% elif page == 'home' %}
         <!-- ================= 1. 메인 홈 화면 ================= -->
         <nav class="top-nav" style="background: transparent; border: none; justify-content: space-between;">
-            <a href="/" class="logo-wrapper"><span class="logo-sb">SB</span>.GG</a>
+            <a href="/" class="logo-wrapper"><span class="logo-sb">Z</span></a>
             <div style="display:flex; align-items:center; gap:10px;">
                 <button type="button" class="feedback-btn" onclick="openFeedback()">
                     <span style="font-size:14px;">💬</span> 고객의 소리
@@ -594,7 +595,7 @@
             </div>
         </nav>
         <div class="home-hero">
-            <div class="home-title"><span class="logo-sb">SB</span>.GG</div>
+            <div class="home-title"><span class="logo-sb">Z</span></div>
             <div class="home-search-wrapper">
                 <form action="/search" method="get" class="home-search-box" id="homeSearchForm">
                     <input type="text" name="name" placeholder="소환사명 입력 후 Enter  (여러명: 쉼표로 구분)" required id="homeSearchName"
@@ -780,7 +781,7 @@
     {% elif page == 'leaderboard' %}
         <!-- ================= 2. 래더 랭킹 화면 ================= -->
         <nav class="top-nav">
-            <a href="/" class="logo-wrapper"><span class="logo-sb">SB</span>.GG</a>
+            <a href="/" class="logo-wrapper"><span class="logo-sb">Z</span></a>
             <div class="nav-search-wrapper">
                 <form action="/search" method="get" class="nav-search-box">
                     <input type="text" name="name" style="width: 150px;" placeholder="소환사명 여러명 가능" required>
@@ -832,7 +833,7 @@
 
     {% elif page == 'champions' %}
         <nav class="top-nav">
-            <a href="/" class="logo-wrapper"><span class="logo-sb">SB</span>.GG</a>
+            <a href="/" class="logo-wrapper"><span class="logo-sb">Z</span></a>
             <div class="nav-search-wrapper">
                 <form action="/search" method="get" class="nav-search-box">
                     <input type="text" name="name" style="width: 150px;" placeholder="소환사명 여러명 가능" required>
@@ -861,7 +862,7 @@
 
     {% elif page == 'duo' %}
         <nav class="top-nav">
-            <a href="/" class="logo-wrapper"><span class="logo-sb">SB</span>.GG</a>
+            <a href="/" class="logo-wrapper"><span class="logo-sb">Z</span></a>
             <div class="nav-search-wrapper">
                 <form action="/search" method="get" class="nav-search-box">
                     <input type="text" name="name" style="width: 150px;" placeholder="소환사명 여러명 가능" required>
@@ -979,7 +980,7 @@
 
     {% elif page == 'spectate' %}
         <nav class="top-nav">
-            <a href="/" class="logo-wrapper"><span class="logo-sb">SB</span>.GG</a>
+            <a href="/" class="logo-wrapper"><span class="logo-sb">Z</span></a>
             <div class="nav-search-wrapper">
                 <form action="/search" method="get" class="nav-search-box">
                     <input type="text" name="name" style="width: 150px;" placeholder="소환사명 여러명 가능" required>
@@ -1056,7 +1057,7 @@
     {% elif page == 'search' %}
         <!-- ================= 5. 단일 전적 분석창 ================= -->
         <nav class="top-nav">
-            <a href="/" class="logo-wrapper"><span class="logo-sb">SB</span>.GG</a>
+            <a href="/" class="logo-wrapper"><span class="logo-sb">Z</span></a>
             
             <div class="nav-search-wrapper">
                 <form action="/search" method="get" class="nav-search-box">
@@ -1612,7 +1613,7 @@
     {% elif page == 'meta' %}
     <!-- ================= 챔피언 메타 분석 ================= -->
     <nav class="top-nav">
-        <a href="/" class="logo-wrapper"><span class="logo-sb">SB</span>.GG</a>
+        <a href="/" class="logo-wrapper"><span class="logo-sb">Z</span></a>
         <div class="nav-search-wrapper">
             <form action="/search" method="get" class="nav-search-box">
                 <input type="text" name="name" style="width: 150px;" placeholder="소환사명 검색" required>
@@ -1790,7 +1791,7 @@
     {% elif page == 'champion' %}
     <!-- ================= 챔피언 상세 분석 (LOL.PS 스타일) ================= -->
     <nav class="top-nav">
-        <a href="/" class="logo-wrapper"><span class="logo-sb">SB</span>.GG</a>
+        <a href="/" class="logo-wrapper"><span class="logo-sb">Z</span></a>
         <div class="nav-search-wrapper">
             <form action="/search" method="get" class="nav-search-box">
                 <input type="text" name="name" style="width: 150px;" placeholder="소환사명 검색" required>
@@ -2112,7 +2113,7 @@
     {% elif page == 'privacy' %}
     <!-- ================= 개인정보처리방침 ================= -->
     <nav class="top-nav">
-        <a href="/" class="logo-wrapper"><span class="logo-sb">SB</span>.GG</a>
+        <a href="/" class="logo-wrapper"><span class="logo-sb">Z</span></a>
         <div style="width: 80px;"></div>
     </nav>
     <div class="main-container" style="max-width: 820px;">
@@ -2180,7 +2181,7 @@
     {% elif page == 'login' %}
     <!-- ================= 로그인 ================= -->
     <nav class="top-nav">
-        <a href="/" class="logo-wrapper"><span class="logo-sb">SB</span>.GG</a>
+        <a href="/" class="logo-wrapper"><span class="logo-sb">Z</span></a>
         <div style="width: 80px;"></div>
     </nav>
     <div class="auth-wrap">
@@ -2202,7 +2203,7 @@
     {% elif page == 'signup' %}
     <!-- ================= 회원가입 ================= -->
     <nav class="top-nav">
-        <a href="/" class="logo-wrapper"><span class="logo-sb">SB</span>.GG</a>
+        <a href="/" class="logo-wrapper"><span class="logo-sb">Z</span></a>
         <div style="width: 80px;"></div>
     </nav>
     <div class="auth-wrap">
