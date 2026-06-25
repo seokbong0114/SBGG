@@ -27,17 +27,49 @@ app.secret_key = os.getenv("SECRET_KEY", "sbgg-dev-secret-key-change-me")
 API_KEY = os.getenv("RIOT_API_KEY")
 HEADERS = {"X-Riot-Token": API_KEY}
 
-# 💾 SQLite 데이터베이스 파일 경로 및 초기화 설정
+# 💾 데이터베이스 — DATABASE_URL(외부 Postgres) 있으면 영구 DB, 없으면 로컬 SQLite
 DB_FILE = "sbgg.db"
+DATABASE_URL = os.getenv("DATABASE_URL")
+IS_PG = bool(DATABASE_URL)
+if IS_PG:
+    import psycopg2
+AUTO_PK = "SERIAL PRIMARY KEY" if IS_PG else "INTEGER PRIMARY KEY AUTOINCREMENT"
 CACHE_EXPIRE_TIME = 300      # 캐시 만료 시간: 5분
 LEADERBOARD_CACHE_TIME = 600 # 래더 캐시: 10분
 SPECTATE_CACHE_TIME = 60     # 관전 캐시: 1분 (라이브 데이터)
+
+# ─── SQLite/Postgres 양립 DB 래퍼 ───
+# 코드는 ? 플레이스홀더로 작성하고, Postgres에서는 자동으로 %s로 변환.
+class _DBCursor:
+    def __init__(self, cur): self._c = cur
+    def execute(self, sql, params=()):
+        self._c.execute(sql.replace("?", "%s") if IS_PG else sql, params); return self
+    def fetchone(self): return self._c.fetchone()
+    def fetchall(self): return self._c.fetchall()
+    @property
+    def lastrowid(self):
+        try: return self._c.lastrowid
+        except Exception: return None
+
+class _DBConn:
+    def __init__(self):
+        self._c = psycopg2.connect(DATABASE_URL) if IS_PG else sqlite3.connect(DB_FILE)
+    def cursor(self): return _DBCursor(self._c.cursor())
+    def execute(self, sql, params=()):
+        cur = self._c.cursor()
+        cur.execute(sql.replace("?", "%s") if IS_PG else sql, params)
+        return _DBCursor(cur)
+    def commit(self): self._c.commit()
+    def close(self): self._c.close()
+
+def db_connect():
+    return _DBConn()
 
 def riot_get(url):
     return requests.get(url, headers=HEADERS, timeout=5)
 
 def init_db():
-    conn = sqlite3.connect(DB_FILE)
+    conn = db_connect()
     cursor = conn.cursor()
     # 소환사별 랭크 검색 데이터를 통째로 캐싱할 테이블 생성
     cursor.execute('''
@@ -48,9 +80,9 @@ def init_db():
         )
     ''')
     # 고객의 소리(피드백) 테이블 — 추후 회원 기능 대비 user_ref 컬럼 포함
-    cursor.execute('''
+    cursor.execute(f'''
         CREATE TABLE IF NOT EXISTS feedback (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id {AUTO_PK},
             category TEXT,
             content TEXT NOT NULL,
             contact TEXT,
@@ -82,9 +114,9 @@ def init_db():
         )
     ''')
     # 듀오 찾기 게시판
-    cursor.execute('''
+    cursor.execute(f'''
         CREATE TABLE IF NOT EXISTS duo_posts (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id {AUTO_PK},
             name TEXT, tag TEXT, tier TEXT,
             my_role TEXT, find_role TEXT,
             queue_type TEXT, mic TEXT, message TEXT,
@@ -92,9 +124,9 @@ def init_db():
         )
     ''')
     # 회원 계정
-    cursor.execute('''
+    cursor.execute(f'''
         CREATE TABLE IF NOT EXISTS users (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            id {AUTO_PK},
             username TEXT UNIQUE NOT NULL,
             password_hash TEXT NOT NULL,
             riot_name TEXT, riot_tag TEXT,
@@ -157,7 +189,7 @@ def init_db():
 def db_read(cache_key):
     """캐시 키로 데이터를 조회. (json_data, updated_at) 또는 (None, 0) 반환."""
     try:
-        conn = sqlite3.connect(DB_FILE)
+        conn = db_connect()
         row = conn.execute("SELECT json_data, updated_at FROM search_cache WHERE cache_key=?", (cache_key,)).fetchone()
         conn.close()
         return (row[0], row[1]) if row else (None, 0)
@@ -168,8 +200,9 @@ def db_read(cache_key):
 def db_write(cache_key, data, current_time):
     """데이터를 JSON으로 직렬화하여 캐시에 저장/갱신."""
     try:
-        conn = sqlite3.connect(DB_FILE)
-        conn.execute("REPLACE INTO search_cache (cache_key, json_data, updated_at) VALUES (?, ?, ?)",
+        conn = db_connect()
+        conn.execute("""INSERT INTO search_cache (cache_key, json_data, updated_at) VALUES (?, ?, ?)
+                        ON CONFLICT(cache_key) DO UPDATE SET json_data=EXCLUDED.json_data, updated_at=EXCLUDED.updated_at""",
                      (cache_key, json.dumps(data), current_time))
         conn.commit()
         conn.close()
@@ -186,7 +219,7 @@ def record_match_stats(m_res, match_id):
     """매치 1건의 챔피언 픽/승패/밴을 통계 DB에 누적. 중복 매치는 건너뜀.
     피기백 수집: 전적 검색 시 이미 가져온 매치를 재활용 (추가 API 호출 0)."""
     try:
-        conn = sqlite3.connect(DB_FILE)
+        conn = db_connect()
         cur = conn.cursor()
         # 중복 방지
         if cur.execute("SELECT 1 FROM processed_matches WHERE match_id=?", (match_id,)).fetchone():
@@ -274,7 +307,7 @@ def record_match_stats(m_res, match_id):
         # 총 경기 수 증가 + 처리 완료 기록
         cur.execute("""INSERT INTO stats_meta (key, value) VALUES ('total_games', '1')
                        ON CONFLICT(key) DO UPDATE SET value=CAST(CAST(value AS INTEGER)+1 AS TEXT)""")
-        cur.execute("INSERT OR IGNORE INTO processed_matches (match_id, processed_at) VALUES (?,?)",
+        cur.execute("INSERT INTO processed_matches (match_id, processed_at) VALUES (?,?) ON CONFLICT(match_id) DO NOTHING",
                     (match_id, int(time.time())))
         conn.commit()
         conn.close()
@@ -289,7 +322,7 @@ def record_timeline_stats(timeline, m_res, match_id):
     """타임라인에서 스킬 마스터 순서 + 코어 아이템 구매 순서를 수집.
     (Riot Timeline API 추가 호출 필요 — /collect 시드 수집에서만 사용)"""
     try:
-        conn = sqlite3.connect(DB_FILE)
+        conn = db_connect()
         cur = conn.cursor()
         if cur.execute("SELECT 1 FROM processed_timelines WHERE match_id=?", (match_id,)).fetchone():
             conn.close()
@@ -358,7 +391,7 @@ def record_timeline_stats(timeline, m_res, match_id):
                                ON CONFLICT(champ_en, role, items) DO UPDATE SET games=games+1, wins=wins+?""",
                             (champ, role, sset, win, win))
 
-        cur.execute("INSERT OR IGNORE INTO processed_timelines (match_id, processed_at) VALUES (?,?)",
+        cur.execute("INSERT INTO processed_timelines (match_id, processed_at) VALUES (?,?) ON CONFLICT(match_id) DO NOTHING",
                     (match_id, int(time.time())))
         conn.commit()
         conn.close()
@@ -369,7 +402,7 @@ def record_timeline_stats(timeline, m_res, match_id):
 
 def get_stats_total_games():
     try:
-        conn = sqlite3.connect(DB_FILE)
+        conn = db_connect()
         row = conn.execute("SELECT value FROM stats_meta WHERE key='total_games'").fetchone()
         conn.close()
         return int(row[0]) if row else 0
@@ -380,7 +413,7 @@ def get_real_stats_map():
     """수집된 실측 통계를 {champ_en: {role: {games, wins}}} + 밴 {champ_en: bans} 로 반환."""
     stats, bans = {}, {}
     try:
-        conn = sqlite3.connect(DB_FILE)
+        conn = db_connect()
         for champ, role, games, wins in conn.execute("SELECT champ_en, role, games, wins FROM champion_stats"):
             stats.setdefault(champ, {})[role] = {"games": games, "wins": wins}
         for champ, b in conn.execute("SELECT champ_en, bans FROM champion_bans"):
@@ -396,7 +429,7 @@ def get_champion_build(champ_en, preferred_role=None):
     """수집 데이터로 추천 빌드(룬/스펠/아이템/스킬/아이템순서)를 산출.
     표본이 부족하면 None 반환 → 프론트에서 '수집 중' 표시."""
     try:
-        conn = sqlite3.connect(DB_FILE)
+        conn = db_connect()
         cur = conn.cursor()
         # 역할 결정: 표본이 가장 많은 역할 (선호 역할에 데이터 있으면 우선)
         roles = cur.execute("SELECT role, SUM(games) FROM champion_stats WHERE champ_en=? GROUP BY role ORDER BY SUM(games) DESC",
@@ -536,7 +569,7 @@ def get_champion_build(champ_en, preferred_role=None):
 def get_champion_counters(champ_en, role, min_games=3):
     """라인 맞대결 승률 기반 카운터(취약)/유리 상대 산출."""
     try:
-        conn = sqlite3.connect(DB_FILE)
+        conn = db_connect()
         rows = conn.execute("""SELECT opponent, games, wins FROM build_matchups
                                WHERE champ_en=? AND role=? AND games>=? ORDER BY games DESC""",
                             (champ_en, role, min_games)).fetchall()
@@ -652,7 +685,7 @@ load_ddragon()  # 앱 시작 시 초기 로드
 def reset_stats_if_new_patch():
     """수집 통계가 이전 패치 것이면 초기화 (새 패치 메타 재수집)."""
     try:
-        conn = sqlite3.connect(DB_FILE)
+        conn = db_connect()
         row = conn.execute("SELECT value FROM stats_meta WHERE key='collected_patch'").fetchone()
         if (row[0] if row else None) != CURRENT_PATCH:
             for t in ['champion_stats','champion_bans','processed_matches','build_runes','build_runepages',
@@ -661,7 +694,8 @@ def reset_stats_if_new_patch():
                 try: conn.execute(f"DELETE FROM {t}")
                 except Exception: pass
             conn.execute("DELETE FROM stats_meta WHERE key='total_games'")
-            conn.execute("REPLACE INTO stats_meta (key, value) VALUES ('collected_patch', ?)", (CURRENT_PATCH,))
+            conn.execute("""INSERT INTO stats_meta (key, value) VALUES ('collected_patch', ?)
+                            ON CONFLICT(key) DO UPDATE SET value=EXCLUDED.value""", (CURRENT_PATCH,))
             conn.commit()
             print(f"패치 변경 감지 → 빌드 통계 초기화 (현재 패치 {CURRENT_PATCH})")
         conn.close()
@@ -1624,15 +1658,20 @@ def signup():
         return render_template('index.html', page='signup', error="비밀번호가 일치하지 않습니다.", form=request.form)
 
     try:
-        conn = sqlite3.connect(DB_FILE)
+        conn = db_connect()
         exists = conn.execute("SELECT 1 FROM users WHERE username=?", (username,)).fetchone()
         if exists:
             conn.close()
             return render_template('index.html', page='signup', error="이미 사용 중인 아이디입니다.", form=request.form)
-        cur = conn.execute("INSERT INTO users (username, password_hash, riot_name, riot_tag, created_at) VALUES (?,?,?,?,?)",
-                           (username, generate_password_hash(password), riot_name, riot_tag, int(time.time())))
+        params = (username, generate_password_hash(password), riot_name, riot_tag, int(time.time()))
+        if IS_PG:
+            uid = conn.execute("""INSERT INTO users (username, password_hash, riot_name, riot_tag, created_at)
+                                  VALUES (?,?,?,?,?) RETURNING id""", params).fetchone()[0]
+        else:
+            cur = conn.execute("""INSERT INTO users (username, password_hash, riot_name, riot_tag, created_at)
+                                  VALUES (?,?,?,?,?)""", params)
+            uid = cur.lastrowid
         conn.commit()
-        uid = cur.lastrowid
         conn.close()
     except Exception as e:
         print(f"회원가입 에러: {e}")
@@ -1651,7 +1690,7 @@ def login():
     username = (request.form.get('username') or '').strip()
     password = request.form.get('password') or ''
     try:
-        conn = sqlite3.connect(DB_FILE)
+        conn = db_connect()
         row = conn.execute("SELECT id, password_hash, riot_name, riot_tag FROM users WHERE username=?", (username,)).fetchone()
         conn.close()
     except Exception as e:
@@ -2042,7 +2081,7 @@ def _time_ago(ts):
 def duo():
     posts = []
     try:
-        conn = sqlite3.connect(DB_FILE)
+        conn = db_connect()
         rows = conn.execute("""SELECT name, tag, tier, my_role, find_role, queue_type, mic, message, created_at
                                FROM duo_posts ORDER BY created_at DESC LIMIT 50""").fetchall()
         conn.close()
@@ -2075,7 +2114,7 @@ def duo_create():
     if tier not in TIER_IMG_MAP:
         tier = "언랭"
     try:
-        conn = sqlite3.connect(DB_FILE)
+        conn = db_connect()
         conn.execute("""INSERT INTO duo_posts (name, tag, tier, my_role, find_role, queue_type, mic, message, created_at)
                         VALUES (?,?,?,?,?,?,?,?,?)""",
                      (name, tag, tier, my_role, find_role, queue_type, mic, message, int(time.time())))
@@ -2151,7 +2190,7 @@ def feedback():
         content = content[:2000]
 
     try:
-        conn = sqlite3.connect(DB_FILE)
+        conn = db_connect()
         conn.execute(
             "INSERT INTO feedback (category, content, contact, user_ref, created_at) VALUES (?, ?, ?, ?, ?)",
             (category, content, contact, user_ref, int(time.time()))
