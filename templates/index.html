@@ -189,6 +189,29 @@
         .skill-key { position: absolute; bottom: -6px; right: -6px; background: var(--point-color); color: white; font-size: 11px; font-weight: 900; width: 20px; height: 20px; border-radius: 6px; display: flex; align-items: center; justify-content: center; border: 2px solid var(--bg-panel); }
         .skill-name { font-size: 11px; font-weight: 700; color: #e2e8f0; text-align: center; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 88px; }
 
+        /* 로그인 / 회원가입 */
+        .auth-wrap { flex: 1; display: flex; align-items: center; justify-content: center; padding: 40px 20px; }
+        .auth-card { width: 100%; max-width: 400px; padding: 36px 32px; }
+        .auth-title { font-size: 26px; font-weight: 900; color: white; margin-bottom: 6px; }
+        .auth-sub { font-size: 13px; color: var(--text-muted); margin-bottom: 24px; }
+        .auth-label { display: block; font-size: 12px; font-weight: 800; color: var(--text-muted); margin: 14px 0 6px; }
+        .auth-input { width: 100%; box-sizing: border-box; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.12); border-radius: 10px; padding: 12px 14px; color: white; font-size: 14px; font-weight: 700; font-family: 'Pretendard'; outline: none; transition: 0.2s; }
+        .auth-input:focus { border-color: var(--point-color); background: rgba(255,255,255,0.08); }
+        .auth-submit { width: 100%; margin-top: 22px; background: linear-gradient(135deg, #f43f5e, #8b5cf6); color: white; border: none; border-radius: 10px; padding: 14px; font-size: 15px; font-weight: 900; font-family: 'Pretendard'; cursor: pointer; transition: 0.2s; }
+        .auth-submit:hover { opacity: 0.9; transform: translateY(-1px); }
+        .auth-foot { text-align: center; margin-top: 22px; font-size: 13px; color: var(--text-muted); }
+        .auth-foot a { color: var(--point-color); font-weight: 800; text-decoration: none; }
+        .auth-error { background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.3); color: #fca5a5; font-size: 13px; font-weight: 700; padding: 10px 14px; border-radius: 10px; margin-bottom: 16px; }
+        .nav-account { display: flex; align-items: center; gap: 8px; }
+        .nav-account a { text-decoration: none; font-size: 13px; font-weight: 800; transition: 0.2s; }
+        .nav-login-btn { color: var(--text-muted); padding: 7px 14px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.12); }
+        .nav-login-btn:hover { color: white; border-color: rgba(255,255,255,0.3); }
+        .nav-signup-btn { color: white; padding: 7px 14px; border-radius: 8px; background: var(--point-color); }
+        .nav-signup-btn:hover { opacity: 0.85; }
+        .nav-user { color: white; font-weight: 800; font-size: 13px; }
+        .nav-logout-btn { color: var(--text-muted); font-size: 12px; padding: 6px 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); }
+        .nav-logout-btn:hover { color: #fca5a5; border-color: rgba(239,68,68,0.3); }
+
         /* 듀오 찾기 게시판 */
         .duo-label { display:block; font-size: 11px; font-weight: 800; color: var(--text-muted); margin-bottom: 6px; }
         .duo-input { width: 100%; box-sizing: border-box; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.12); border-radius: 10px; padding: 10px 12px; color: white; font-size: 13px; font-weight: 700; font-family: 'Pretendard'; outline: none; transition: 0.2s; }
@@ -520,9 +543,22 @@
         <!-- ================= 1. 메인 홈 화면 ================= -->
         <nav class="top-nav" style="background: transparent; border: none; justify-content: space-between;">
             <a href="/" class="logo-wrapper"><span class="logo-sb">SB</span>.GG</a>
-            <button type="button" class="feedback-btn" onclick="openFeedback()">
-                <span style="font-size:14px;">💬</span> 고객의 소리
-            </button>
+            <div style="display:flex; align-items:center; gap:10px;">
+                <button type="button" class="feedback-btn" onclick="openFeedback()">
+                    <span style="font-size:14px;">💬</span> 고객의 소리
+                </button>
+                {% if current_user %}
+                <div class="nav-account">
+                    <span class="nav-user">👤 {{ current_user.username }}</span>
+                    <a href="/logout" class="nav-logout-btn">로그아웃</a>
+                </div>
+                {% else %}
+                <div class="nav-account">
+                    <a href="/login" class="nav-login-btn">로그인</a>
+                    <a href="/signup" class="nav-signup-btn">회원가입</a>
+                </div>
+                {% endif %}
+            </div>
         </nav>
         <div class="home-hero">
             <div class="home-title"><span class="logo-sb">SB</span>.GG</div>
@@ -1909,6 +1945,57 @@
 
         <div style="margin-top: 20px; text-align: center;">
             <a href="/" style="color: var(--text-muted); font-size: 14px; font-weight: 700; text-decoration: none;">← 홈으로 돌아가기</a>
+        </div>
+    </div>
+
+    {% elif page == 'login' %}
+    <!-- ================= 로그인 ================= -->
+    <nav class="top-nav">
+        <a href="/" class="logo-wrapper"><span class="logo-sb">SB</span>.GG</a>
+        <div style="width: 80px;"></div>
+    </nav>
+    <div class="auth-wrap">
+        <div class="glass-panel auth-card">
+            <div class="auth-title">로그인</div>
+            <div class="auth-sub">SB.GG 계정으로 로그인하세요</div>
+            {% if error %}<div class="auth-error">⚠️ {{ error }}</div>{% endif %}
+            <form action="/login" method="post">
+                <label class="auth-label">아이디</label>
+                <input type="text" name="username" required value="{{ form.username if form else '' }}" class="auth-input" placeholder="아이디">
+                <label class="auth-label">비밀번호</label>
+                <input type="password" name="password" required class="auth-input" placeholder="비밀번호">
+                <button type="submit" class="auth-submit">로그인</button>
+            </form>
+            <div class="auth-foot">아직 계정이 없으신가요? <a href="/signup">회원가입</a></div>
+        </div>
+    </div>
+
+    {% elif page == 'signup' %}
+    <!-- ================= 회원가입 ================= -->
+    <nav class="top-nav">
+        <a href="/" class="logo-wrapper"><span class="logo-sb">SB</span>.GG</a>
+        <div style="width: 80px;"></div>
+    </nav>
+    <div class="auth-wrap">
+        <div class="glass-panel auth-card">
+            <div class="auth-title">회원가입</div>
+            <div class="auth-sub">SB.GG의 회원이 되어 더 많은 기능을 이용하세요</div>
+            {% if error %}<div class="auth-error">⚠️ {{ error }}</div>{% endif %}
+            <form action="/signup" method="post">
+                <label class="auth-label">아이디 <span style="color:var(--text-muted); font-weight:600;">(3~20자)</span></label>
+                <input type="text" name="username" required minlength="3" maxlength="20" value="{{ form.username if form else '' }}" class="auth-input" placeholder="사용할 아이디">
+                <label class="auth-label">비밀번호 <span style="color:var(--text-muted); font-weight:600;">(6자 이상)</span></label>
+                <input type="password" name="password" required minlength="6" class="auth-input" placeholder="비밀번호">
+                <label class="auth-label">비밀번호 확인</label>
+                <input type="password" name="password2" required minlength="6" class="auth-input" placeholder="비밀번호 재입력">
+                <label class="auth-label">내 소환사 <span style="color:var(--text-muted); font-weight:600;">(선택 — 연동 시 빠른 검색)</span></label>
+                <div style="display:flex; gap:8px;">
+                    <input type="text" name="riot_name" class="auth-input" style="flex:1;" placeholder="소환사명" value="{{ form.riot_name if form else '' }}">
+                    <input type="text" name="riot_tag" class="auth-input" style="width:80px;" placeholder="KR1" value="{{ form.riot_tag if form else 'KR1' }}">
+                </div>
+                <button type="submit" class="auth-submit" style="margin-top:18px;">가입하기</button>
+            </form>
+            <div class="auth-foot">이미 계정이 있으신가요? <a href="/login">로그인</a></div>
         </div>
     </div>
 

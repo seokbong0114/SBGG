@@ -5,7 +5,8 @@ import sqlite3
 import json
 import time
 import re
-from flask import Flask, render_template, request, redirect, jsonify
+from flask import Flask, render_template, request, redirect, jsonify, session
+from werkzeug.security import generate_password_hash, check_password_hash
 import requests
 from dotenv import load_dotenv
 from collections import Counter
@@ -20,6 +21,8 @@ from champion_meta import (
 
 load_dotenv()
 app = Flask(__name__)
+# 세션 암호화 키 (프로덕션은 환경변수 SECRET_KEY 설정 권장)
+app.secret_key = os.getenv("SECRET_KEY", "sbgg-dev-secret-key-change-me")
 
 API_KEY = os.getenv("RIOT_API_KEY")
 HEADERS = {"X-Riot-Token": API_KEY}
@@ -85,6 +88,16 @@ def init_db():
             name TEXT, tag TEXT, tier TEXT,
             my_role TEXT, find_role TEXT,
             queue_type TEXT, mic TEXT, message TEXT,
+            created_at INTEGER
+        )
+    ''')
+    # 회원 계정
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            riot_name TEXT, riot_tag TEXT,
             created_at INTEGER
         )
     ''')
@@ -1044,6 +1057,81 @@ def get_live_challenger_games():
         print(f"관전 API 에러: {e}")
         return [], False
 
+# ================= 회원 인증 =================
+@app.context_processor
+def inject_user():
+    """모든 템플릿에서 current_user 사용 가능하도록 주입."""
+    if session.get('user_id'):
+        return {'current_user': {'id': session['user_id'], 'username': session.get('username'),
+                                 'riot_name': session.get('riot_name'), 'riot_tag': session.get('riot_tag')}}
+    return {'current_user': None}
+
+@app.route('/signup', methods=['GET', 'POST'])
+def signup():
+    if request.method == 'GET':
+        return render_template('index.html', page='signup')
+    username = (request.form.get('username') or '').strip()
+    password = request.form.get('password') or ''
+    password2 = request.form.get('password2') or ''
+    riot_name = (request.form.get('riot_name') or '').strip()
+    riot_tag = (request.form.get('riot_tag') or '').strip().lstrip('#')
+
+    if len(username) < 3 or len(username) > 20:
+        return render_template('index.html', page='signup', error="아이디는 3~20자로 입력해주세요.", form=request.form)
+    if len(password) < 6:
+        return render_template('index.html', page='signup', error="비밀번호는 6자 이상이어야 합니다.", form=request.form)
+    if password != password2:
+        return render_template('index.html', page='signup', error="비밀번호가 일치하지 않습니다.", form=request.form)
+
+    try:
+        conn = sqlite3.connect(DB_FILE)
+        exists = conn.execute("SELECT 1 FROM users WHERE username=?", (username,)).fetchone()
+        if exists:
+            conn.close()
+            return render_template('index.html', page='signup', error="이미 사용 중인 아이디입니다.", form=request.form)
+        cur = conn.execute("INSERT INTO users (username, password_hash, riot_name, riot_tag, created_at) VALUES (?,?,?,?,?)",
+                           (username, generate_password_hash(password), riot_name, riot_tag, int(time.time())))
+        conn.commit()
+        uid = cur.lastrowid
+        conn.close()
+    except Exception as e:
+        print(f"회원가입 에러: {e}")
+        return render_template('index.html', page='signup', error="가입 처리 중 오류가 발생했습니다.", form=request.form)
+
+    session['user_id'] = uid
+    session['username'] = username
+    session['riot_name'] = riot_name
+    session['riot_tag'] = riot_tag
+    return redirect('/')
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'GET':
+        return render_template('index.html', page='login')
+    username = (request.form.get('username') or '').strip()
+    password = request.form.get('password') or ''
+    try:
+        conn = sqlite3.connect(DB_FILE)
+        row = conn.execute("SELECT id, password_hash, riot_name, riot_tag FROM users WHERE username=?", (username,)).fetchone()
+        conn.close()
+    except Exception as e:
+        print(f"로그인 에러: {e}")
+        return render_template('index.html', page='login', error="로그인 처리 중 오류가 발생했습니다.", form=request.form)
+
+    if not row or not check_password_hash(row[1], password):
+        return render_template('index.html', page='login', error="아이디 또는 비밀번호가 올바르지 않습니다.", form=request.form)
+
+    session['user_id'] = row[0]
+    session['username'] = username
+    session['riot_name'] = row[2]
+    session['riot_tag'] = row[3]
+    return redirect('/')
+
+@app.route('/logout')
+def logout():
+    session.clear()
+    return redirect('/')
+
 # ================= 라우팅 =================
 @app.route('/')
 def index():
@@ -1451,7 +1539,8 @@ def feedback():
     content = (data.get('content') or '').strip()
     category = (data.get('category') or '기타').strip()
     contact = (data.get('contact') or '').strip()
-    user_ref = (data.get('user_ref') or '').strip()  # 추후 회원 식별자 연동
+    # 로그인 회원이면 자동 연동, 아니면 폼 값 사용
+    user_ref = session.get('username') or (data.get('user_ref') or '').strip()
 
     if not content:
         return jsonify({"ok": False, "msg": "내용을 입력해주세요."}), 400
