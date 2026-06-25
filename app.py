@@ -55,6 +55,29 @@ def init_db():
             created_at INTEGER
         )
     ''')
+    # ★ 실시간 통계 파이프라인 — 챔피언별 표본 누적 (피기백 수집)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS champion_stats (
+            champ_en TEXT, role TEXT,
+            games INTEGER DEFAULT 0, wins INTEGER DEFAULT 0,
+            PRIMARY KEY (champ_en, role)
+        )
+    ''')
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS champion_bans (
+            champ_en TEXT PRIMARY KEY, bans INTEGER DEFAULT 0
+        )
+    ''')
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS stats_meta (
+            key TEXT PRIMARY KEY, value TEXT
+        )
+    ''')
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS processed_matches (
+            match_id TEXT PRIMARY KEY, processed_at INTEGER
+        )
+    ''')
     conn.commit()
     conn.close()
 
@@ -80,6 +103,80 @@ def db_write(cache_key, data, current_time):
         conn.close()
     except Exception as e:
         print(f"DB 쓰기 에러 [{cache_key}]: {e}")
+
+# ═══════════════════════════════════════════════════════════════════════
+#  ★ 실시간 통계 데이터 파이프라인
+# ═══════════════════════════════════════════════════════════════════════
+VALID_ROLES = {"TOP", "JUNGLE", "MIDDLE", "BOTTOM", "UTILITY"}
+MIN_SAMPLE = 15  # 실측 데이터로 인정할 최소 표본(경기 수)
+
+def record_match_stats(m_res, match_id):
+    """매치 1건의 챔피언 픽/승패/밴을 통계 DB에 누적. 중복 매치는 건너뜀.
+    피기백 수집: 전적 검색 시 이미 가져온 매치를 재활용 (추가 API 호출 0)."""
+    try:
+        conn = sqlite3.connect(DB_FILE)
+        cur = conn.cursor()
+        # 중복 방지
+        if cur.execute("SELECT 1 FROM processed_matches WHERE match_id=?", (match_id,)).fetchone():
+            conn.close()
+            return False
+
+        info = m_res.get('info', {})
+        # 픽 / 승패
+        for p in info.get('participants', []):
+            role = p.get('teamPosition', '')
+            if role not in VALID_ROLES:
+                continue
+            champ = p.get('championName', '')
+            if not champ:
+                continue
+            win = 1 if p.get('win') else 0
+            cur.execute("""INSERT INTO champion_stats (champ_en, role, games, wins) VALUES (?,?,1,?)
+                           ON CONFLICT(champ_en, role) DO UPDATE SET games=games+1, wins=wins+?""",
+                        (champ, role, win, win))
+        # 밴
+        for team in info.get('teams', []):
+            for ban in team.get('bans', []):
+                cid = str(ban.get('championId', -1))
+                champ = CHAMP_KEYS.get(cid)
+                if not champ:
+                    continue
+                cur.execute("""INSERT INTO champion_bans (champ_en, bans) VALUES (?,1)
+                               ON CONFLICT(champ_en) DO UPDATE SET bans=bans+1""", (champ,))
+        # 총 경기 수 증가 + 처리 완료 기록
+        cur.execute("""INSERT INTO stats_meta (key, value) VALUES ('total_games', '1')
+                       ON CONFLICT(key) DO UPDATE SET value=CAST(CAST(value AS INTEGER)+1 AS TEXT)""")
+        cur.execute("INSERT OR IGNORE INTO processed_matches (match_id, processed_at) VALUES (?,?)",
+                    (match_id, int(time.time())))
+        conn.commit()
+        conn.close()
+        return True
+    except Exception as e:
+        print(f"통계 기록 에러 [{match_id}]: {e}")
+        return False
+
+def get_stats_total_games():
+    try:
+        conn = sqlite3.connect(DB_FILE)
+        row = conn.execute("SELECT value FROM stats_meta WHERE key='total_games'").fetchone()
+        conn.close()
+        return int(row[0]) if row else 0
+    except Exception:
+        return 0
+
+def get_real_stats_map():
+    """수집된 실측 통계를 {champ_en: {role: {games, wins}}} + 밴 {champ_en: bans} 로 반환."""
+    stats, bans = {}, {}
+    try:
+        conn = sqlite3.connect(DB_FILE)
+        for champ, role, games, wins in conn.execute("SELECT champ_en, role, games, wins FROM champion_stats"):
+            stats.setdefault(champ, {})[role] = {"games": games, "wins": wins}
+        for champ, b in conn.execute("SELECT champ_en, bans FROM champion_bans"):
+            bans[champ] = b
+        conn.close()
+    except Exception as e:
+        print(f"실측 통계 조회 에러: {e}")
+    return stats, bans
 
 # 앱 시작 시 DB 초기화 실행
 init_db()
@@ -314,6 +411,9 @@ def get_match_details(puuid, start=0, count=20, queue=None):
             if queue_id not in [420, 440]:
                 continue
             game_type = QUEUE_MAP.get(queue_id, "기타 랭크")
+
+            # ★ 피기백 통계 수집: 이미 가져온 매치를 통계 DB에 누적 (추가 API 호출 없음)
+            record_match_stats(m_res, m_id)
 
             main_player_data, participants_details, max_damage, max_cs, max_cspm = None, [], 0, 0, 0
 
@@ -952,6 +1052,10 @@ def build_champion_meta(rank_tier="emeraldplus"):
     result = {"TOP": [], "JUNGLE": [], "MIDDLE": [], "BOTTOM": [], "UTILITY": []}
     processed = set()
 
+    # ★ 실측 통계 로드 (피기백 수집 데이터)
+    real_stats, real_bans = get_real_stats_map()
+    total_games = get_stats_total_games()
+
     for champ_en, kr_name in CHAMP_KR_MAP.items():
         roles = CHAMPION_ROLE_MAP.get(champ_en, [])
         if not roles:
@@ -972,18 +1076,32 @@ def build_champion_meta(rank_tier="emeraldplus"):
             continue
         processed.add(champ_en)
 
+        # 정적(예측) 데이터 — 난이도/추세 등 메타 정보 출처
         champ_stats_entry = META_STATS.get(champ_en, {})
         role_stats_entry  = champ_stats_entry.get(primary_role, {})
         stats = role_stats_entry.get(rank_tier, None)
-
         if stats:
-            wr, pr, br = stats["wr"], stats["pr"], stats["br"]
-            trend      = stats.get("trend", "stable")
             difficulty = stats.get("difficulty", 2)
         else:
-            d = DEFAULT_ROLE_STATS.get(primary_role, DEFAULT_ROLE_STATS["TOP"])
-            wr, pr, br = d["wr"], d["pr"], d["br"]
-            trend, difficulty = d["trend"], d["difficulty"]
+            difficulty = DEFAULT_ROLE_STATS.get(primary_role, DEFAULT_ROLE_STATS["TOP"])["difficulty"]
+
+        # ★ 실측 우선: 표본이 충분하면 수집 데이터로, 아니면 정적 예측으로
+        real_role = real_stats.get(champ_en, {}).get(primary_role)
+        sample = real_role["games"] if real_role else 0
+        if real_role and sample >= MIN_SAMPLE and total_games > 0:
+            wr = round(real_role["wins"] / sample * 100, 1)
+            pr = round(sample / total_games * 100, 1)
+            br = round(real_bans.get(champ_en, 0) / total_games * 100, 1)
+            source, trend = "실측", "stable"
+        else:
+            if stats:
+                wr, pr, br = stats["wr"], stats["pr"], stats["br"]
+                trend = stats.get("trend", "stable")
+            else:
+                d = DEFAULT_ROLE_STATS.get(primary_role, DEFAULT_ROLE_STATS["TOP"])
+                wr, pr, br = d["wr"], d["pr"], d["br"]
+                trend = d["trend"]
+            source = "예측"
 
         num_tier   = calc_meta_tier(wr, pr, br)
         tier_style = NUMERIC_TIER_COLOR.get(num_tier, NUMERIC_TIER_COLOR["5"])
@@ -1003,6 +1121,7 @@ def build_champion_meta(rank_tier="emeraldplus"):
             "has_detail": existing is not None,
             "role_kr": ROLE_KR.get(primary_role, primary_role),
             "role_en": primary_role,
+            "source": source, "sample": sample,
         }
         result[primary_role].append(entry)
 
@@ -1019,15 +1138,51 @@ def meta():
         rank_tier = "emeraldplus"
     champion_tiers = build_champion_meta(rank_tier)
     tier_counts = {"OP": 0, "1": 0, "2": 0, "3": 0, "4": 0, "5": 0}
+    real_count = 0
     for champs in champion_tiers.values():
         for c in champs:
             tier_counts[c["tier"]] = tier_counts.get(c["tier"], 0) + 1
+            if c.get("source") == "실측":
+                real_count += 1
     return render_template('index.html', page='meta', champion_tiers=champion_tiers,
                            latest_version=LATEST_VERSION, current_patch=CURRENT_PATCH,
                            role_kr=ROLE_KR, rank_tier=rank_tier,
                            rank_tier_labels=RANK_TIER_LABELS,
                            numeric_tier_color=NUMERIC_TIER_COLOR,
-                           tier_counts=tier_counts)
+                           tier_counts=tier_counts,
+                           total_games=get_stats_total_games(), real_count=real_count)
+
+@app.route('/collect')
+def collect():
+    """챌린저 래더에서 매치를 수집해 통계 DB를 부트스트랩하는 시드 라우트.
+    ?n=플레이어수 (기본 5, 최대 10). API 한도 보호를 위해 소량씩 호출."""
+    n = max(1, min(int(request.args.get("n", 5)), 10))
+    collected, scanned_players = 0, 0
+    try:
+        res = riot_get("https://kr.api.riotgames.com/lol/league/v4/challengerleagues/by-queue/RANKED_SOLO_5x5")
+        if res.status_code != 200:
+            return jsonify({"error": f"래더 조회 실패 ({res.status_code})"}), 502
+        entries = res.json().get('entries', [])
+        entries.sort(key=lambda x: x['leaguePoints'], reverse=True)
+        for entry in entries[:n]:
+            # 챌린저 엔트리는 puuid를 직접 제공 (summonerId 미제공)
+            puuid = entry.get('puuid', '')
+            if not puuid:
+                continue
+            ids_res = riot_get(f"https://asia.api.riotgames.com/lol/match/v5/matches/by-puuid/{puuid}/ids?start=0&count=10&type=ranked")
+            if ids_res.status_code != 200:
+                continue
+            scanned_players += 1
+            for m_id in ids_res.json():
+                raw = riot_get(f"https://asia.api.riotgames.com/lol/match/v5/matches/{m_id}")
+                if raw.status_code != 200:
+                    continue
+                if record_match_stats(raw.json(), m_id):
+                    collected += 1
+    except Exception as e:
+        return jsonify({"error": str(e), "collected": collected}), 500
+    return jsonify({"collected_new_matches": collected, "scanned_players": scanned_players,
+                    "total_games": get_stats_total_games()})
 
 @app.route('/champion/<champ_id>')
 def champion_page(champ_id):

@@ -1360,6 +1360,22 @@
             <span style="font-size: 14px; color: var(--text-muted); font-weight: 600;">패치 {{ current_patch }} · KR 솔로랭크</span>
         </div>
 
+        <!-- 데이터 수집 현황 배너 -->
+        <div class="glass-panel" style="padding: 14px 20px; margin-bottom: 18px; display:flex; align-items:center; gap:16px; flex-wrap:wrap;">
+            <div style="display:flex; align-items:center; gap:8px;">
+                <span style="width:8px; height:8px; background:#4ade80; border-radius:50%; box-shadow:0 0 8px #4ade80;"></span>
+                <span style="font-size:13px; font-weight:800; color:white;">실시간 통계 수집</span>
+            </div>
+            <div style="font-size:12px; color:var(--text-muted);">
+                누적 분석 경기 <b style="color:#93c5fd;">{{ "{:,}".format(total_games) }}</b>게임 ·
+                <span style="color:#4ade80; font-weight:800;">실측</span> {{ real_count }}챔프 /
+                <span style="color:#fbbf24; font-weight:800;">예측</span> 보완
+            </div>
+            <div style="font-size:11px; color:var(--text-muted); margin-left:auto; opacity:0.7;">
+                ※ 전적 검색이 쌓일수록 실측 데이터로 자동 전환됩니다
+            </div>
+        </div>
+
         <!-- 랭크 티어 선택 -->
         <div style="display: flex; gap: 6px; margin-bottom: 20px; flex-wrap: wrap; align-items: center;">
             <span style="font-size: 12px; color: var(--text-muted); font-weight: 700; margin-right: 6px;">랭크 기준</span>
@@ -1429,8 +1445,13 @@
                                 <span>픽률 <b style="color: #e2e8f0;">{{ c.pr }}%</b></span>
                                 <span>밴률 <b style="color: {% if c.br >= 15 %}#f87171{% else %}#e2e8f0{% endif %};">{{ c.br }}%</b></span>
                             </div>
-                            <div>
+                            <div style="display:flex; align-items:center; gap:6px;">
                                 <span style="font-size: 10px; padding: 2px 7px; border-radius: 5px; font-weight: 800; background: rgba(255,255,255,0.04); color: {{ c.diff_color }}; border: 1px solid rgba(255,255,255,0.07);">난이도 {{ c.diff_label }}</span>
+                                {% if c.source == '실측' %}
+                                <span title="수집된 {{ c.sample }}게임 기반 실측 데이터" style="font-size: 10px; padding: 2px 7px; border-radius: 5px; font-weight: 800; background: rgba(74,222,128,0.12); color: #4ade80; border: 1px solid rgba(74,222,128,0.3);">실측 {{ c.sample }}</span>
+                                {% else %}
+                                <span title="표본 부족 — 메타 예측치" style="font-size: 10px; padding: 2px 7px; border-radius: 5px; font-weight: 800; background: rgba(251,191,36,0.1); color: #fbbf24; border: 1px solid rgba(251,191,36,0.25);">예측</span>
+                                {% endif %}
                             </div>
                         </div>
                     </div>
