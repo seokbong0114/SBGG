@@ -486,13 +486,33 @@ def get_champion_build(champ_en, preferred_role=None):
                                WHERE champ_en=? AND role=? ORDER BY games DESC LIMIT 6""", (champ_en, role)).fetchall()
         build["items"] = [{"id": it[0], "name": ITEM_NAME.get(it[0], ""),
                            "wr": round(it[2] / it[1] * 100) if it[1] else 0, "games": it[1]} for it in items]
-        # 상위 3개 코어 빌드(최대 4코어 순서)
-        top_builds = cur.execute("""SELECT seq, games, wins FROM build_item_order
-                                    WHERE champ_en=? AND role=? ORDER BY games DESC LIMIT 3""", (champ_en, role)).fetchall()
-        build["top_builds"] = [{
-            "list": [{"id": i, "name": ITEM_NAME.get(i, "")} for i in tb[0].split("-")],
-            "games": tb[1], "wr": round(tb[2] / tb[1] * 100) if tb[1] else 0
-        } for tb in top_builds]
+        # 상위 3개 코어 빌드 — 첫 코어별 그룹 → 위치별 최빈 아이템으로 4코어 경로 구성
+        # (정확 시퀀스 집계는 표본 적을 때 짧은 빌드 편향 → 위치별 집계로 안정적 4코어 출력)
+        all_seqs = cur.execute("""SELECT seq, games, wins FROM build_item_order
+                                  WHERE champ_en=? AND role=?""", (champ_en, role)).fetchall()
+        groups = {}  # 첫 코어 → {games, wins, pos:{i:{item:count}}}
+        for seq, g, w in all_seqs:
+            items = seq.split("-")[:4]
+            if not items:
+                continue
+            grp = groups.setdefault(items[0], {"games": 0, "wins": 0, "pos": {}})
+            grp["games"] += g; grp["wins"] += w
+            for i, it in enumerate(items):
+                grp["pos"].setdefault(i, {})
+                grp["pos"][i][it] = grp["pos"][i].get(it, 0) + g
+        top3 = sorted(groups.items(), key=lambda x: -x[1]["games"])[:3]
+        build["top_builds"] = []
+        for first, grp in top3:
+            path = []
+            for i in range(4):
+                col = grp["pos"].get(i)
+                if not col:
+                    break
+                best = max(col, key=col.get)
+                path.append({"id": best, "name": ITEM_NAME.get(best, "")})
+            build["top_builds"].append({
+                "list": path, "games": grp["games"],
+                "wr": round(grp["wins"] / grp["games"] * 100) if grp["games"] else 0})
         # 스킬 마스터 순서(우선순위)
         sk = cur.execute("""SELECT skill_order, games, wins FROM build_skills
                             WHERE champ_en=? AND role=? ORDER BY games DESC LIMIT 1""", (champ_en, role)).fetchone()
