@@ -1214,6 +1214,10 @@ def spectate():
     spectate_games, from_cache = get_live_challenger_games()
     return render_template('index.html', page='spectate', spectate_games=spectate_games, latest_version=LATEST_VERSION, from_cache=from_cache)
 
+@app.route('/privacy')
+def privacy():
+    return render_template('index.html', page='privacy', current_patch=CURRENT_PATCH)
+
 @app.route('/more_matches')
 def more_matches():
     puuid = request.args.get('puuid')

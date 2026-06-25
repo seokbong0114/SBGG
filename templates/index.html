@@ -189,6 +189,14 @@
         .skill-key { position: absolute; bottom: -6px; right: -6px; background: var(--point-color); color: white; font-size: 11px; font-weight: 900; width: 20px; height: 20px; border-radius: 6px; display: flex; align-items: center; justify-content: center; border: 2px solid var(--bg-panel); }
         .skill-name { font-size: 11px; font-weight: 700; color: #e2e8f0; text-align: center; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 88px; }
 
+        /* 개인정보처리방침 */
+        .privacy-section { margin-top: 26px; }
+        .privacy-h { font-size: 16px; font-weight: 900; color: white; margin: 0 0 10px 0; padding-left: 12px; border-left: 3px solid var(--point-color); }
+        .privacy-p { font-size: 14px; color: var(--text-muted); margin: 0; }
+        .privacy-ul { margin: 0; padding-left: 20px; }
+        .privacy-ul li { font-size: 14px; color: var(--text-muted); margin-bottom: 8px; }
+        .privacy-ul li b, .privacy-p b { color: #e2e8f0; }
+
         .scoreboard-container { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; padding: 15px; }
         
         .team-box { border-radius: 12px; padding: 15px; border: var(--border-glass); box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
@@ -542,6 +550,20 @@
                 {% endfor %}
             </div>
         </div>
+
+        <!-- 푸터 -->
+        <footer style="max-width: 1080px; margin: 0 auto 50px auto; padding: 24px 20px 0 20px; border-top: 1px solid rgba(255,255,255,0.06); text-align: center;">
+            <div style="display: flex; gap: 18px; justify-content: center; flex-wrap: wrap; margin-bottom: 12px;">
+                <a href="/privacy" style="color: var(--text-muted); font-size: 13px; font-weight: 700; text-decoration: none;">개인정보처리방침</a>
+                <span style="color: rgba(255,255,255,0.15);">·</span>
+                <a href="#" onclick="openFeedback(); return false;" style="color: var(--text-muted); font-size: 13px; font-weight: 700; text-decoration: none;">고객의 소리</a>
+                <span style="color: rgba(255,255,255,0.15);">·</span>
+                <a href="/meta" style="color: var(--text-muted); font-size: 13px; font-weight: 700; text-decoration: none;">메타 분석</a>
+            </div>
+            <div style="font-size: 11px; color: rgba(148,163,184,0.6); line-height: 1.6;">
+                SB.GG isn't endorsed by Riot Games. Riot Games and all associated properties are trademarks or registered trademarks of Riot Games, Inc.
+            </div>
+        </footer>
 
         <!-- ================= 고객의 소리 (피드백) 모달 ================= -->
         <div id="feedbackOverlay" class="feedback-overlay" onclick="if(event.target===this)closeFeedback()">
@@ -1678,6 +1700,74 @@
 
         <div style="margin-top: 20px; text-align: center;">
             <a href="/meta" style="color: var(--text-muted); font-size: 14px; font-weight: 700; text-decoration: none;">← 전체 메타 분석으로 돌아가기</a>
+        </div>
+    </div>
+
+    {% elif page == 'privacy' %}
+    <!-- ================= 개인정보처리방침 ================= -->
+    <nav class="top-nav">
+        <a href="/" class="logo-wrapper"><span class="logo-sb">SB</span>.GG</a>
+        <div style="width: 80px;"></div>
+    </nav>
+    <div class="main-container" style="max-width: 820px;">
+        <div class="page-title">🔒 개인정보처리방침 <span style="font-size: 13px; color: var(--text-muted); font-weight: 600;">Privacy Policy</span></div>
+
+        <div class="glass-panel" style="padding: 36px; line-height: 1.8;">
+            <p style="color: var(--text-muted); font-size: 14px; margin-top: 0;">
+                SB.GG(이하 "서비스")는 이용자의 개인정보를 중요하게 생각하며, 「개인정보 보호법」을 준수합니다.
+                본 방침은 서비스가 어떤 정보를 어떻게 수집·이용·보관하는지 설명합니다.
+            </p>
+
+            <div class="privacy-section">
+                <h3 class="privacy-h">1. 수집하는 정보</h3>
+                <ul class="privacy-ul">
+                    <li><b>공개 게임 데이터:</b> 이용자가 검색한 소환사의 공개 전적·통계 정보 (Riot Games API를 통해 제공되는 공개 데이터). 별도의 라이엇 계정 로그인이나 비밀번호는 수집하지 않습니다.</li>
+                    <li><b>피드백 정보:</b> '고객의 소리'로 직접 제출한 내용 및 선택적으로 입력한 연락처.</li>
+                    <li><b>로컬 저장 정보:</b> 즐겨찾기·최근 검색 기록은 이용자 브라우저(localStorage)에만 저장되며 서버로 전송되지 않습니다.</li>
+                </ul>
+            </div>
+
+            <div class="privacy-section">
+                <h3 class="privacy-h">2. 이용 목적</h3>
+                <ul class="privacy-ul">
+                    <li>전적 분석·메타 통계·빌드 추천 등 핵심 기능 제공</li>
+                    <li>제출된 피드백을 통한 서비스 품질 개선</li>
+                    <li>API 호출 한도 준수를 위한 응답 데이터의 일시적 캐싱</li>
+                </ul>
+            </div>
+
+            <div class="privacy-section">
+                <h3 class="privacy-h">3. 보관 및 파기</h3>
+                <ul class="privacy-ul">
+                    <li><b>검색 캐시:</b> 일정 시간(수 분) 후 자동 갱신·만료되는 임시 데이터입니다.</li>
+                    <li><b>피드백:</b> 서비스 개선 목적 달성 후 또는 이용자 요청 시 파기합니다.</li>
+                </ul>
+            </div>
+
+            <div class="privacy-section">
+                <h3 class="privacy-h">4. 제3자 제공</h3>
+                <p class="privacy-p">서비스는 수집한 정보를 제3자에게 판매하거나 제공하지 않습니다. 다만 게임 데이터 조회를 위해 <b>Riot Games API</b>를 이용하며, 이는 Riot Games의 정책을 따릅니다.</p>
+            </div>
+
+            <div class="privacy-section">
+                <h3 class="privacy-h">5. 이용자의 권리</h3>
+                <p class="privacy-p">이용자는 본인이 제출한 피드백의 열람·삭제를 언제든 요청할 수 있으며, 브라우저에 저장된 즐겨찾기·검색 기록은 직접 삭제할 수 있습니다.</p>
+            </div>
+
+            <div class="privacy-section">
+                <h3 class="privacy-h">6. 문의처</h3>
+                <p class="privacy-p">개인정보 관련 문의: <a href="mailto:seokbong0114@gmail.com" style="color: var(--point-color); font-weight: 700;">seokbong0114@gmail.com</a> 또는 홈 화면 '고객의 소리'</p>
+            </div>
+
+            <div style="margin-top: 28px; padding: 18px; background: rgba(255,255,255,0.03); border-radius: 12px; border: 1px solid rgba(255,255,255,0.07); font-size: 12px; color: var(--text-muted); line-height: 1.7;">
+                SB.GG isn't endorsed by Riot Games and doesn't reflect the views or opinions of Riot Games or anyone officially involved in producing or managing Riot Games properties. Riot Games, and all associated properties are trademarks or registered trademarks of Riot Games, Inc.
+            </div>
+
+            <div style="margin-top: 20px; font-size: 12px; color: var(--text-muted);">시행일: 2026년 6월 25일 · 패치 {{ current_patch }} 기준</div>
+        </div>
+
+        <div style="margin-top: 20px; text-align: center;">
+            <a href="/" style="color: var(--text-muted); font-size: 14px; font-weight: 700; text-decoration: none;">← 홈으로 돌아가기</a>
         </div>
     </div>
 
