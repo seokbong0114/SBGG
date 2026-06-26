@@ -46,6 +46,7 @@ class _DBCursor:
         self._c.execute(sql.replace("?", "%s") if IS_PG else sql, params); return self
     def fetchone(self): return self._c.fetchone()
     def fetchall(self): return self._c.fetchall()
+    def __iter__(self): return iter(self._c.fetchall())  # for row in execute(...) 지원
     @property
     def lastrowid(self):
         try: return self._c.lastrowid
@@ -318,6 +319,8 @@ def record_match_stats(m_res, match_id):
         return True
     except Exception as e:
         print(f"통계 기록 에러 [{match_id}]: {e}")
+        try: conn.close()  # 에러 시 연결 누수 방지 (Postgres 연결 한도 보호)
+        except Exception: pass
         return False
 
 SKILL_LETTER = {1: "Q", 2: "W", 3: "E", 4: "R"}
@@ -402,6 +405,8 @@ def record_timeline_stats(timeline, m_res, match_id):
         return True
     except Exception as e:
         print(f"타임라인 기록 에러 [{match_id}]: {e}")
+        try: conn.close()  # 연결 누수 방지
+        except Exception: pass
         return False
 
 def get_stats_total_games():
@@ -1881,10 +1886,16 @@ def collect():
                     tl = riot_get(f"https://asia.api.riotgames.com/lol/match/v5/matches/{m_id}/timeline")
                     if tl.status_code == 200:
                         record_timeline_stats(tl.json(), m_json, m_id)
-    except Exception as e:
-        return jsonify({"error": str(e), "collected": collected, "tier": tier}), 500
+    except Exception:
+        import traceback
+        return "<pre>COLLECT ERROR:\n" + traceback.format_exc() + "</pre>", 500
+    try:
+        total = get_stats_total_games()
+    except Exception:
+        import traceback
+        return "<pre>TOTAL ERROR:\n" + traceback.format_exc() + "</pre>", 500
     return jsonify({"tier": tier, "collected_new_matches": collected,
-                    "scanned_players": scanned, "total_games": get_stats_total_games()})
+                    "scanned_players": scanned, "total_games": total})
 
 @app.route('/champion/<champ_id>')
 def champion_page(champ_id):
