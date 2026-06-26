@@ -243,7 +243,7 @@ def record_match_stats(m_res, match_id):
                 continue
             win = 1 if p.get('win') else 0
             cur.execute("""INSERT INTO champion_stats (champ_en, role, games, wins) VALUES (?,?,1,?)
-                           ON CONFLICT(champ_en, role) DO UPDATE SET games=games+1, wins=wins+?""",
+                           ON CONFLICT(champ_en, role) DO UPDATE SET games=champion_stats.games+1, wins=champion_stats.wins+?""",
                         (champ, role, win, win))
 
             # 상세 룬 페이지 (키스톤+주룬3 | 보조룬2 | 샤드3)
@@ -259,7 +259,7 @@ def record_match_stats(m_res, match_id):
                        ",".join(str(x) for x in shards)
                 cur.execute("""INSERT INTO build_runepages (champ_en, role, page, primary_style, sub_style, games, wins)
                                VALUES (?,?,?,?,?,1,?)
-                               ON CONFLICT(champ_en, role, page) DO UPDATE SET games=games+1, wins=wins+?""",
+                               ON CONFLICT(champ_en, role, page) DO UPDATE SET games=build_runepages.games+1, wins=build_runepages.wins+?""",
                             (champ, role, page, styles[0]['style'], styles[1]['style'], win, win))
             except (KeyError, IndexError, TypeError):
                 pass
@@ -269,7 +269,7 @@ def record_match_stats(m_res, match_id):
             if s1 and s2:
                 combo = "-".join(sorted([str(s1), str(s2)]))
                 cur.execute("""INSERT INTO build_spells (champ_en, role, spells, games, wins) VALUES (?,?,?,1,?)
-                               ON CONFLICT(champ_en, role, spells) DO UPDATE SET games=games+1, wins=wins+?""",
+                               ON CONFLICT(champ_en, role, spells) DO UPDATE SET games=build_spells.games+1, wins=build_spells.wins+?""",
                             (champ, role, combo, win, win))
 
             # 최종 아이템 → 코어/신발 분리 빈도 집계
@@ -279,11 +279,11 @@ def record_match_stats(m_res, match_id):
                     continue
                 if iid in BOOTS_ITEMS:
                     cur.execute("""INSERT INTO build_boots (champ_en, role, item_id, games, wins) VALUES (?,?,?,1,?)
-                                   ON CONFLICT(champ_en, role, item_id) DO UPDATE SET games=games+1, wins=wins+?""",
+                                   ON CONFLICT(champ_en, role, item_id) DO UPDATE SET games=build_boots.games+1, wins=build_boots.wins+?""",
                                 (champ, role, iid, win, win))
                 elif iid in CORE_ITEMS:
                     cur.execute("""INSERT INTO build_items (champ_en, role, item_id, games, wins) VALUES (?,?,?,1,?)
-                                   ON CONFLICT(champ_en, role, item_id) DO UPDATE SET games=games+1, wins=wins+?""",
+                                   ON CONFLICT(champ_en, role, item_id) DO UPDATE SET games=build_items.games+1, wins=build_items.wins+?""",
                                 (champ, role, iid, win, win))
 
         # 카운터 라인 맞대결 (같은 라인 양 팀 챔피언 대결)
@@ -296,10 +296,10 @@ def record_match_stats(m_res, match_id):
             if len(plist) == 2 and plist[0][1] != plist[1][1]:
                 (ca, _, wa), (cb, _, wb) = plist
                 cur.execute("""INSERT INTO build_matchups (champ_en, role, opponent, games, wins) VALUES (?,?,?,1,?)
-                               ON CONFLICT(champ_en, role, opponent) DO UPDATE SET games=games+1, wins=wins+?""",
+                               ON CONFLICT(champ_en, role, opponent) DO UPDATE SET games=build_matchups.games+1, wins=build_matchups.wins+?""",
                             (ca, r, cb, wa, wa))
                 cur.execute("""INSERT INTO build_matchups (champ_en, role, opponent, games, wins) VALUES (?,?,?,1,?)
-                               ON CONFLICT(champ_en, role, opponent) DO UPDATE SET games=games+1, wins=wins+?""",
+                               ON CONFLICT(champ_en, role, opponent) DO UPDATE SET games=build_matchups.games+1, wins=build_matchups.wins+?""",
                             (cb, r, ca, wb, wb))
         # 밴
         for team in info.get('teams', []):
@@ -309,10 +309,10 @@ def record_match_stats(m_res, match_id):
                 if not champ:
                     continue
                 cur.execute("""INSERT INTO champion_bans (champ_en, bans) VALUES (?,1)
-                               ON CONFLICT(champ_en) DO UPDATE SET bans=bans+1""", (champ,))
+                               ON CONFLICT(champ_en) DO UPDATE SET bans=champion_bans.bans+1""", (champ,))
         # 총 경기 수 증가 + 처리 완료 기록
         cur.execute("""INSERT INTO stats_meta (key, value) VALUES ('total_games', '1')
-                       ON CONFLICT(key) DO UPDATE SET value=CAST(CAST(value AS INTEGER)+1 AS TEXT)""")
+                       ON CONFLICT(key) DO UPDATE SET value=CAST(CAST(stats_meta.value AS INTEGER)+1 AS TEXT)""")
         cur.execute("INSERT INTO processed_matches (match_id, processed_at) VALUES (?,?) ON CONFLICT(match_id) DO NOTHING",
                     (match_id, int(time.time())))
         conn.commit()
@@ -382,24 +382,24 @@ def record_timeline_stats(timeline, m_res, match_id):
                 ordered = sorted(counts.keys(), key=lambda s: (-counts[s][0], counts[s][1]))
                 order_str = ">".join(SKILL_LETTER[s] for s in ordered)
                 cur.execute("""INSERT INTO build_skills (champ_en, role, skill_order, games, wins) VALUES (?,?,?,1,?)
-                               ON CONFLICT(champ_en, role, skill_order) DO UPDATE SET games=games+1, wins=wins+?""",
+                               ON CONFLICT(champ_en, role, skill_order) DO UPDATE SET games=build_skills.games+1, wins=build_skills.wins+?""",
                             (champ, role, order_str, win, win))
             # 레벨별 스킬 (lol.ps 스타일 18레벨 트리)
             for lvl, slot in enumerate(full, start=1):
                 cur.execute("""INSERT INTO build_skill_levels (champ_en, role, lvl, slot, games, wins) VALUES (?,?,?,?,1,?)
-                               ON CONFLICT(champ_en, role, lvl, slot) DO UPDATE SET games=games+1, wins=wins+?""",
+                               ON CONFLICT(champ_en, role, lvl, slot) DO UPDATE SET games=build_skill_levels.games+1, wins=build_skill_levels.wins+?""",
                             (champ, role, lvl, slot, win, win))
             # 코어 아이템 구매 순서: 앞 4개 (4코어 타임라인)
             if item_seq[pid]:
                 seqstr = "-".join(item_seq[pid][:4])
                 cur.execute("""INSERT INTO build_item_order (champ_en, role, seq, games, wins) VALUES (?,?,?,1,?)
-                               ON CONFLICT(champ_en, role, seq) DO UPDATE SET games=games+1, wins=wins+?""",
+                               ON CONFLICT(champ_en, role, seq) DO UPDATE SET games=build_item_order.games+1, wins=build_item_order.wins+?""",
                             (champ, role, seqstr, win, win))
             # 시작 아이템 세트
             if start_items[pid]:
                 sset = "-".join(sorted(start_items[pid]))
                 cur.execute("""INSERT INTO build_starts (champ_en, role, items, games, wins) VALUES (?,?,?,1,?)
-                               ON CONFLICT(champ_en, role, items) DO UPDATE SET games=games+1, wins=wins+?""",
+                               ON CONFLICT(champ_en, role, items) DO UPDATE SET games=build_starts.games+1, wins=build_starts.wins+?""",
                             (champ, role, sset, win, win))
 
         cur.execute("INSERT INTO processed_timelines (match_id, processed_at) VALUES (?,?) ON CONFLICT(match_id) DO NOTHING",
@@ -1861,6 +1861,8 @@ def _fetch_tier_pool(tier):
 def collect():
     """플래티넘+ 다중 티어 순회 수집. ?n=플레이어수(기본5, 최대12), ?tier=auto|티어명.
     크론으로 주기 호출 시 매번 다른 티어를 표본화해 전 티어 커버."""
+    global _LAST_DB_ERROR
+    _LAST_DB_ERROR = None  # 이번 호출의 에러만 진단
     n = max(1, min(int(request.args.get("n", 5)), 12))
     tier = request.args.get("tier", "auto").lower()
     if tier not in SAMPLE_TIERS:
