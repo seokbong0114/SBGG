@@ -2163,6 +2163,11 @@ def spectate():
 def privacy():
     return render_template('index.html', page='privacy', current_patch=CURRENT_PATCH)
 
+@app.route('/riot.txt')
+def riot_txt():
+    # Riot Production API Key 사이트 소유권 검증 토큰
+    return "c49dcec5-23e6-494c-b5d1-69f5e4d09a8a", 200, {'Content-Type': 'text/plain'}
+
 @app.route('/more_matches')
 def more_matches():
     puuid = request.args.get('puuid')
