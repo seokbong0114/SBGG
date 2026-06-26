@@ -992,6 +992,74 @@ def _first_num(burn):
     except (ValueError, IndexError):
         return 0.0
 
+def get_patch_highlights(limit=6):
+    """championFull.json 1파일로 전 챔피언 패치 버프/너프 일괄 감지 (홈 위젯용).
+    DDragon 호출 2번(현재·직전 패치)으로 끝 → 패치 단위 캐시로 1회만 계산."""
+    if not PREV_VERSION:
+        return None
+    cache_key = f"patchhighlights#{LATEST_VERSION}"
+    cached, _ = db_read(cache_key)
+    if cached:
+        return json.loads(cached)
+    try:
+        def fetch_full(ver):
+            r = requests.get(f"https://ddragon.leagueoflegends.com/cdn/{ver}/data/ko_KR/championFull.json", timeout=10)
+            return r.json().get('data', {}) if r.status_code == 200 else {}
+        cur_all, prev_all = fetch_full(LATEST_VERSION), fetch_full(PREV_VERSION)
+        if not cur_all or not prev_all:
+            return None
+        scored = []
+        slot_keys = ['Q', 'W', 'E', 'R']
+        for cid, cur_d in cur_all.items():
+            prev_d = prev_all.get(cid)
+            if not prev_d:
+                continue
+            buffs = nerfs = 0
+            details = []
+            # 기본 스탯
+            cs, ps = cur_d.get('stats', {}), prev_d.get('stats', {})
+            for key, kr in STAT_KR.items():
+                cv, pv = cs.get(key), ps.get(key)
+                if cv is None or pv is None or abs(cv - pv) < 1e-6:
+                    continue
+                is_buff = (cv > pv) if STAT_BUFF_DIR.get(key, 1) == 1 else (cv < pv)
+                buffs, nerfs = (buffs + 1, nerfs) if is_buff else (buffs, nerfs + 1)
+                details.append({"type": "buff" if is_buff else "nerf", "text": f"{kr} {round(pv,1)}→{round(cv,1)}"})
+            # 스킬 쿨다운·소모값
+            pspells = {s['id']: s for s in prev_d.get('spells', [])}
+            for idx, sp in enumerate(cur_d.get('spells', [])):
+                slot = slot_keys[idx] if idx < 4 else '?'
+                ps_sp = pspells.get(sp['id'])
+                if not ps_sp:
+                    continue
+                cc, pc = sp.get('cooldownBurn'), ps_sp.get('cooldownBurn')
+                if cc and pc and cc != pc:
+                    cd_buff = _first_num(cc) < _first_num(pc)
+                    buffs, nerfs = (buffs + 1, nerfs) if cd_buff else (buffs, nerfs + 1)
+                    details.append({"type": "buff" if cd_buff else "nerf", "text": f"{slot} 쿨다운 {pc}→{cc}초"})
+                ck, pk = sp.get('costBurn'), ps_sp.get('costBurn')
+                if ck and pk and ck != pk and ck not in ('0', 'No Cost'):
+                    cost_buff = _first_num(ck) < _first_num(pk)
+                    buffs, nerfs = (buffs + 1, nerfs) if cost_buff else (buffs, nerfs + 1)
+                    details.append({"type": "buff" if cost_buff else "nerf", "text": f"{slot} 소모값 {pk}→{ck}"})
+            if buffs == 0 and nerfs == 0:
+                continue
+            net = buffs - nerfs
+            kind = "buff" if net > 0 else ("nerf" if net < 0 else "adjust")
+            scored.append({"id": cid, "kr": CHAMP_KR_MAP.get(cid, cid),
+                           "kind": kind, "net": net, "details": details[:3]})
+        buffed = sorted([s for s in scored if s["kind"] == "buff"], key=lambda x: -x["net"])[:limit]
+        nerfed = sorted([s for s in scored if s["kind"] == "nerf"], key=lambda x:  x["net"])[:limit]
+        result = {"buffed": buffed, "nerfed": nerfed,
+                  "cur_patch": ".".join(LATEST_VERSION.split(".")[:2]),
+                  "prev_patch": ".".join(PREV_VERSION.split(".")[:2]),
+                  "total_changed": len(scored)}
+        db_write(cache_key, result, int(time.time()))
+        return result
+    except Exception as e:
+        print(f"패치 하이라이트 에러: {e}")
+        return None
+
 def get_match_details(puuid, start=0, count=20, queue=None, collect_stats=True):
     url = f"https://asia.api.riotgames.com/lol/match/v5/matches/by-puuid/{puuid}/ids?start={start}&count={count}"
     url += f"&queue={queue}" if queue and queue != 'all' else "&type=ranked"
@@ -1736,16 +1804,19 @@ def logout():
 # ================= 라우팅 =================
 @app.route('/')
 def index():
+    ensure_current_patch()  # 새 패치 자동 감지·갱신 (스로틀)
+    # 라인별 최강 챔피언 — 실측 메타와 동일 산출(보정 승률·티어, /meta와 일치)
+    tiers = build_champion_meta("emeraldplus")
     meta_top = []
     for role in ['TOP', 'JUNGLE', 'MIDDLE', 'BOTTOM', 'UTILITY']:
-        s_champs = [c for c in CHAMPION_TIERS.get(role, []) if c['tier'] == 'S']
-        if s_champs:
-            c = s_champs[0]
-            meta_top.append({**c, 'role_kr': ROLE_KR.get(role, role),
-                              'tier_style': TIER_COLOR.get(c['tier'], TIER_COLOR['B'])})
+        lst = tiers.get(role, [])
+        if lst:
+            meta_top.append(lst[0])  # 이미 티어·승률순 정렬 + role_kr/tier_style 포함
+    patch_highlights = get_patch_highlights()  # 이번 패치 버프/너프 (캐시)
     return render_template('index.html', page='home', roster_data=GLOBAL_ROSTER_DATA,
                            pro_gamers=PRO_GAMERS, latest_version=LATEST_VERSION,
-                           meta_top=meta_top, current_patch=CURRENT_PATCH)
+                           meta_top=meta_top, current_patch=CURRENT_PATCH,
+                           patch_highlights=patch_highlights)
 
 def build_champion_meta(rank_tier="emeraldplus"):
     result = {"TOP": [], "JUNGLE": [], "MIDDLE": [], "BOTTOM": [], "UTILITY": []}

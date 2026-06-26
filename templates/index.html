@@ -677,14 +677,71 @@
                         <img src="https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/champion/{{ c.id }}.png" style="width: 64px; height: 64px; border-radius: 50%; border: 3px solid {{ c.tier_style.color }}; box-shadow: 0 0 16px {{ c.tier_style.border }}; margin-bottom: 10px;">
                         <div style="font-size: 14px; font-weight: 900; color: white; margin-bottom: 6px;">{{ c.kr }}</div>
                         <div style="display: flex; justify-content: center; gap: 6px; align-items: center;">
-                            <span style="background: {{ c.tier_style.bg }}; color: {{ c.tier_style.color }}; border: 1px solid {{ c.tier_style.border }}; padding: 2px 10px; border-radius: 10px; font-size: 12px; font-weight: 900;">{{ c.tier }}티어</span>
+                            <span style="background: {{ c.tier_style.bg }}; color: {{ c.tier_style.color }}; border: 1px solid {{ c.tier_style.border }}; padding: 2px 10px; border-radius: 10px; font-size: 12px; font-weight: 900;">{% if c.tier == 'OP' %}OP{% else %}{{ c.tier }}티어{% endif %}</span>
                         </div>
                         <div style="margin-top: 8px; font-size: 12px; color: var(--text-muted);">승률 <b style="color: white;">{{ c.wr }}%</b></div>
+                        <div style="margin-top: 4px; font-size: 10px; font-weight: 800;">
+                            {% if c.source == '실측' %}<span style="color:#4ade80;">● 실측 {{ c.sample }}게임</span>{% else %}<span style="color:rgba(148,163,184,0.7);">○ 예측</span>{% endif %}
+                        </div>
                     </div>
                 </a>
                 {% endfor %}
             </div>
         </div>
+
+        <!-- ★ 이번 패치 버프/너프 챔피언 위젯 -->
+        {% if patch_highlights and (patch_highlights.buffed or patch_highlights.nerfed) %}
+        <div class="main-container" style="margin-bottom: 60px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; flex-wrap: wrap; gap: 6px;">
+                <div style="font-size: 18px; font-weight: 900;">📰 패치 {{ patch_highlights.cur_patch }} 변화 — 버프 / 너프 챔피언</div>
+                <span style="font-size: 12px; color: var(--text-muted); font-weight: 700;">직전 {{ patch_highlights.prev_patch }} 대비 · 총 {{ patch_highlights.total_changed }}챔프 변경</span>
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px;">
+                <!-- 상향(버프) -->
+                <div class="glass-panel" style="padding: 20px;">
+                    <div style="font-size: 15px; font-weight: 900; color:#4ade80; margin-bottom: 14px;">🟢 상향 (버프)</div>
+                    {% if patch_highlights.buffed %}
+                    <div style="display:flex; flex-direction:column; gap:10px;">
+                        {% for c in patch_highlights.buffed %}
+                        <a href="/champion/{{ c.id }}" style="text-decoration:none;">
+                            <div style="display:flex; align-items:center; gap:12px; padding:10px 12px; border-radius:10px; background:rgba(74,222,128,0.06); border:1px solid rgba(74,222,128,0.15); transition:0.2s;" onmouseover="this.style.background='rgba(74,222,128,0.12)';" onmouseout="this.style.background='rgba(74,222,128,0.06)';">
+                                <img src="https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/champion/{{ c.id }}.png" style="width:38px; height:38px; border-radius:50%; border:2px solid rgba(74,222,128,0.4); flex-shrink:0;">
+                                <div style="flex-grow:1; min-width:0;">
+                                    <div style="font-size:14px; font-weight:900; color:white;">{{ c.kr }} <span style="color:#4ade80; font-size:11px;">↑</span></div>
+                                    <div style="font-size:11px; color:var(--text-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{% for d in c.details %}{{ d.text }}{% if not loop.last %} · {% endif %}{% endfor %}</div>
+                                </div>
+                            </div>
+                        </a>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div style="text-align:center; padding:20px 0; color:var(--text-muted); font-size:13px;">이번 패치 상향 챔피언 없음</div>
+                    {% endif %}
+                </div>
+                <!-- 하향(너프) -->
+                <div class="glass-panel" style="padding: 20px;">
+                    <div style="font-size: 15px; font-weight: 900; color:#f87171; margin-bottom: 14px;">🔴 하향 (너프)</div>
+                    {% if patch_highlights.nerfed %}
+                    <div style="display:flex; flex-direction:column; gap:10px;">
+                        {% for c in patch_highlights.nerfed %}
+                        <a href="/champion/{{ c.id }}" style="text-decoration:none;">
+                            <div style="display:flex; align-items:center; gap:12px; padding:10px 12px; border-radius:10px; background:rgba(248,113,113,0.06); border:1px solid rgba(248,113,113,0.15); transition:0.2s;" onmouseover="this.style.background='rgba(248,113,113,0.12)';" onmouseout="this.style.background='rgba(248,113,113,0.06)';">
+                                <img src="https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/champion/{{ c.id }}.png" style="width:38px; height:38px; border-radius:50%; border:2px solid rgba(248,113,113,0.4); flex-shrink:0;">
+                                <div style="flex-grow:1; min-width:0;">
+                                    <div style="font-size:14px; font-weight:900; color:white;">{{ c.kr }} <span style="color:#f87171; font-size:11px;">↓</span></div>
+                                    <div style="font-size:11px; color:var(--text-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{% for d in c.details %}{{ d.text }}{% if not loop.last %} · {% endif %}{% endfor %}</div>
+                                </div>
+                            </div>
+                        </a>
+                        {% endfor %}
+                    </div>
+                    {% else %}
+                    <div style="text-align:center; padding:20px 0; color:var(--text-muted); font-size:13px;">이번 패치 하향 챔피언 없음</div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
 
         <!-- 푸터 -->
         <footer style="max-width: 1080px; margin: 0 auto 50px auto; padding: 24px 20px 0 20px; border-top: 1px solid rgba(255,255,255,0.06); text-align: center;">
