@@ -227,6 +227,10 @@ def record_match_stats(m_res, match_id):
             return False
 
         info = m_res.get('info', {})
+        # 비정상 게임 제외: 랭크(420/440)만 + 리메이크(5분 미만) 제외
+        if info.get('queueId') not in (420, 440) or info.get('gameDuration', 0) < 300:
+            conn.close()
+            return False
         # 픽 / 승패 + 빌드(룬/스펠/아이템) 수집
         for p in info.get('participants', []):
             role = p.get('teamPosition', '')
@@ -1830,27 +1834,42 @@ def meta():
                            tier_counts=tier_counts,
                            total_games=get_stats_total_games(), real_count=real_count)
 
+APEX_TIERS = {"challenger", "grandmaster", "master"}
+SAMPLE_TIERS = ["challenger", "grandmaster", "master", "diamond", "emerald", "platinum"]
+
+def _fetch_tier_pool(tier):
+    """티어별 플레이어 풀(엔트리 리스트) 조회. 다이아 이하는 랜덤 디비전·페이지."""
+    tier = tier.lower()
+    if tier in APEX_TIERS:
+        r = riot_get(f"https://kr.api.riotgames.com/lol/league/v4/{tier}leagues/by-queue/RANKED_SOLO_5x5")
+        return r.json().get('entries', []) if r.status_code == 200 else []
+    div = random.choice(["I", "II", "III", "IV"])
+    page = random.randint(1, 4)
+    r = riot_get(f"https://kr.api.riotgames.com/lol/league/v4/entries/RANKED_SOLO_5x5/{tier.upper()}/{div}?page={page}")
+    return r.json() if r.status_code == 200 else []
+
 @app.route('/collect')
 def collect():
-    """챌린저 래더에서 매치를 수집해 통계 DB를 부트스트랩하는 시드 라우트.
-    ?n=플레이어수 (기본 5, 최대 10). API 한도 보호를 위해 소량씩 호출."""
-    n = max(1, min(int(request.args.get("n", 5)), 10))
-    collected, scanned_players = 0, 0
+    """플래티넘+ 다중 티어 순회 수집. ?n=플레이어수(기본5, 최대12), ?tier=auto|티어명.
+    크론으로 주기 호출 시 매번 다른 티어를 표본화해 전 티어 커버."""
+    n = max(1, min(int(request.args.get("n", 5)), 12))
+    tier = request.args.get("tier", "auto").lower()
+    if tier not in SAMPLE_TIERS:
+        tier = random.choice(SAMPLE_TIERS)  # auto: 티어 랜덤 순회
+    collected, scanned = 0, 0
     try:
-        res = riot_get("https://kr.api.riotgames.com/lol/league/v4/challengerleagues/by-queue/RANKED_SOLO_5x5")
-        if res.status_code != 200:
-            return jsonify({"error": f"래더 조회 실패 ({res.status_code})"}), 502
-        entries = res.json().get('entries', [])
-        entries.sort(key=lambda x: x['leaguePoints'], reverse=True)
-        for entry in entries[:n]:
-            # 챌린저 엔트리는 puuid를 직접 제공 (summonerId 미제공)
+        pool = _fetch_tier_pool(tier)
+        if not pool:
+            return jsonify({"error": f"{tier} 풀 조회 실패", "tier": tier}), 502
+        random.shuffle(pool)  # 상위 편중 방지, 다양한 플레이어 표본
+        for entry in pool[:n]:
             puuid = entry.get('puuid', '')
             if not puuid:
                 continue
             ids_res = riot_get(f"https://asia.api.riotgames.com/lol/match/v5/matches/by-puuid/{puuid}/ids?start=0&count=10&type=ranked")
             if ids_res.status_code != 200:
                 continue
-            scanned_players += 1
+            scanned += 1
             for m_id in ids_res.json():
                 raw = riot_get(f"https://asia.api.riotgames.com/lol/match/v5/matches/{m_id}")
                 if raw.status_code != 200:
@@ -1858,15 +1877,14 @@ def collect():
                 m_json = raw.json()
                 if record_match_stats(m_json, m_id):
                     collected += 1
-                # 타임라인 수집 (스킬/아이템 순서) — 솔로/자유랭만
                 if m_json.get('info', {}).get('queueId', 0) in (420, 440):
                     tl = riot_get(f"https://asia.api.riotgames.com/lol/match/v5/matches/{m_id}/timeline")
                     if tl.status_code == 200:
                         record_timeline_stats(tl.json(), m_json, m_id)
     except Exception as e:
-        return jsonify({"error": str(e), "collected": collected}), 500
-    return jsonify({"collected_new_matches": collected, "scanned_players": scanned_players,
-                    "total_games": get_stats_total_games()})
+        return jsonify({"error": str(e), "collected": collected, "tier": tier}), 500
+    return jsonify({"tier": tier, "collected_new_matches": collected,
+                    "scanned_players": scanned, "total_games": get_stats_total_games()})
 
 @app.route('/champion/<champ_id>')
 def champion_page(champ_id):
