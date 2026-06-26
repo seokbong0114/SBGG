@@ -1892,19 +1892,10 @@ def collect():
                     tl = riot_get(f"https://asia.api.riotgames.com/lol/match/v5/matches/{m_id}/timeline")
                     if tl.status_code == 200:
                         record_timeline_stats(tl.json(), m_json, m_id)
-    except Exception:
-        import traceback
-        return "<pre>COLLECT ERROR:\n" + traceback.format_exc() + "</pre>", 500
-    try:
-        total = get_stats_total_games()
-    except Exception:
-        import traceback
-        return "<pre>TOTAL ERROR:\n" + traceback.format_exc() + "</pre>", 500
-    # 수집 0건인데 에러가 있었으면 진단용으로 노출
-    if collected == 0 and _LAST_DB_ERROR:
-        return "<pre>RECORD ERROR (수집 실패 원인):\n" + _LAST_DB_ERROR + "</pre>", 500
+    except Exception as e:
+        return jsonify({"error": str(e), "collected": collected, "tier": tier}), 500
     return jsonify({"tier": tier, "collected_new_matches": collected,
-                    "scanned_players": scanned, "total_games": total})
+                    "scanned_players": scanned, "total_games": get_stats_total_games()})
 
 @app.route('/champion/<champ_id>')
 def champion_page(champ_id):
