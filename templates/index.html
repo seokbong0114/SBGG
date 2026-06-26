@@ -2163,10 +2163,34 @@
                 {% endif %}
                 <div class="glass-panel" style="padding: 24px;">
                     <div class="section-title" style="margin-bottom: 16px;">💡 핵심 플레이 팁</div>
+                    {% if skills and (skills.allytips or skills.enemytips) %}
+                        {% if skills.allytips %}
+                        <div style="font-size: 13px; font-weight: 800; color: #4ade80; margin-bottom: 10px;">👍 플레이할 때</div>
+                        <div style="display: flex; flex-direction: column; gap: 9px; margin-bottom: 18px;">
+                            {% for t in skills.allytips %}
+                            <div style="display: flex; gap: 9px; align-items: flex-start; font-size: 13px; line-height: 1.6; color: var(--text-main);">
+                                <span style="color: #4ade80; flex-shrink: 0; font-weight: 900;">›</span><span>{{ t }}</span>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                        {% if skills.enemytips %}
+                        <div style="font-size: 13px; font-weight: 800; color: #f87171; margin-bottom: 10px;">⚔️ 상대할 때</div>
+                        <div style="display: flex; flex-direction: column; gap: 9px; margin-bottom: 14px;">
+                            {% for t in skills.enemytips %}
+                            <div style="display: flex; gap: 9px; align-items: flex-start; font-size: 13px; line-height: 1.6; color: var(--text-main);">
+                                <span style="color: #f87171; flex-shrink: 0; font-weight: 900;">›</span><span>{{ t }}</span>
+                            </div>
+                            {% endfor %}
+                        </div>
+                        {% endif %}
+                        <div style="font-size: 11px; color: rgba(148,163,184,0.6); text-align: right; margin-top: 4px;">출처 · Riot 공식 챔피언 가이드</div>
+                    {% else %}
                     <div style="text-align: center; padding: 18px 12px; color: var(--text-muted);">
                         <div style="font-size: 30px; margin-bottom: 10px;">✍️</div>
-                        <div style="font-size: 13px; line-height: 1.7;">검증된 콤보·운영 팁을<br>전문 에디터가 큐레이션하여<br>순차적으로 업데이트합니다.</div>
+                        <div style="font-size: 13px; line-height: 1.7;">이 챔피언은 공식 가이드 팁이<br>제공되지 않습니다.</div>
                     </div>
+                    {% endif %}
                 </div>
             </div>
         </div>

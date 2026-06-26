@@ -885,8 +885,9 @@ def _strip_html(text):
 
 def get_champion_detail(champ_id):
     """DDragon에서 최신 패치 기준 챔피언 스킬(패시브 + QWER) 정보를 가져옴.
-    패치 버전을 캐시 키에 포함 → 패치 변경 시 자동 갱신."""
-    cache_key = f"champdetail#{champ_id}#{LATEST_VERSION}"
+    패치 버전을 캐시 키에 포함 → 패치 변경 시 자동 갱신.
+    v2: Riot 공식 아군팁/상대팁(allytips/enemytips) 포함."""
+    cache_key = f"champdetail#v2#{champ_id}#{LATEST_VERSION}"
     cached_json, _ = db_read(cache_key)
     if cached_json:
         return json.loads(cached_json)
@@ -911,6 +912,9 @@ def get_champion_detail(champ_id):
                 'img': f"https://ddragon.leagueoflegends.com/cdn/{LATEST_VERSION}/img/spell/{s['image']['full']}",
                 'desc': _strip_html(s.get('description', '')),
             } for i, s in enumerate(d['spells'][:4])],
+            # Riot 공식 가이드 팁 (한글) — 빈 문자열 제거 후 최대 4개
+            'allytips':  [t.strip() for t in d.get('allytips', [])  if t and t.strip()][:4],
+            'enemytips': [t.strip() for t in d.get('enemytips', []) if t and t.strip()][:4],
         }
         db_write(cache_key, detail, int(time.time()))
         return detail
