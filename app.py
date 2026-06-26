@@ -215,7 +215,15 @@ def db_write(cache_key, data, current_time):
 # ═══════════════════════════════════════════════════════════════════════
 VALID_ROLES = {"TOP", "JUNGLE", "MIDDLE", "BOTTOM", "UTILITY"}
 MIN_SAMPLE = 15  # 실측 데이터로 인정할 최소 표본(경기 수)
+WR_PRIOR = 20    # 승률 베이지안 보정용 가상 표본(50% 기준으로 끌어당김)
 _LAST_DB_ERROR = None  # 마지막 수집 에러 (진단용)
+
+def smooth_wr(wins, games, prior=WR_PRIOR):
+    """표본이 적을 때 승률 노이즈 제거 — 50% 기준 베이지안 보정.
+    (승 + prior/2) / (판수 + prior). 판수가 커질수록 raw 승률에 수렴."""
+    if not games:
+        return 0.0
+    return round((wins + prior * 0.5) / (games + prior) * 100, 1)
 
 def record_match_stats(m_res, match_id):
     """매치 1건의 챔피언 픽/승패/밴을 통계 DB에 누적. 중복 매치는 건너뜀.
@@ -455,8 +463,9 @@ def get_champion_build(champ_en, preferred_role=None):
             conn.close(); return None
 
         build = {"role": role, "sample": sample}
-        ALT_MIN = 3  # 고승률 변형 최소 표본
-        WR = "(CAST(wins AS REAL)/games) DESC, games DESC"
+        ALT_MIN = 5  # 고승률 변형 최소 표본 (허수 방지)
+        # 고승률 정렬도 베이지안 보정 — 3판 100% 같은 허수 대신 안정적 상위 채택
+        WR = f"((CAST(wins AS REAL)+{WR_PRIOR/2})/(games+{WR_PRIOR})) DESC, games DESC"
 
         # ── 인게임 풀 트리 룬 뷰 빌더 ──
         def rune_view(row):
@@ -481,24 +490,24 @@ def get_champion_build(champ_en, preferred_role=None):
                 "primary": render(RUNE_TREES.get(ps), pids, False),
                 "sub": render(RUNE_TREES.get(ss), sids, True),
                 "shards": [{"icon": shard_icon(s), "name": SHARD_INFO.get(s, ("",))[0]} for s in shard_ids],
-                "games": games, "wr": round(wins / games * 100) if games else 0,
+                "games": games, "wr": smooth_wr(wins, games),
             }
         def spell_view(row):
             if not row:
                 return None
             spells = [{"icon": SPELL_MAP.get(s), "name": SPELL_NAME.get(SPELL_MAP.get(s), "")}
                       for s in row[0].split("-") if SPELL_MAP.get(s)]
-            return {"list": spells, "games": row[1], "wr": round(row[2] / row[1] * 100) if row[1] else 0}
+            return {"list": spells, "games": row[1], "wr": smooth_wr(row[2], row[1])}
         def boots_view(row):
             if not row:
                 return None
             return {"id": row[0], "name": ITEM_NAME.get(row[0], ""), "games": row[1],
-                    "wr": round(row[2] / row[1] * 100) if row[1] else 0}
+                    "wr": smooth_wr(row[2], row[1])}
         def start_view(row):
             if not row:
                 return None
             return {"list": [{"id": i, "name": ITEM_NAME.get(i, "")} for i in row[0].split("-")],
-                    "games": row[1], "wr": round(row[2] / row[1] * 100) if row[1] else 0}
+                    "games": row[1], "wr": smooth_wr(row[2], row[1])}
 
         def q(table, cols, order, min_g=0):
             return cur.execute(f"""SELECT {cols} FROM {table} WHERE champ_en=? AND role=? AND games>=?
@@ -531,7 +540,7 @@ def get_champion_build(champ_en, preferred_role=None):
         items = cur.execute("""SELECT item_id, games, wins FROM build_items
                                WHERE champ_en=? AND role=? ORDER BY games DESC LIMIT 6""", (champ_en, role)).fetchall()
         build["items"] = [{"id": it[0], "name": ITEM_NAME.get(it[0], ""),
-                           "wr": round(it[2] / it[1] * 100) if it[1] else 0, "games": it[1]} for it in items]
+                           "wr": smooth_wr(it[2], it[1]), "games": it[1]} for it in items]
         # 상위 3개 코어 빌드 — 첫 코어별 그룹 → 위치별 최빈 아이템으로 4코어 경로 구성
         # (정확 시퀀스 집계는 표본 적을 때 짧은 빌드 편향 → 위치별 집계로 안정적 4코어 출력)
         all_seqs = cur.execute("""SELECT seq, games, wins FROM build_item_order
@@ -558,12 +567,12 @@ def get_champion_build(champ_en, preferred_role=None):
                 path.append({"id": best, "name": ITEM_NAME.get(best, "")})
             build["top_builds"].append({
                 "list": path, "games": grp["games"],
-                "wr": round(grp["wins"] / grp["games"] * 100) if grp["games"] else 0})
+                "wr": smooth_wr(grp["wins"], grp["games"])})
         # 스킬 마스터 순서(우선순위)
         sk = cur.execute("""SELECT skill_order, games, wins FROM build_skills
                             WHERE champ_en=? AND role=? ORDER BY games DESC LIMIT 1""", (champ_en, role)).fetchone()
         if sk:
-            build["skill_order"] = {"order": sk[0].split(">"), "games": sk[1], "wr": round(sk[2] / sk[1] * 100) if sk[1] else 0}
+            build["skill_order"] = {"order": sk[0].split(">"), "games": sk[1], "wr": smooth_wr(sk[2], sk[1])}
         # 레벨별 스킬트리 (lol.ps 스타일) — 각 레벨에서 가장 많이 찍은 슬롯
         lvl_rows = cur.execute("""SELECT lvl, slot, games FROM build_skill_levels
                                   WHERE champ_en=? AND role=?""", (champ_en, role)).fetchall()
@@ -588,7 +597,7 @@ def get_champion_counters(champ_en, role, min_games=3):
                             (champ_en, role, min_games)).fetchall()
         conn.close()
         matchups = [{"id": r[0], "kr": CHAMP_KR_MAP.get(r[0], r[0]),
-                     "games": r[1], "wr": round(r[2] / r[1] * 100)} for r in rows]
+                     "games": r[1], "wr": smooth_wr(r[2], r[1])} for r in rows]
         if not matchups:
             return None
         weak = sorted(matchups, key=lambda x: x["wr"])[:3]            # 승률 낮은 = 취약
@@ -1779,7 +1788,7 @@ def build_champion_meta(rank_tier="emeraldplus"):
         real_role = real_stats.get(champ_en, {}).get(primary_role)
         sample = real_role["games"] if real_role else 0
         if real_role and sample >= MIN_SAMPLE and total_games > 0:
-            wr = round(real_role["wins"] / sample * 100, 1)
+            wr = smooth_wr(real_role["wins"], sample)
             pr = round(sample / total_games * 100, 1)
             br = round(real_bans.get(champ_en, 0) / total_games * 100, 1)
             source, trend = "실측", "stable"
@@ -1963,6 +1972,31 @@ def champion_page(champ_id):
     styled['weak_vs_kr'] = []
     styled['strong_vs_kr'] = []
     styled['tip'] = None
+
+    # ★ 헤더 승률/티어 통일: 표본 충분하면 메타 페이지와 동일한 실측(보정) 값 사용
+    #   (메타 페이지의 primary_role 산출 로직과 동일하게 맞춰 두 페이지 수치 일치)
+    _roles = CHAMPION_ROLE_MAP.get(canonical_id, [])
+    if not _roles:
+        _tags = CHAMP_TAGS.get(canonical_id, [])
+        if "Marksman" in _tags: _roles = ["BOTTOM"]
+        elif "Support" in _tags and "Fighter" not in _tags: _roles = ["UTILITY"]
+        elif "Assassin" in _tags and "Fighter" not in _tags: _roles = ["MIDDLE"]
+        elif "Mage" in _tags and "Fighter" not in _tags: _roles = ["MIDDLE"]
+        else: _roles = ["TOP"]
+    _meta_role = _roles[0]
+    _real_stats, _real_bans = get_real_stats_map()
+    _total = get_stats_total_games()
+    _rr = _real_stats.get(canonical_id, {}).get(_meta_role)
+    if _rr and _rr["games"] >= MIN_SAMPLE and _total > 0:
+        _wr = smooth_wr(_rr["wins"], _rr["games"])
+        _pr = round(_rr["games"] / _total * 100, 1)
+        _br = round(_real_bans.get(canonical_id, 0) / _total * 100, 1)
+        _nt = calc_meta_tier(_wr, _pr, _br)
+        styled['wr'], styled['pr'], styled['br'], styled['tier'] = _wr, _pr, _br, _nt
+        styled['tier_style'] = NUMERIC_TIER_COLOR.get(_nt, NUMERIC_TIER_COLOR["5"])
+        styled['sample'], styled['source'] = _rr["games"], '실측'
+    else:
+        styled.setdefault('source', '예측')
 
     # 4) DDragon 실시간 스킬 데이터 (패시브 + QWER) — 모든 챔피언 공통
     skills = get_champion_detail(canonical_id)
