@@ -225,6 +225,32 @@ def smooth_wr(wins, games, prior=WR_PRIOR):
         return 0.0
     return round((wins + prior * 0.5) / (games + prior) * 100, 1)
 
+# Riot championName ≠ DDragon id 인 케이스 (이미지/한글명/빌드 매칭 깨짐 방지)
+RIOT_NAME_ALIAS = {"Wukong": "MonkeyKing", "FiddleSticks": "Fiddlesticks"}
+def champ_ddragon_id(name):
+    """Riot championName → DDragon 정식 id. 통계·이미지·한글명을 일관되게."""
+    if not name:
+        return name
+    if name in CHAMP_KR_MAP:
+        return name
+    if name in RIOT_NAME_ALIAS:
+        return RIOT_NAME_ALIAS[name]
+    return next((c for c in CHAMP_KR_MAP if c.lower() == name.lower()), name)
+
+def match_champion_query(q):
+    """검색어가 챔피언 이름(한글/영문)과 정확히 일치하면 DDragon id 반환, 아니면 None.
+    검색창에 챔피언명을 치면 메타/상세 페이지로 보내기 위함."""
+    q = (q or "").strip()
+    if not q:
+        return None
+    # 한글 정식명 정확 일치 (르블랑, 오공 …)
+    for cid, kr in CHAMP_KR_MAP.items():
+        if kr == q:
+            return cid
+    # 영문 id/별칭/대소문자 보정
+    cid = champ_ddragon_id(q)
+    return cid if cid in CHAMP_KR_MAP else None
+
 def record_match_stats(m_res, match_id):
     """매치 1건의 챔피언 픽/승패/밴을 통계 DB에 누적. 중복 매치는 건너뜀.
     피기백 수집: 전적 검색 시 이미 가져온 매치를 재활용 (추가 API 호출 0)."""
@@ -246,7 +272,7 @@ def record_match_stats(m_res, match_id):
             role = p.get('teamPosition', '')
             if role not in VALID_ROLES:
                 continue
-            champ = p.get('championName', '')
+            champ = champ_ddragon_id(p.get('championName', ''))
             if not champ:
                 continue
             win = 1 if p.get('win') else 0
@@ -299,7 +325,7 @@ def record_match_stats(m_res, match_id):
         for p in info.get('participants', []):
             r = p.get('teamPosition', '')
             if r in VALID_ROLES and p.get('championName'):
-                by_role.setdefault(r, []).append((p['championName'], p.get('teamId'), 1 if p.get('win') else 0))
+                by_role.setdefault(r, []).append((champ_ddragon_id(p['championName']), p.get('teamId'), 1 if p.get('win') else 0))
         for r, plist in by_role.items():
             if len(plist) == 2 and plist[0][1] != plist[1][1]:
                 (ca, _, wa), (cb, _, wb) = plist
@@ -353,7 +379,7 @@ def record_timeline_stats(timeline, m_res, match_id):
             pid = p.get('participantId')
             role = p.get('teamPosition', '')
             if pid and role in VALID_ROLES and p.get('championName'):
-                pmeta[pid] = (p['championName'], role, 1 if p.get('win') else 0)
+                pmeta[pid] = (champ_ddragon_id(p['championName']), role, 1 if p.get('win') else 0)
 
         skill_seq = {pid: [] for pid in pmeta}    # 슬롯(1/2/3/4) 레벨업 순서 (전체 18레벨)
         item_seq = {pid: [] for pid in pmeta}     # 코어 아이템 구매 순서
@@ -1114,7 +1140,7 @@ def get_match_details(puuid, start=0, count=20, queue=None, collect_stats=True):
                 k, d, a = p['kills'], p['deaths'], p['assists']
                 op_score = (k * 2) + (a * 1.5) - (d * 1.5) + (dmg / 400) + (cs * 0.2) + (p.get('visionScore', 0) * 0.5)
 
-                champ_en = p['championName']
+                champ_en = champ_ddragon_id(p['championName'])
                 spell1 = SPELL_MAP.get(str(p.get('summoner1Id', '')), "SummonerFlash")
                 spell2 = SPELL_MAP.get(str(p.get('summoner2Id', '')), "SummonerDot")
 
@@ -1309,7 +1335,7 @@ def get_multi_search_summary(name, tag):
                 if p['puuid'] == puuid:
                     if p['win']: win_count += 1
                     total_k += p['kills']; total_d += p['deaths']; total_a += p['assists']
-                    c_en = p['championName']
+                    c_en = champ_ddragon_id(p['championName'])
                     if c_en not in recent_champs: recent_champs[c_en] = 0
                     recent_champs[c_en] += 1
                     break
@@ -1985,10 +2011,8 @@ def collect():
 def champion_page(champ_id):
     ensure_current_patch()  # 새 패치 자동 감지·갱신 (스로틀)
     # 1) DDragon 정식 챔피언 ID로 정규화 (대소문자 보정)
-    canonical_id = next((cid for cid in CHAMP_KR_MAP if cid.lower() == champ_id.lower()), None)
-    if not canonical_id and champ_id in CHAMP_KR_MAP:
-        canonical_id = champ_id
-    if not canonical_id:
+    canonical_id = champ_ddragon_id(champ_id)  # Wukong→MonkeyKing, 대소문자 보정 포함
+    if canonical_id not in CHAMP_KR_MAP:
         return redirect('/')
 
     # 2) 상세 빌드 데이터(CHAMPION_TIERS) 보유 여부 확인
@@ -2073,6 +2097,10 @@ def champion_page(champ_id):
     else:
         styled.setdefault('source', '예측')
 
+    # ★ 이미지 깨짐 방지: 챔피언 id를 항상 DDragon 정식 id로 고정
+    #   (CHAMPION_TIERS의 id 케이싱이 달라도 스플래시/아이콘 URL이 유효하도록)
+    styled['id'] = canonical_id
+
     # 4) DDragon 실시간 스킬 데이터 (패시브 + QWER) — 모든 챔피언 공통
     skills = get_champion_detail(canonical_id)
     # 5) 실측 추천 빌드 (룬/스펠/아이템/스킬순서) — 수집 데이터 기반
@@ -2109,7 +2137,12 @@ def search():
                     data = get_multi_search_summary(u_name, u_tag)
                     if data: multi_data.append(data)
                 return render_template('index.html', page='multi', multi_data=multi_data, latest_version=LATEST_VERSION)
-    
+
+    # 🏆 챔피언 이름을 검색하면 챔피언 메타/상세 페이지로 이동 (한글/영문 정확 일치)
+    champ_hit = match_champion_query(raw_name)
+    if champ_hit:
+        return redirect(f'/champion/{champ_hit}')
+
     # 💡 데이터베이스 캐싱 키 생성
     cache_key = f"{raw_name.lower().replace(' ', '')}#{tag.lower()}#{queue}"
     current_time = int(time.time())
