@@ -663,8 +663,30 @@
             </div>
         </div>
 
+        <!-- ★ 이번 주 무료 로테이션 위젯 (Riot 공식 데이터) -->
+        {% if free_rotation and free_rotation.champs %}
+        <div class="main-container" style="margin-top: -40px; margin-bottom: 40px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; flex-wrap: wrap; gap: 6px;">
+                <div style="font-size: 18px; font-weight: 900;">🔄 이번 주 무료 로테이션 <span style="font-size: 12px; color: var(--text-muted); font-weight: 700;">Riot 공식 · {{ free_rotation.count }}챔피언</span></div>
+                <span style="font-size: 12px; color: var(--text-muted); font-weight: 700;">무료로 플레이 가능</span>
+            </div>
+            <div class="glass-panel" style="padding: 20px;">
+                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(72px, 1fr)); gap: 14px;">
+                    {% for c in free_rotation.champs %}
+                    <a href="/champion/{{ c.id }}" style="text-decoration: none; text-align: center;">
+                        <div style="transition: 0.2s;" onmouseover="this.style.transform='translateY(-4px)';" onmouseout="this.style.transform='translateY(0)';">
+                            <img src="https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/champion/{{ c.id }}.png" style="width: 52px; height: 52px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.1);">
+                            <div style="font-size: 11px; font-weight: 800; color: var(--text-main); margin-top: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ c.kr }}</div>
+                        </div>
+                    </a>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
         <!-- ★ 패치 메타 위젯 -->
-        <div class="main-container" style="margin-top: -40px; margin-bottom: 60px;">
+        <div class="main-container" style="margin-bottom: 60px;">
             <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px;">
                 <div style="font-size: 18px; font-weight: 900;">⚡ 패치 {{ current_patch }} — 라인별 최강 챔피언</div>
                 <a href="/meta" style="font-size: 13px; color: var(--point-color); font-weight: 800; text-decoration: none;">전체 메타 보기 ➔</a>

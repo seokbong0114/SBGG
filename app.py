@@ -471,6 +471,9 @@ def get_real_stats_map():
     return stats, bans
 
 BUILD_MIN_SAMPLE = 5  # 빌드를 표시할 최소 표본
+# 레벨별 스킬트리는 표본 부족 + 규칙 미반영으로 신빙성 낮음 → 환경 갖춰질 때까지 표시 보류
+SHOW_LEVEL_SKILL_TREE = False
+COUNTER_MIN_GAMES = 10  # 카운터(맞대결)는 이 판수 이상일 때만 표시 (저표본 허수 방지)
 
 def get_champion_build(champ_en, preferred_role=None):
     """수집 데이터로 추천 빌드(룬/스펠/아이템/스킬/아이템순서)를 산출.
@@ -600,22 +603,26 @@ def get_champion_build(champ_en, preferred_role=None):
         if sk:
             build["skill_order"] = {"order": sk[0].split(">"), "games": sk[1], "wr": smooth_wr(sk[2], sk[1])}
         # 레벨별 스킬트리 (lol.ps 스타일) — 각 레벨에서 가장 많이 찍은 슬롯
-        lvl_rows = cur.execute("""SELECT lvl, slot, games FROM build_skill_levels
-                                  WHERE champ_en=? AND role=?""", (champ_en, role)).fetchall()
-        if lvl_rows:
-            best = {}  # lvl → (slot, games)
-            for lvl, slot, games in lvl_rows:
-                if lvl not in best or games > best[lvl][1]:
-                    best[lvl] = (slot, games)
-            build["skill_levels"] = {lvl: SKILL_LETTER.get(best[lvl][0]) for lvl in best}
+        # ⏸️ 보류: 레벨별 표본이 적어 신빙성 부족 + 게임 규칙(R은 6/11/16만) 미반영으로
+        #    불가능한 결과(R@18 등) 발생. Production Key로 표본 충분해지면 규칙 검증과 함께 재개.
+        #    데이터 수집(build_skill_levels)은 계속 진행 → 재개 시 즉시 활용.
+        if SHOW_LEVEL_SKILL_TREE:
+            lvl_rows = cur.execute("""SELECT lvl, slot, games FROM build_skill_levels
+                                      WHERE champ_en=? AND role=?""", (champ_en, role)).fetchall()
+            if lvl_rows:
+                best = {}  # lvl → (slot, games)
+                for lvl, slot, games in lvl_rows:
+                    if lvl not in best or games > best[lvl][1]:
+                        best[lvl] = (slot, games)
+                build["skill_levels"] = {lvl: SKILL_LETTER.get(best[lvl][0]) for lvl in best}
         conn.close()
         return build
     except Exception as e:
         print(f"빌드 산출 에러 [{champ_en}]: {e}")
         return None
 
-def get_champion_counters(champ_en, role, min_games=3):
-    """라인 맞대결 승률 기반 카운터(취약)/유리 상대 산출."""
+def get_champion_counters(champ_en, role, min_games=COUNTER_MIN_GAMES):
+    """라인 맞대결 승률 기반 카운터(취약)/유리 상대 산출. 저표본은 보류."""
     try:
         conn = db_connect()
         rows = conn.execute("""SELECT opponent, games, wins FROM build_matchups
@@ -1832,6 +1839,33 @@ def logout():
     return redirect('/')
 
 # ================= 라우팅 =================
+def get_free_rotation():
+    """이번 주 무료 로테이션 챔피언 (Riot 공식 Champion-Rotations v3). 캐시 6시간.
+    응답 구조: {'sr': [championId...], 'newplayer': [...]}. 공식 데이터라 100% 정확."""
+    cache_key = "free_rotation"
+    cached, updated = db_read(cache_key)
+    if cached and int(time.time()) - updated < 21600:  # 6시간
+        return json.loads(cached)
+    try:
+        r = riot_get("https://kr.api.riotgames.com/lol/platform/v3/champion-rotations")
+        if r.status_code != 200:
+            return json.loads(cached) if cached else None
+        ids = r.json().get('sr', [])  # 일반(소환사의 협곡) 무료 로테이션
+        champs = []
+        for cid in ids:
+            en = CHAMP_KEYS.get(str(cid))
+            if en:
+                champs.append({"id": en, "kr": CHAMP_KR_MAP.get(en, en)})
+        if not champs:
+            return json.loads(cached) if cached else None
+        champs.sort(key=lambda c: c["kr"])
+        result = {"champs": champs, "count": len(champs)}
+        db_write(cache_key, result, int(time.time()))
+        return result
+    except Exception as e:
+        print(f"무료 로테이션 조회 에러: {e}")
+        return json.loads(cached) if cached else None
+
 @app.route('/')
 def index():
     ensure_current_patch()  # 새 패치 자동 감지·갱신 (스로틀)
@@ -1843,10 +1877,11 @@ def index():
         if lst:
             meta_top.append(lst[0])  # 이미 티어·승률순 정렬 + role_kr/tier_style 포함
     patch_highlights = get_patch_highlights()  # 이번 패치 버프/너프 (캐시)
+    free_rotation = get_free_rotation()        # 이번 주 무료 로테이션 (공식 API)
     return render_template('index.html', page='home', roster_data=GLOBAL_ROSTER_DATA,
                            pro_gamers=PRO_GAMERS, latest_version=LATEST_VERSION,
                            meta_top=meta_top, current_patch=CURRENT_PATCH,
-                           patch_highlights=patch_highlights)
+                           patch_highlights=patch_highlights, free_rotation=free_rotation)
 
 def build_champion_meta(rank_tier="emeraldplus"):
     result = {"TOP": [], "JUNGLE": [], "MIDDLE": [], "BOTTOM": [], "UTILITY": []}
