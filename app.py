@@ -215,6 +215,7 @@ def db_write(cache_key, data, current_time):
 # ═══════════════════════════════════════════════════════════════════════
 VALID_ROLES = {"TOP", "JUNGLE", "MIDDLE", "BOTTOM", "UTILITY"}
 MIN_SAMPLE = 15  # 실측 데이터로 인정할 최소 표본(경기 수)
+_LAST_DB_ERROR = None  # 마지막 수집 에러 (진단용)
 
 def record_match_stats(m_res, match_id):
     """매치 1건의 챔피언 픽/승패/밴을 통계 DB에 누적. 중복 매치는 건너뜀.
@@ -318,6 +319,9 @@ def record_match_stats(m_res, match_id):
         conn.close()
         return True
     except Exception as e:
+        global _LAST_DB_ERROR
+        import traceback
+        _LAST_DB_ERROR = traceback.format_exc()
         print(f"통계 기록 에러 [{match_id}]: {e}")
         try: conn.close()  # 에러 시 연결 누수 방지 (Postgres 연결 한도 보호)
         except Exception: pass
@@ -1894,6 +1898,9 @@ def collect():
     except Exception:
         import traceback
         return "<pre>TOTAL ERROR:\n" + traceback.format_exc() + "</pre>", 500
+    # 수집 0건인데 에러가 있었으면 진단용으로 노출
+    if collected == 0 and _LAST_DB_ERROR:
+        return "<pre>RECORD ERROR (수집 실패 원인):\n" + _LAST_DB_ERROR + "</pre>", 500
     return jsonify({"tier": tier, "collected_new_matches": collected,
                     "scanned_players": scanned, "total_games": total})
 
