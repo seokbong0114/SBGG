@@ -474,6 +474,11 @@ BUILD_MIN_SAMPLE = 5  # 빌드를 표시할 최소 표본
 # 레벨별 스킬트리는 표본 부족 + 규칙 미반영으로 신빙성 낮음 → 환경 갖춰질 때까지 표시 보류
 SHOW_LEVEL_SKILL_TREE = False
 COUNTER_MIN_GAMES = 10  # 카운터(맞대결)는 이 판수 이상일 때만 표시 (저표본 허수 방지)
+# 실측 통계 표본 출처 표기 — /collect는 챌린저~플래티넘 수집 + 검색 유저(피기백) 합산
+STATS_BASIS_LABEL = "플래티넘+ 솔로랭크 (KR)"
+# DDragon 아이템 stats는 모드 변형(동일 이름 중복 id)·레거시 필드로 거짓 변경을 만들어 신빙성 낮음
+# → 신뢰 가능한 소스 확보 전까지 아이템 패치 자동감지 보류 (챔피언 변경은 championFull로 신뢰 가능)
+RELIABLE_ITEM_DIFF = False
 
 def get_champion_build(champ_en, preferred_role=None):
     """수집 데이터로 추천 빌드(룬/스펠/아이템/스킬/아이템순서)를 산출.
@@ -969,7 +974,7 @@ def get_champion_patch_changes(champ_en):
     """현재/직전 패치 DDragon 데이터를 비교해 버프/너프 자동 감지. 챔피언·패치 단위 캐시."""
     if not PREV_VERSION:
         return None
-    cache_key = f"patchdiff#{champ_en}#{LATEST_VERSION}"
+    cache_key = f"patchdiff#v2#{champ_en}#{LATEST_VERSION}"
     cached, _ = db_read(cache_key)
     if cached:
         return json.loads(cached)
@@ -980,6 +985,7 @@ def get_champion_patch_changes(champ_en):
         cur_d, prev_d = fetch(LATEST_VERSION), fetch(PREV_VERSION)
         changes = []
         if cur_d and prev_d:
+            res = _resource_label(cur_d.get('partype'))  # 마나/기력/분노/체력…
             # 기본 스탯 비교
             cs, ps = cur_d.get('stats', {}), prev_d.get('stats', {})
             for key, kr in STAT_KR.items():
@@ -999,16 +1005,16 @@ def get_champion_patch_changes(champ_en):
                 ps_sp = pspells.get(sp['id'])
                 if not ps_sp:
                     continue
-                # 쿨다운
+                # 쿨타임
                 cc, pc = sp.get('cooldownBurn'), ps_sp.get('cooldownBurn')
                 if cc and pc and cc != pc:
                     changes.append({"type": "buff" if _first_num(cc) < _first_num(pc) else "nerf",
-                                    "text": f"{slot} 쿨다운 {pc} → {cc}초"})
-                # 코스트
+                                    "text": f"{slot} 쿨타임 {pc} → {cc}초"})
+                # 소모 자원 (마나/체력 등 명시)
                 ck, pk = sp.get('costBurn'), ps_sp.get('costBurn')
                 if ck and pk and ck != pk and ck not in ('0', 'No Cost'):
                     changes.append({"type": "buff" if _first_num(ck) < _first_num(pk) else "nerf",
-                                    "text": f"{slot} 소모값 {pk} → {ck}"})
+                                    "text": f"{slot} {res} 소모량 {pk} → {ck}"})
                 # 효과 수치(데미지 등) 변경 — 방향 단정 어려워 중립 표기
                 if sp.get('effectBurn') != ps_sp.get('effectBurn'):
                     changes.append({"type": "adjust", "text": f"{slot} 스킬 효과 수치 변경"})
@@ -1029,20 +1035,33 @@ def _first_num(burn):
     except (ValueError, IndexError):
         return 0.0
 
+# 아이템 패치 비교용 — 주요(정수형) 스탯 한글명
+ITEM_STAT_KR = {
+    "FlatHPPoolMod": "체력", "FlatMPPoolMod": "마나", "FlatArmorMod": "방어력",
+    "FlatSpellBlockMod": "마법저항", "FlatPhysicalDamageMod": "공격력",
+    "FlatMagicDamageMod": "주문력", "FlatHPRegenMod": "체력재생",
+}
+def _resource_label(partype):
+    """챔피언 자원(partype) → 소모 자원 표기(마나/기력/분노/체력…). 자원 없으면 체력으로 간주."""
+    p = (partype or "").strip()
+    return p if p and p != "없음" else "체력"
+def _numfmt(v):
+    return str(int(v)) if float(v).is_integer() else str(round(v, 1))
+
 def get_patch_highlights(limit=6):
-    """championFull.json 1파일로 전 챔피언 패치 버프/너프 일괄 감지 (홈 위젯용).
-    DDragon 호출 2번(현재·직전 패치)으로 끝 → 패치 단위 캐시로 1회만 계산."""
+    """championFull.json + item.json 비교로 챔피언·아이템 패치 버프/너프 일괄 감지.
+    DDragon 공식 데이터 기반 자동 감지(쿨타임/소모값/스탯/가격). 패치 단위 캐시."""
     if not PREV_VERSION:
         return None
-    cache_key = f"patchhighlights#{LATEST_VERSION}"
+    cache_key = f"patchhighlights#v3#{LATEST_VERSION}"
     cached, _ = db_read(cache_key)
     if cached:
         return json.loads(cached)
     try:
-        def fetch_full(ver):
-            r = requests.get(f"https://ddragon.leagueoflegends.com/cdn/{ver}/data/ko_KR/championFull.json", timeout=10)
+        def fetch_json(ver, file):
+            r = requests.get(f"https://ddragon.leagueoflegends.com/cdn/{ver}/data/ko_KR/{file}", timeout=10)
             return r.json().get('data', {}) if r.status_code == 200 else {}
-        cur_all, prev_all = fetch_full(LATEST_VERSION), fetch_full(PREV_VERSION)
+        cur_all, prev_all = fetch_json(LATEST_VERSION, "championFull.json"), fetch_json(PREV_VERSION, "championFull.json")
         if not cur_all or not prev_all:
             return None
         scored = []
@@ -1051,6 +1070,7 @@ def get_patch_highlights(limit=6):
             prev_d = prev_all.get(cid)
             if not prev_d:
                 continue
+            res = _resource_label(cur_d.get('partype'))  # 마나/기력/분노/체력…
             buffs = nerfs = 0
             details = []
             # 기본 스탯
@@ -1073,12 +1093,12 @@ def get_patch_highlights(limit=6):
                 if cc and pc and cc != pc:
                     cd_buff = _first_num(cc) < _first_num(pc)
                     buffs, nerfs = (buffs + 1, nerfs) if cd_buff else (buffs, nerfs + 1)
-                    details.append({"type": "buff" if cd_buff else "nerf", "text": f"{slot} 쿨다운 {pc}→{cc}초"})
+                    details.append({"type": "buff" if cd_buff else "nerf", "text": f"{slot} 쿨타임 {pc}→{cc}초"})
                 ck, pk = sp.get('costBurn'), ps_sp.get('costBurn')
                 if ck and pk and ck != pk and ck not in ('0', 'No Cost'):
                     cost_buff = _first_num(ck) < _first_num(pk)
                     buffs, nerfs = (buffs + 1, nerfs) if cost_buff else (buffs, nerfs + 1)
-                    details.append({"type": "buff" if cost_buff else "nerf", "text": f"{slot} 소모값 {pk}→{ck}"})
+                    details.append({"type": "buff" if cost_buff else "nerf", "text": f"{slot} {res} 소모량 {pk}→{ck}"})
             if buffs == 0 and nerfs == 0:
                 continue
             net = buffs - nerfs
@@ -1087,10 +1107,51 @@ def get_patch_highlights(limit=6):
                            "kind": kind, "net": net, "details": details[:3]})
         buffed = sorted([s for s in scored if s["kind"] == "buff"], key=lambda x: -x["net"])[:limit]
         nerfed = sorted([s for s in scored if s["kind"] == "nerf"], key=lambda x:  x["net"])[:limit]
+
+        # ── 아이템 변경 감지 (주요 스탯·가격) — 협곡 구매 가능 아이템만 ──
+        # ⏸️ 보류: DDragon 아이템 stats는 모드 변형(동일 이름 중복 id)·레거시 필드로
+        #    거짓 변경(예: 도란의 투구 미변경인데 변형 id가 바뀐 것처럼 표기)을 만들어 신빙성 낮음.
+        item_scored, seen_names = [], set()
+        cur_it = fetch_json(LATEST_VERSION, "item.json") if RELIABLE_ITEM_DIFF else {}
+        prev_it = fetch_json(PREV_VERSION, "item.json") if RELIABLE_ITEM_DIFF else {}
+        for iid, cit in cur_it.items():
+            pit = prev_it.get(iid)
+            if not pit or not cit.get('maps', {}).get('11') or not cit.get('gold', {}).get('purchasable'):
+                continue
+            name = cit.get('name', '')
+            if not name or name in seen_names:
+                continue
+            ib = inn = 0
+            idetails = []
+            cstat, pstat = cit.get('stats', {}), pit.get('stats', {})
+            for key, kr in ITEM_STAT_KR.items():
+                cv, pv = cstat.get(key, 0), pstat.get(key, 0)
+                if abs(cv - pv) < 1e-6:
+                    continue
+                up = cv > pv
+                ib, inn = (ib + 1, inn) if up else (ib, inn + 1)
+                idetails.append({"type": "buff" if up else "nerf", "text": f"{kr} {_numfmt(pv)}→{_numfmt(cv)}"})
+            cg, pg = cit.get('gold', {}).get('total', 0), pit.get('gold', {}).get('total', 0)
+            if cg != pg and pg > 0 and cg > 0:
+                cheaper = cg < pg
+                ib, inn = (ib + 1, inn) if cheaper else (ib, inn + 1)
+                idetails.append({"type": "buff" if cheaper else "nerf", "text": f"가격 {pg}→{cg} G"})
+            if ib == 0 and inn == 0:
+                continue
+            seen_names.add(name)
+            inet = ib - inn
+            ikind = "buff" if inet > 0 else ("nerf" if inet < 0 else "adjust")
+            item_scored.append({"id": iid, "name": name,
+                                "icon": f"https://ddragon.leagueoflegends.com/cdn/{LATEST_VERSION}/img/item/{iid}.png",
+                                "kind": ikind, "net": inet, "details": idetails[:3]})
+        items_buffed = sorted([s for s in item_scored if s["kind"] == "buff"], key=lambda x: -x["net"])[:limit]
+        items_nerfed = sorted([s for s in item_scored if s["kind"] == "nerf"], key=lambda x:  x["net"])[:limit]
+
         result = {"buffed": buffed, "nerfed": nerfed,
+                  "items_buffed": items_buffed, "items_nerfed": items_nerfed,
                   "cur_patch": ".".join(LATEST_VERSION.split(".")[:2]),
                   "prev_patch": ".".join(PREV_VERSION.split(".")[:2]),
-                  "total_changed": len(scored)}
+                  "total_changed": len(scored), "item_changed": len(item_scored)}
         db_write(cache_key, result, int(time.time()))
         return result
     except Exception as e:
@@ -1881,7 +1942,8 @@ def index():
     return render_template('index.html', page='home', roster_data=GLOBAL_ROSTER_DATA,
                            pro_gamers=PRO_GAMERS, latest_version=LATEST_VERSION,
                            meta_top=meta_top, current_patch=CURRENT_PATCH,
-                           patch_highlights=patch_highlights, free_rotation=free_rotation)
+                           patch_highlights=patch_highlights, free_rotation=free_rotation,
+                           total_games=get_stats_total_games(), stats_basis=STATS_BASIS_LABEL)
 
 def build_champion_meta(rank_tier="emeraldplus"):
     result = {"TOP": [], "JUNGLE": [], "MIDDLE": [], "BOTTOM": [], "UTILITY": []}
