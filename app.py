@@ -1061,7 +1061,7 @@ def _resource_label(partype):
 def _numfmt(v):
     return str(int(v)) if float(v).is_integer() else str(round(v, 1))
 
-def get_patch_highlights(limit=6):
+def get_patch_highlights(limit=8):
     """championFull.json + item.json 비교로 챔피언·아이템 패치 버프/너프 일괄 감지.
     DDragon 공식 데이터 기반 자동 감지(쿨타임/소모값/스탯/가격). 패치 단위 캐시."""
     if not PREV_VERSION:
