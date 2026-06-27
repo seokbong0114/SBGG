@@ -2240,33 +2240,40 @@
                 </div>
                 {% endif %}
                 <div class="glass-panel" style="padding: 24px;">
-                    <div class="section-title" style="margin-bottom: 16px;">💡 핵심 플레이 팁</div>
-                    {% if skills and (skills.allytips or skills.enemytips) %}
-                        {% if skills.allytips %}
-                        <div style="font-size: 13px; font-weight: 800; color: #4ade80; margin-bottom: 10px;">👍 플레이할 때</div>
-                        <div style="display: flex; flex-direction: column; gap: 9px; margin-bottom: 18px;">
-                            {% for t in skills.allytips %}
-                            <div style="display: flex; gap: 9px; align-items: flex-start; font-size: 13px; line-height: 1.6; color: var(--text-main);">
-                                <span style="color: #4ade80; flex-shrink: 0; font-weight: 900;">›</span><span>{{ t }}</span>
-                            </div>
-                            {% endfor %}
+                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 14px; flex-wrap: wrap;">
+                        <div class="section-title" style="margin: 0;">🧭 고티어 운영법
+                            <span style="font-size: 11px; font-weight: 800; color: #34d399; background: rgba(52,211,153,0.12); border: 1px solid rgba(52,211,153,0.3); border-radius: 6px; padding: 2px 7px; vertical-align: middle;">{{ champ_guide.bracket }}</span>
                         </div>
-                        {% endif %}
-                        {% if skills.enemytips %}
-                        <div style="font-size: 13px; font-weight: 800; color: #f87171; margin-bottom: 10px;">⚔️ 상대할 때</div>
-                        <div style="display: flex; flex-direction: column; gap: 9px; margin-bottom: 14px;">
-                            {% for t in skills.enemytips %}
-                            <div style="display: flex; gap: 9px; align-items: flex-start; font-size: 13px; line-height: 1.6; color: var(--text-main);">
-                                <span style="color: #f87171; flex-shrink: 0; font-weight: 900;">›</span><span>{{ t }}</span>
-                            </div>
-                            {% endfor %}
-                        </div>
-                        {% endif %}
-                        <div style="font-size: 11px; color: rgba(148,163,184,0.6); text-align: right; margin-top: 4px;">출처 · Riot 공식 챔피언 가이드</div>
+                        {% if is_admin %}<a href="/admin/guide?champ={{ canonical_id }}" style="font-size: 11px; color: var(--point-color); font-weight: 800; text-decoration: none;">✏️ 작성/수정</a>{% endif %}
+                    </div>
+                    {% if champ_guide.has_guide %}
+                    {% set shortmap = {'early': '초반', 'mid': '중반', 'late': '후반'} %}
+                    <div style="display: flex; gap: 6px; margin-bottom: 16px;">
+                        {% for p in champ_guide.phases %}
+                        <button type="button" id="gtab-{{ p.key }}" class="guide-tab" onclick="showGuide('{{ p.key }}')"
+                                style="flex: 1; padding: 9px 4px; border-radius: 9px; font-size: 13px; font-weight: 800; cursor: pointer; background: rgba(255,255,255,0.04); color: var(--text-muted); border: 1px solid rgba(255,255,255,0.1); font-family: inherit;">{{ shortmap.get(p.key, p.key) }}</button>
+                        {% endfor %}
+                    </div>
+                    {% for p in champ_guide.phases %}
+                    <div id="gpanel-{{ p.key }}" class="guide-panel" style="display: none;">
+                        <div style="font-size: 14px; font-weight: 800; color: #93c5fd; margin-bottom: 9px;">{{ p.title }}</div>
+                        <div style="font-size: 13px; line-height: 1.85; color: var(--text-main); white-space: pre-line;">{{ p.body }}</div>
+                    </div>
+                    {% endfor %}
+                    <script>
+                        function showGuide(key){
+                            document.querySelectorAll('.guide-panel').forEach(function(e){e.style.display='none';});
+                            document.querySelectorAll('.guide-tab').forEach(function(e){e.style.background='rgba(255,255,255,0.04)';e.style.color='var(--text-muted)';e.style.borderColor='rgba(255,255,255,0.1)';});
+                            var p=document.getElementById('gpanel-'+key), t=document.getElementById('gtab-'+key);
+                            if(p)p.style.display='block';
+                            if(t){t.style.background='var(--point-color)';t.style.color='#fff';t.style.borderColor='var(--point-color)';}
+                        }
+                        document.addEventListener('DOMContentLoaded',function(){var f=document.querySelector('.guide-tab');if(f)f.click();});
+                    </script>
                     {% else %}
-                    <div style="text-align: center; padding: 18px 12px; color: var(--text-muted);">
-                        <div style="font-size: 30px; margin-bottom: 10px;">✍️</div>
-                        <div style="font-size: 13px; line-height: 1.7;">이 챔피언은 공식 가이드 팁이<br>제공되지 않습니다.</div>
+                    <div style="text-align: center; padding: 22px 12px; color: var(--text-muted);">
+                        <div style="font-size: 30px; margin-bottom: 10px;">🧭</div>
+                        <div style="font-size: 13px; line-height: 1.7;">이 챔피언의 <b style="color:#34d399;">{{ champ_guide.bracket }} 운영법</b>은<br>준비 중입니다. 곧 업데이트됩니다.</div>
                     </div>
                     {% endif %}
                 </div>
@@ -2380,6 +2387,50 @@
         </div>
         {% endif %}
         <a href="https://www.leagueoflegends.com/ko-kr/news/tags/patch-notes/" target="_blank" rel="noopener" style="font-size: 13px; color: var(--point-color); font-weight: 800; text-decoration: none;">공식 패치노트에서 전체 보기 ➔</a>
+        {% endif %}
+    </div>
+
+    {% elif page == 'admin_guide' %}
+    <!-- ================= 운영법 작성 (관리자) ================= -->
+    <nav class="top-nav">
+        <a href="/" class="logo-wrapper"><span class="logo-sb">Z</span></a>
+        <div style="font-size: 13px; color: var(--text-muted); font-weight: 700;">🔐 관리자 · 운영법 편집</div>
+        <div style="width: 80px;"></div>
+    </nav>
+    <div class="main-container" style="margin-top: 30px; max-width: 820px;">
+        <h1 style="font-size: 26px; font-weight: 900; margin: 0 0 6px;">🧭 에메랄드+ 운영법 작성</h1>
+        <div style="font-size: 13px; color: var(--text-muted); margin-bottom: 22px;">챔피언을 선택해 초반·중반·후반 운영법을 작성하세요. 빈 단계는 챔피언 페이지에 표시되지 않습니다.</div>
+
+        {% if saved %}<div style="background: rgba(74,222,128,0.12); border: 1px solid rgba(74,222,128,0.35); color: #4ade80; font-weight: 800; font-size: 14px; padding: 12px 16px; border-radius: 10px; margin-bottom: 18px;">✅ 저장되었습니다.</div>{% endif %}
+
+        <form method="get" action="/admin/guide" style="margin-bottom: 22px;">
+            <label style="font-size: 13px; font-weight: 800; color: var(--text-main); display: block; margin-bottom: 8px;">챔피언 선택</label>
+            <select name="champ" onchange="this.form.submit()" style="width: 100%; max-width: 320px; padding: 11px 14px; border-radius: 10px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.15); color: var(--text-main); font-size: 14px; font-weight: 700; font-family: inherit;">
+                <option value="">— 챔피언 선택 —</option>
+                {% for cid, kr in champ_list %}
+                <option value="{{ cid }}" {% if cid == sel_champ %}selected{% endif %}>{{ kr }}</option>
+                {% endfor %}
+            </select>
+        </form>
+
+        {% if sel_champ %}
+        <form method="post" action="/admin/guide?champ={{ sel_champ }}">
+            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 20px;">
+                <img src="https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/champion/{{ sel_champ }}.png" style="width: 44px; height: 44px; border-radius: 50%; border: 2px solid rgba(52,211,153,0.4);">
+                <div style="font-size: 20px; font-weight: 900;">{{ sel_kr }} <span style="font-size: 12px; color: #34d399;">에메랄드+ 운영법</span></div>
+            </div>
+            {% for key, title in guide_phases %}
+            <div class="glass-panel" style="padding: 18px; margin-bottom: 16px;">
+                <div style="font-size: 14px; font-weight: 900; color: #93c5fd; margin-bottom: 10px;">{{ loop.index }}. {{ title }}</div>
+                <input type="text" name="{{ key }}_title" value="{{ cur_guide.get(key, {}).get('title') or title }}" placeholder="단계 제목"
+                       style="width: 100%; padding: 9px 12px; border-radius: 8px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.12); color: var(--text-main); font-size: 13px; font-weight: 700; font-family: inherit; margin-bottom: 10px;">
+                <textarea name="{{ key }}" rows="5" placeholder="이 단계의 운영법을 작성하세요. (줄바꿈 가능)"
+                          style="width: 100%; padding: 11px 13px; border-radius: 8px; background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.12); color: var(--text-main); font-size: 13px; line-height: 1.7; font-family: inherit; resize: vertical;">{{ cur_guide.get(key, {}).get('body') or '' }}</textarea>
+            </div>
+            {% endfor %}
+            <button type="submit" class="search-btn" style="width: 100%; padding: 14px; font-size: 15px; border-radius: 12px; margin-top: 4px;">💾 운영법 저장</button>
+            <a href="/champion/{{ sel_champ }}" target="_blank" style="display: block; text-align: center; margin-top: 12px; font-size: 13px; color: var(--point-color); font-weight: 800; text-decoration: none;">챔피언 페이지에서 미리보기 ➔</a>
+        </form>
         {% endif %}
     </div>
 

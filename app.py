@@ -156,6 +156,11 @@ def init_db():
         champ_en TEXT, role TEXT, seq TEXT,
         games INTEGER DEFAULT 0, wins INTEGER DEFAULT 0,
         PRIMARY KEY (champ_en, role, seq))''')
+    # 고티어(에메랄드+) 운영법 — 에디터 직접 작성 콘텐츠 (단계별)
+    cursor.execute('''CREATE TABLE IF NOT EXISTS champion_guide (
+        champ_en TEXT, bracket TEXT DEFAULT 'emeraldplus', phase TEXT,
+        title TEXT, body TEXT, updated_at INTEGER,
+        PRIMARY KEY (champ_en, bracket, phase))''')
     # 상세 룬 페이지 (키스톤+주룬3+보조룬2+샤드3 전체)
     cursor.execute('''CREATE TABLE IF NOT EXISTS build_runepages (
         champ_en TEXT, role TEXT, page TEXT, primary_style INTEGER, sub_style INTEGER,
@@ -1922,6 +1927,64 @@ def get_live_challenger_games():
         print(f"관전 API 에러: {e}")
         return [], False
 
+# ================= 고티어 운영법 (에디터 직접 작성) =================
+GUIDE_PHASES = [
+    ("early", "초반 라인전 및 동선"),
+    ("mid",   "중반 사이드/오브젝트 합류"),
+    ("late",  "후반 한타 포지셔닝"),
+]
+GUIDE_BRACKET_KR = {"emeraldplus": "에메랄드+"}
+
+def get_champion_guide(champ_en, bracket="emeraldplus"):
+    """챔피언 운영법(단계별) 반환. 작성된 단계만 포함. 없으면 has_guide=False."""
+    rows = []
+    try:
+        conn = db_connect()
+        rows = conn.execute("SELECT phase, title, body FROM champion_guide WHERE champ_en=? AND bracket=?",
+                            (champ_en, bracket)).fetchall()
+        conn.close()
+    except Exception as e:
+        print(f"운영법 조회 에러 [{champ_en}]: {e}")
+    bymap = {r[0]: (r[1], r[2]) for r in rows if (r[2] or "").strip()}
+    phases = []
+    for key, default_title in GUIDE_PHASES:
+        if key in bymap:
+            title, body = bymap[key]
+            phases.append({"key": key, "title": title or default_title, "body": body.strip()})
+    return {"has_guide": bool(phases), "bracket": GUIDE_BRACKET_KR.get(bracket, bracket), "phases": phases}
+
+def get_guide_raw(champ_en, bracket="emeraldplus"):
+    """관리자 편집용 — 작성 여부 무관 전체 단계 원본 반환 {phase:{title,body}}."""
+    try:
+        conn = db_connect()
+        rows = conn.execute("SELECT phase, title, body FROM champion_guide WHERE champ_en=? AND bracket=?",
+                            (champ_en, bracket)).fetchall()
+        conn.close()
+        return {r[0]: {"title": r[1] or "", "body": r[2] or ""} for r in rows}
+    except Exception as e:
+        print(f"운영법 원본 조회 에러: {e}")
+        return {}
+
+def save_champion_guide(champ_en, form, bracket="emeraldplus"):
+    """관리자 폼 → 단계별 운영법 upsert."""
+    conn = db_connect()
+    ts = int(time.time())
+    for key, default_title in GUIDE_PHASES:
+        body = (form.get(key) or "").strip()
+        title = (form.get(key + "_title") or default_title).strip() or default_title
+        conn.execute("""INSERT INTO champion_guide (champ_en, bracket, phase, title, body, updated_at)
+                        VALUES (?,?,?,?,?,?)
+                        ON CONFLICT(champ_en, bracket, phase) DO UPDATE SET
+                          title=EXCLUDED.title, body=EXCLUDED.body, updated_at=EXCLUDED.updated_at""",
+                     (champ_en, bracket, key, title, body, ts))
+    conn.commit()
+    conn.close()
+
+ADMIN_USERNAME = os.getenv("ADMIN_USERNAME", "")
+def is_admin():
+    """관리자 여부 — 로그인 사용자명이 ADMIN_USERNAME(환경변수)과 일치."""
+    return bool(ADMIN_USERNAME) and session.get('username') == ADMIN_USERNAME
+
 # ================= 회원 인증 =================
 @app.context_processor
 def inject_user():
@@ -2317,12 +2380,35 @@ def champion_page(champ_id):
     # 6) 카운터 라인 맞대결 (실측 승률 기반)
     build_role = champ_build['role'] if champ_build else champ_role
     champ_counters = get_champion_counters(canonical_id, build_role)
+    # 7) 에메랄드+ 고티어 운영법 (에디터 작성 콘텐츠)
+    champ_guide = get_champion_guide(canonical_id)
 
     return render_template('index.html', page='champion', champ=styled,
                            champ_role=ROLE_KR.get(champ_role, champ_role),
                            champ_role_en=champ_role, has_build=has_build, skills=skills,
                            champ_build=champ_build, champ_counters=champ_counters, role_kr=ROLE_KR,
+                           champ_guide=champ_guide, is_admin=is_admin(), canonical_id=canonical_id,
                            latest_version=LATEST_VERSION, current_patch=CURRENT_PATCH_DISPLAY)
+
+@app.route('/admin/guide', methods=['GET', 'POST'])
+def admin_guide():
+    """에메랄드+ 운영법 작성/수정 (관리자 전용)."""
+    if not is_admin():
+        return redirect('/')
+    champ_in = request.values.get('champ', '').strip()
+    canonical = champ_ddragon_id(champ_in) if champ_in else ''
+    if canonical not in CHAMP_KR_MAP:
+        canonical = ''
+    if request.method == 'POST' and canonical:
+        save_champion_guide(canonical, request.form)
+        return redirect(f'/admin/guide?champ={canonical}&saved=1')
+    cur = get_guide_raw(canonical) if canonical else {}
+    champ_list = sorted(CHAMP_KR_MAP.items(), key=lambda x: x[1])  # (id, kr) 가나다순
+    return render_template('index.html', page='admin_guide',
+                           champ_list=champ_list, sel_champ=canonical,
+                           sel_kr=CHAMP_KR_MAP.get(canonical, ''), guide_phases=GUIDE_PHASES,
+                           cur_guide=cur, saved=request.args.get('saved'),
+                           latest_version=LATEST_VERSION)
 
 @app.route('/search')
 def search():
