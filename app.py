@@ -5,6 +5,7 @@ import sqlite3
 import json
 import time
 import re
+import html
 from flask import Flask, render_template, request, redirect, jsonify, session
 from werkzeug.security import generate_password_hash, check_password_hash
 import requests
@@ -1171,6 +1172,95 @@ def get_patch_highlights(limit=8):
         print(f"패치 하이라이트 에러: {e}")
         return None
 
+# ── 공식 패치노트 파서 (leagueoflegends.com 원문 → 구조화) ──
+PATCH_UA = {'User-Agent': 'Mozilla/5.0'}
+
+def _pn_strip(s):
+    return html.unescape(re.sub(r'<[^>]+>', '', s)).strip()
+
+def _pn_section(body, titles):
+    """h2 제목이 titles 중 하나인 섹션 HTML(다음 h2 전까지) 반환."""
+    h2s = list(re.finditer(r'<h2[^>]*>(.*?)</h2>', body, re.S))
+    for i, m in enumerate(h2s):
+        if _pn_strip(m.group(1)) in titles:
+            return body[m.end():(h2s[i + 1].start() if i + 1 < len(h2s) else len(body))]
+    return ''
+
+def _pn_entries(section, kr_to_id):
+    """h3 단위로 챔피언/아이템 항목 파싱 → [{name,id,kr,summary,groups:[{name,changes}]}]."""
+    entries = []
+    for b in re.split(r'(?=<h3)', section):
+        h3m = re.search(r'<h3[^>]*>(.*?)</h3>', b, re.S)
+        if not h3m:
+            continue
+        head = h3m.group(1)
+        name = _pn_strip(head)
+        if not name:
+            continue
+        cid = kr_to_id.get(name)  # 한글명 → DDragon id (챔피언일 때)
+        bq = re.search(r'<blockquote[^>]*>(.*?)</blockquote>', b, re.S)
+        summary = _pn_strip(bq.group(1)) if bq else ''
+        groups = []
+        first_h4 = b.find('<h4')
+        head_part = b[:first_h4] if first_h4 != -1 else b
+        gen = [_pn_strip(x) for x in re.findall(r'<li[^>]*>(.*?)</li>', head_part, re.S) if _pn_strip(x)]
+        if gen:
+            groups.append({"name": "", "changes": gen})
+        for am in re.finditer(r'<h4[^>]*>(.*?)</h4>(.*?)(?=<h4|$)', b, re.S):
+            aname = _pn_strip(am.group(1))
+            lis = [_pn_strip(x) for x in re.findall(r'<li[^>]*>(.*?)</li>', am.group(2), re.S) if _pn_strip(x)]
+            if lis:
+                groups.append({"name": aname, "changes": lis})
+        if groups or summary:
+            entries.append({"name": name, "id": cid, "summary": summary, "groups": groups})
+    return entries
+
+def _discover_patch_url():
+    """현재 패치의 공식 패치노트 기사 URL 탐색 (슬러그 형식 변화 대응)."""
+    maj, minor = (CURRENT_PATCH_DISPLAY.split(".") + ["", ""])[:2]
+    frag = f"patch-{maj}-{minor}-notes"
+    try:
+        r = requests.get("https://www.leagueoflegends.com/ko-kr/news/tags/patch-notes/", headers=PATCH_UA, timeout=10)
+        if r.status_code == 200:
+            m = re.search(r'href="(/ko-kr/news/game-updates/[a-z0-9\-]*' + re.escape(frag) + r'/?)"', r.text)
+            if m:
+                return "https://www.leagueoflegends.com" + m.group(1)
+    except Exception:
+        pass
+    return f"https://www.leagueoflegends.com/ko-kr/news/game-updates/league-of-legends-{frag}"
+
+def fetch_official_patch_notes():
+    """공식 패치노트 원문을 파싱해 챔피언·아이템 변경 전체 반환. 패치 단위 캐시.
+    실패 시 None → 호출부에서 DDragon 자동감지로 폴백."""
+    cache_key = f"officialpatch#v2#{LATEST_VERSION}"
+    cached, _ = db_read(cache_key)
+    if cached:
+        return json.loads(cached)
+    try:
+        url = _discover_patch_url()
+        r = requests.get(url, headers=PATCH_UA, timeout=15)
+        if r.status_code != 200:
+            return None
+        m = re.search(r'<script id="__NEXT_DATA__" type="application/json">(.*?)</script>', r.text, re.S)
+        if not m:
+            return None
+        blades = json.loads(m.group(1)).get('props', {}).get('pageProps', {}).get('page', {}).get('blades', [])
+        body = max((bl.get('richText', {}).get('body', '') for bl in blades if isinstance(bl.get('richText', {}).get('body', ''), str)),
+                   key=len, default='')
+        if not body:
+            return None
+        kr_to_id = {kr: cid for cid, kr in CHAMP_KR_MAP.items()}
+        champions = _pn_entries(_pn_section(body, ['챔피언']), kr_to_id)
+        items = _pn_entries(_pn_section(body, ['아이템']), {})
+        if not champions and not items:
+            return None  # 구조 변경 등 → 폴백
+        result = {"patch": CURRENT_PATCH_DISPLAY, "champions": champions, "item_list": items, "source_url": url}
+        db_write(cache_key, result, int(time.time()))
+        return result
+    except Exception as e:
+        print(f"공식 패치노트 파싱 에러: {e}")
+        return None
+
 def get_match_details(puuid, start=0, count=20, queue=None, collect_stats=True):
     url = f"https://asia.api.riotgames.com/lol/match/v5/matches/by-puuid/{puuid}/ids?start={start}&count={count}"
     url += f"&queue={queue}" if queue and queue != 'all' else "&type=ranked"
@@ -2062,6 +2152,15 @@ def meta():
                            numeric_tier_color=NUMERIC_TIER_COLOR,
                            tier_counts=tier_counts,
                            total_games=get_stats_total_games(), real_count=real_count)
+
+@app.route('/patch')
+def patch_notes():
+    ensure_current_patch()  # 새 패치 자동 감지·갱신 (스로틀)
+    official = fetch_official_patch_notes()        # 공식 원문 파싱 (전체)
+    highlights = get_patch_highlights()            # DDragon 자동감지 (폴백/요약)
+    return render_template('index.html', page='patch', official=official,
+                           highlights=highlights, latest_version=LATEST_VERSION,
+                           current_patch=CURRENT_PATCH_DISPLAY)
 
 APEX_TIERS = {"challenger", "grandmaster", "master"}
 SAMPLE_TIERS = ["challenger", "grandmaster", "master", "diamond", "emerald", "platinum"]

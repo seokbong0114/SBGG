@@ -655,6 +655,7 @@
                     <div style="font-size: 18px; font-weight: 800; margin-bottom: 15px;">🚀 퀵 메뉴</div>
                     <div class="quick-menu-list">
                         <a href="/meta" class="quick-menu-item"><b>📊 메타 분석</b><span>패치 {{ current_patch }} ➔</span></a>
+                        <a href="/patch" class="quick-menu-item"><b>📰 패치노트</b><span>공식 {{ current_patch }} ➔</span></a>
                         <a href="/leaderboard" class="quick-menu-item"><b>👑 래더 랭킹</b><span>바로가기 ➔</span></a>
                         <a href="/spectate" class="quick-menu-item"><b>🔴 천상계 관전</b><span>바로가기 ➔</span></a>
                         <a href="/duo" class="quick-menu-item"><b>🤝 듀오 찾기</b><span>바로가기 ➔</span></a>
@@ -728,10 +729,10 @@
                 </div>
                 <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 3px;">
                     <span style="font-size: 12px; color: var(--text-muted); font-weight: 700;">직전 {{ patch_highlights.prev_patch }} 대비 · 챔피언 {{ patch_highlights.total_changed }}종{% if patch_highlights.item_changed %} · 아이템 {{ patch_highlights.item_changed }}종{% endif %}</span>
-                    <a href="https://www.leagueoflegends.com/ko-kr/news/tags/patch-notes/" target="_blank" rel="noopener" style="font-size: 12px; color: var(--point-color); font-weight: 800; text-decoration: none;">공식 패치노트 전체 보기 ➔</a>
+                    <a href="/patch" style="font-size: 12px; color: var(--point-color); font-weight: 800; text-decoration: none;">패치노트 전체 보기 ➔</a>
                 </div>
             </div>
-            <div style="font-size: 11px; color: rgba(148,163,184,0.7); font-weight: 600; margin-bottom: 16px;">※ 핵심 수치 변경(스탯·쿨타임·소모값·아이템)을 자동 감지해 보여줍니다. 스킬 계수·시스템·칼바람 등 전체 변경은 공식 패치노트를 참고하세요.</div>
+            <div style="font-size: 11px; color: rgba(148,163,184,0.7); font-weight: 600; margin-bottom: 16px;">※ 아래는 주요 변경 요약입니다. <a href="/patch" style="color: var(--point-color); font-weight: 800;">패치노트 전체 보기</a>에서 스킬 계수까지 포함한 공식 원문 기준 전체 변경을 확인하세요.</div>
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px;">
                 <!-- 상향(버프) -->
                 <div class="glass-panel" style="padding: 20px;">
@@ -2292,6 +2293,94 @@
         <div style="margin-top: 20px; text-align: center;">
             <a href="/meta" style="color: var(--text-muted); font-size: 14px; font-weight: 700; text-decoration: none;">← 전체 메타 분석으로 돌아가기</a>
         </div>
+    </div>
+
+    {% elif page == 'patch' %}
+    <!-- ================= 공식 패치노트 ================= -->
+    <nav class="top-nav">
+        <a href="/" class="logo-wrapper"><span class="logo-sb">Z</span></a>
+        <div class="nav-search-wrapper">
+            <form action="/search" method="get" class="nav-search-box">
+                <input type="text" name="name" style="width: 150px;" placeholder="소환사명·챔피언명" required>
+                <span style="color: #ccc; margin: 0 5px;">#</span>
+                <input type="text" name="tag" style="width: 50px;" value="KR1">
+                <button type="submit" class="search-btn" style="padding: 6px 16px; font-size: 13px;">검색</button>
+            </form>
+        </div>
+        <div style="width: 80px;"></div>
+    </nav>
+
+    <div class="main-container" style="margin-top: 30px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-bottom: 6px;">
+            <h1 style="font-size: 28px; font-weight: 900; margin: 0;">📰 패치 {{ current_patch }} 노트</h1>
+            {% if official %}<a href="{{ official.source_url }}" target="_blank" rel="noopener" style="font-size: 13px; color: var(--point-color); font-weight: 800; text-decoration: none;">공식 원문 보기 ➔</a>{% endif %}
+        </div>
+
+        {% if official %}
+        <div style="font-size: 12px; color: var(--text-muted); font-weight: 700; margin-bottom: 26px;">Riot 공식 패치노트 원문 기준 · 챔피언 {{ official.champions|length }}개 · 아이템 {{ official.item_list|length }}개 변경</div>
+
+        {% if official.champions %}
+        <div class="section-title" style="margin-bottom: 16px;">⚔️ 챔피언</div>
+        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 16px; margin-bottom: 40px;">
+            {% for c in official.champions %}
+            <div class="glass-panel" style="padding: 20px;">
+                <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px;">
+                    {% if c.id %}<a href="/champion/{{ c.id }}"><img src="https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/champion/{{ c.id }}.png" style="width: 46px; height: 46px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.12);"></a>{% endif %}
+                    <div style="font-size: 17px; font-weight: 900;">{% if c.id %}<a href="/champion/{{ c.id }}" style="color: white; text-decoration: none;">{{ c.name }}</a>{% else %}<span style="color: white;">{{ c.name }}</span>{% endif %}</div>
+                </div>
+                {% if c.summary %}<div style="font-size: 12px; color: var(--text-muted); line-height: 1.65; margin-bottom: 14px; border-left: 2px solid rgba(96,165,250,0.35); padding-left: 11px;">{{ c.summary }}</div>{% endif %}
+                {% for g in c.groups %}
+                <div style="margin-bottom: 11px;">
+                    {% if g.name %}<div style="font-size: 13px; font-weight: 800; color: #93c5fd; margin-bottom: 5px;">{{ g.name }}</div>{% endif %}
+                    {% for ch in g.changes %}
+                    <div style="font-size: 12.5px; color: #e2e8f0; line-height: 1.65; padding-left: 11px; text-indent: -8px;">• {{ ch }}</div>
+                    {% endfor %}
+                </div>
+                {% endfor %}
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        {% if official.item_list %}
+        <div class="section-title" style="margin-bottom: 16px;">🛡️ 아이템</div>
+        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(330px, 1fr)); gap: 16px; margin-bottom: 40px;">
+            {% for it in official.item_list %}
+            <div class="glass-panel" style="padding: 20px;">
+                <div style="font-size: 16px; font-weight: 900; color: white; margin-bottom: 12px;">{{ it.name }}</div>
+                {% if it.summary %}<div style="font-size: 12px; color: var(--text-muted); line-height: 1.65; margin-bottom: 14px; border-left: 2px solid rgba(96,165,250,0.35); padding-left: 11px;">{{ it.summary }}</div>{% endif %}
+                {% for g in it.groups %}
+                <div style="margin-bottom: 11px;">
+                    {% if g.name %}<div style="font-size: 13px; font-weight: 800; color: #93c5fd; margin-bottom: 5px;">{{ g.name }}</div>{% endif %}
+                    {% for ch in g.changes %}
+                    <div style="font-size: 12.5px; color: #e2e8f0; line-height: 1.65; padding-left: 11px; text-indent: -8px;">• {{ ch }}</div>
+                    {% endfor %}
+                </div>
+                {% endfor %}
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <div style="font-size: 11px; color: rgba(148,163,184,0.6); line-height: 1.6; margin-bottom: 40px;">※ 본 패치노트는 Riot 공식 패치노트 원문을 기준으로 정리되었습니다. 스킨·이벤트·일부 시스템 변경 등 전체 내용은 <a href="{{ official.source_url }}" target="_blank" rel="noopener" style="color: var(--point-color);">공식 원문</a>을 참고하세요.</div>
+
+        {% else %}
+        <!-- 폴백: 공식 파싱 실패 시 DDragon 자동감지 요약 -->
+        <div style="font-size: 12px; color: var(--text-muted); margin-bottom: 24px;">공식 패치노트 원문을 불러오지 못해, 자동 감지된 주요 변경을 표시합니다.</div>
+        {% if highlights and (highlights.buffed or highlights.nerfed) %}
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; margin-bottom: 24px;">
+            <div class="glass-panel" style="padding: 20px;">
+                <div style="font-size: 15px; font-weight: 900; color:#4ade80; margin-bottom: 12px;">🟢 상향</div>
+                {% for c in highlights.buffed %}<div style="font-size: 13px; color: #e2e8f0; margin-bottom: 8px;"><b>{{ c.kr }}</b> — {% for d in c.details %}{{ d.text }}{% if not loop.last %} · {% endif %}{% endfor %}</div>{% endfor %}
+            </div>
+            <div class="glass-panel" style="padding: 20px;">
+                <div style="font-size: 15px; font-weight: 900; color:#f87171; margin-bottom: 12px;">🔴 하향</div>
+                {% for c in highlights.nerfed %}<div style="font-size: 13px; color: #e2e8f0; margin-bottom: 8px;"><b>{{ c.kr }}</b> — {% for d in c.details %}{{ d.text }}{% if not loop.last %} · {% endif %}{% endfor %}</div>{% endfor %}
+            </div>
+        </div>
+        {% endif %}
+        <a href="https://www.leagueoflegends.com/ko-kr/news/tags/patch-notes/" target="_blank" rel="noopener" style="font-size: 13px; color: var(--point-color); font-weight: 800; text-decoration: none;">공식 패치노트에서 전체 보기 ➔</a>
+        {% endif %}
     </div>
 
     {% elif page == 'privacy' %}
