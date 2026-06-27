@@ -1558,6 +1558,46 @@
             </div>
             {% endif %}
 
+            <!-- ★ 포지션 분포 + 듀오 승률 위젯 (본인 데이터 기반) -->
+            {% if position_dist or duo_stats %}
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px;">
+                {% if position_dist %}
+                <div class="glass-panel" style="padding: 22px 25px;">
+                    <div class="section-title" style="margin-bottom: 16px;">🧭 최근 {{ game_count }}게임 포지션 분포</div>
+                    <div style="display: flex; flex-direction: column; gap: 12px;">
+                        {% for p in position_dist %}
+                        <div style="display: flex; align-items: center; gap: 12px;">
+                            <div style="width: 44px; font-size: 13px; font-weight: 800; color: var(--text-main); flex-shrink:0;">{{ p.role_kr }}</div>
+                            <div style="flex: 1; height: 9px; background: rgba(255,255,255,0.05); border-radius: 5px; overflow: hidden;">
+                                <div style="height: 100%; width: {{ p.pct }}%; border-radius: 5px; background: linear-gradient(to right, #8b5cf6, #c4b5fd);"></div>
+                            </div>
+                            <div style="width: 64px; text-align: right; font-size: 12px; font-weight: 700; color: var(--text-muted); flex-shrink:0;">{{ p.count }}판 {{ p.pct }}%</div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+                {% if duo_stats %}
+                <div class="glass-panel" style="padding: 22px 25px;">
+                    <div class="section-title" style="margin-bottom: 3px;">🤝 자주 함께한 듀오 승률</div>
+                    <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 14px;">최근 게임서 아군으로 2판 이상 동행</div>
+                    <div style="display: flex; flex-direction: column; gap: 11px;">
+                        {% for d in duo_stats %}
+                        <a href="/search?name={{ d.name|urlencode }}&tag={{ d.tag|urlencode }}" style="text-decoration: none; display: flex; align-items: center; gap: 11px;">
+                            <img src="https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/champion/{{ d.champ_img }}.png" title="{{ d.champ_kr }}" style="width: 34px; height: 34px; border-radius: 50%; border: 1px solid rgba(255,255,255,0.12); flex-shrink: 0;" onerror="this.style.opacity=0">
+                            <div style="flex: 1; min-width: 0;">
+                                <div style="font-size: 13px; font-weight: 800; color: white; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ d.name }} <span style="color: var(--text-muted); font-weight: 600; font-size: 11px;">#{{ d.tag }}</span></div>
+                                <div style="font-size: 11px; color: var(--text-muted);">{{ d.games }}판 함께 · {{ d.wins }}승 {{ d.games - d.wins }}패</div>
+                            </div>
+                            <div style="font-size: 15px; font-weight: 900; flex-shrink: 0; color: {% if d.wr >= 60 %}var(--win-color){% elif d.wr < 45 %}var(--lose-color){% else %}var(--text-main){% endif %};">{{ d.wr }}%</div>
+                        </a>
+                        {% endfor %}
+                    </div>
+                </div>
+                {% endif %}
+            </div>
+            {% endif %}
+
             <!-- ★ YOUR.GG 스타일 개선 피드백 + 챔피언 추천 -->
             {% if improvement_tips or champion_recs %}
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 20px;">
@@ -1581,14 +1621,20 @@
                 {% endif %}
                 {% if champion_recs %}
                 <div class="glass-panel" style="padding: 22px 25px;">
-                    <div class="section-title" style="margin-bottom: 16px;">🎯 플레이 스타일 맞춤 챔피언</div>
+                    <div class="section-title" style="margin-bottom: 3px;">🎯 플레이 스타일 맞춤 챔피언</div>
+                    <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 14px;">육각형 지표 × 패치 {{ current_patch }} 메타(티어·승률) 교차검증</div>
                     <div style="display: flex; flex-direction: column; gap: 12px;">
                         {% for rec in champion_recs %}
                         <a href="/champion/{{ rec.id }}" style="text-decoration: none; display: flex; gap: 14px; align-items: center; padding: 14px; border-radius: 12px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); transition: 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.07)'" onmouseout="this.style.background='rgba(255,255,255,0.03)'">
-                            <img src="https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/champion/{{ rec.id }}.png" style="width: 46px; height: 46px; border-radius: 12px; border: 2px solid rgba(255,255,255,0.15);">
-                            <div style="flex: 1;">
-                                <div style="font-size: 15px; font-weight: 900; color: white;">{{ rec.kr }}</div>
-                                <div style="font-size: 12px; color: var(--text-muted); margin-top: 3px;">{{ rec.role }} · {{ rec.reason }}</div>
+                            <img src="https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/champion/{{ rec.id }}.png" style="width: 46px; height: 46px; border-radius: 12px; border: 2px solid {% if rec.tier_style %}{{ rec.tier_style.border }}{% else %}rgba(255,255,255,0.15){% endif %}; flex-shrink:0;">
+                            <div style="flex: 1; min-width: 0;">
+                                <div style="font-size: 10px; font-weight: 800; color: #c4b5fd;">{{ rec.icon }} {{ rec.cat }}</div>
+                                <div style="display: flex; align-items: center; gap: 6px; margin-top: 3px; flex-wrap: wrap;">
+                                    <span style="font-size: 15px; font-weight: 900; color: white;">{{ rec.kr }}</span>
+                                    {% if rec.tier_style %}<span style="font-size: 10px; font-weight: 900; padding: 1px 7px; border-radius: 8px; background: {{ rec.tier_style.bg }}; color: {{ rec.tier_style.color }}; border: 1px solid {{ rec.tier_style.border }};">{% if rec.tier == 'OP' %}OP{% else %}{{ rec.tier }}티어{% endif %}</span>{% endif %}
+                                    <span style="font-size: 11px; color: var(--text-muted);">{{ rec.role }}</span>
+                                </div>
+                                <div style="font-size: 11px; color: var(--text-muted); margin-top: 3px;">{{ rec.reason }}</div>
                             </div>
                             <div style="color: var(--point-color); font-weight: 900;">➔</div>
                         </a>

@@ -161,6 +161,11 @@ def init_db():
         champ_en TEXT, bracket TEXT DEFAULT 'emeraldplus', phase TEXT,
         title TEXT, body TEXT, updated_at INTEGER,
         PRIMARY KEY (champ_en, bracket, phase))''')
+    # 티어별 지표 벤치마크 — 수집/검색 게임에서 (티어×역할×지표) 평균 적립
+    cursor.execute('''CREATE TABLE IF NOT EXISTS tier_benchmark (
+        tier TEXT, role TEXT, metric TEXT,
+        total REAL DEFAULT 0, cnt INTEGER DEFAULT 0,
+        PRIMARY KEY (tier, role, metric))''')
     # 상세 룬 페이지 (키스톤+주룬3+보조룬2+샤드3 전체)
     cursor.execute('''CREATE TABLE IF NOT EXISTS build_runepages (
         champ_en TEXT, role TEXT, page TEXT, primary_style INTEGER, sub_style INTEGER,
@@ -482,6 +487,75 @@ SHOW_LEVEL_SKILL_TREE = False
 COUNTER_MIN_GAMES = 10  # 카운터(맞대결)는 이 판수 이상일 때만 표시 (저표본 허수 방지)
 # 실측 통계 표본 출처 표기 — /collect는 챌린저~플래티넘 수집 + 검색 유저(피기백) 합산
 STATS_BASIS_LABEL = "플래티넘+ 솔로랭크 (KR)"
+
+# ── 티어 지표 벤치마크 (개선 포인트 수치 비교용) ──
+BENCH_MIN_SAMPLE = 30  # 벤치마크 평균을 신뢰할 최소 표본
+TIER_KR = {"challenger": "챌린저", "grandmaster": "그랜드마스터", "master": "마스터",
+           "diamond": "다이아", "emerald": "에메랄드", "platinum": "플래티넘",
+           "gold": "골드", "silver": "실버", "bronze": "브론즈", "iron": "아이언"}
+# 지표: 한글명, 단위, 높을수록 좋은지, 부족 시 조언(정형·정확한 가이드)
+BENCHMARK_METRICS = {
+    "cspm": {"kr": "분당 CS", "unit": "개", "higher": True,
+             "advice": "라인 클리어·웨이브 관리를 신경 써 미니언을 놓치지 마세요. 분당 CS 격차가 골드 차이로 직결됩니다."},
+    "ward": {"kr": "제어 와드 설치", "unit": "개", "higher": True,
+             "advice": "첫 귀환 시 제어 와드를 구매하고, 주요 오브젝트 30초 전 길목 시야를 미리 장악하세요."},
+    "vspm": {"kr": "분당 시야 점수", "unit": "", "higher": True,
+             "advice": "와드를 아끼지 말고, 죽은 와드 정리(스윕)와 핵심 부쉬 시야 확보를 습관화하세요."},
+    "kp":   {"kr": "킬 관여율", "unit": "%", "higher": True,
+             "advice": "교전 신호를 미니맵으로 읽고 합류 타이밍을 앞당기세요. 한타 직전 포지션 선점이 관여율을 올립니다."},
+    "dpm":  {"kr": "분당 챔피언 피해량", "unit": "", "higher": True,
+             "advice": "교전에서 안전하게 더 오래 딜을 넣을 포지션을 잡고, 스킬 적중률을 높이세요."},
+    "deaths": {"kr": "평균 데스", "unit": "회", "higher": False,
+             "advice": "무리한 진입보다 포지셔닝을 우선하세요. 시야 없는 곳 진입과 1:1 과욕이 데스의 주원인입니다."},
+}
+
+def _extract_metrics(p, duration_min):
+    """Match-v5 참가자 → 벤치마크 지표 딕셔너리."""
+    ch = p.get('challenges', {}) or {}
+    dm = max(1.0, duration_min)
+    cs = p.get('totalMinionsKilled', 0) + p.get('neutralMinionsKilled', 0)
+    k, d, a = p.get('kills', 0), p.get('deaths', 0), p.get('assists', 0)
+    return {
+        "cspm": round(cs / dm, 2),
+        "ward": p.get('detectorWardsPlaced', ch.get('controlWardsPlaced', 0)),
+        "vspm": round(p.get('visionScore', 0) / dm, 2),
+        "kp":   round(ch.get('killParticipation', 0) * 100, 1),
+        "dpm":  round(p.get('totalDamageDealtToChampions', 0) / dm, 1),
+        "deaths": d,
+    }
+
+def record_tier_benchmark(metrics, tier, role):
+    """티어×역할×지표 평균에 한 표본 누적. tier는 소문자 티어명."""
+    if not tier or role not in VALID_ROLES:
+        return
+    try:
+        conn = db_connect()
+        for metric, val in metrics.items():
+            conn.execute("""INSERT INTO tier_benchmark (tier, role, metric, total, cnt) VALUES (?,?,?,?,1)
+                            ON CONFLICT(tier, role, metric) DO UPDATE SET
+                              total=tier_benchmark.total+?, cnt=tier_benchmark.cnt+1""",
+                         (tier, role, metric, val, val))
+        conn.commit(); conn.close()
+    except Exception as e:
+        print(f"벤치마크 적립 에러: {e}")
+        try: conn.close()
+        except Exception: pass
+
+def get_tier_benchmarks(tier, role):
+    """해당 티어·역할의 지표 평균 {metric: avg} (표본 충분한 것만)."""
+    out = {}
+    if not tier:
+        return out
+    try:
+        conn = db_connect()
+        for metric, total, cnt in conn.execute(
+                "SELECT metric, total, cnt FROM tier_benchmark WHERE tier=? AND role=?", (tier, role)):
+            if cnt >= BENCH_MIN_SAMPLE:
+                out[metric] = round(total / cnt, 2)
+        conn.close()
+    except Exception as e:
+        print(f"벤치마크 조회 에러: {e}")
+    return out
 # 아이템 패치 자동감지: 공식 패치노트와 일치 확인됨(예: 도란의 투구 방어/마저 10→8, 체력 140→150).
 # 동일 이름 중복 id 중 '변경이 있는 = 현재 살아있는' 항목만 잡히므로 신뢰 가능.
 RELIABLE_ITEM_DIFF = True
@@ -1266,7 +1340,7 @@ def fetch_official_patch_notes():
         print(f"공식 패치노트 파싱 에러: {e}")
         return None
 
-def get_match_details(puuid, start=0, count=20, queue=None, collect_stats=True):
+def get_match_details(puuid, start=0, count=20, queue=None, collect_stats=True, player_tier=None):
     url = f"https://asia.api.riotgames.com/lol/match/v5/matches/by-puuid/{puuid}/ids?start={start}&count={count}"
     url += f"&queue={queue}" if queue and queue != 'all' else "&type=ranked"
         
@@ -1347,6 +1421,11 @@ def get_match_details(puuid, start=0, count=20, queue=None, collect_stats=True):
                     main_player_data['kda_ratio'] = round((k + a) / max(1, d), 2)
                     kp = p.get('challenges', {}).get('killParticipation', 0) * 100
                     main_player_data['kp'] = round(kp)
+                    # ★ 개선 포인트용 상세 지표 + 티어 벤치마크 적립(피기백, 검색 유저)
+                    _pm = _extract_metrics(p, duration_m)
+                    main_player_data['metrics'] = _pm
+                    if collect_stats and player_tier and p.get('teamPosition') in VALID_ROLES and duration_m >= 5:
+                        record_tier_benchmark(_pm, player_tier, p['teamPosition'])
                     grade = calc_game_grade(main_player_data['kda_ratio'], round(kp), main_player_data['cs_per_min'], p['win'])
                     main_player_data['grade'] = grade
                     main_player_data['grade_style'] = GRADE_STYLE.get(grade, GRADE_STYLE['C'])
@@ -1441,13 +1520,15 @@ def get_match_details(puuid, start=0, count=20, queue=None, collect_stats=True):
                 if key not in coplayer_tracker:
                     coplayer_tracker[key] = {'name': cp['name'], 'tag': cp['tag'],
                                              'champ_img': cp['champ_img'], 'champ_kr': cp['champ_kr'],
-                                             'count': 0, 'as_ally': 0, 'as_enemy': 0}
+                                             'count': 0, 'as_ally': 0, 'as_enemy': 0, 'as_ally_win': 0}
                 ct = coplayer_tracker[key]
                 ct['count'] += 1
                 ct['name'], ct['tag'] = cp['name'], cp['tag']  # 최신 닉네임 갱신
                 ct['champ_img'], ct['champ_kr'] = cp['champ_img'], cp['champ_kr']
                 if cp['teamId'] == my_team_id:
                     ct['as_ally'] += 1
+                    if main_player_data.get('win'):
+                        ct['as_ally_win'] += 1
                 else:
                     ct['as_enemy'] += 1
 
@@ -1762,84 +1843,122 @@ def recommend_situational_build(my_champ_en, my_role, comp):
     recs.sort(key=lambda x: x['priority'])
     return recs[:3]
 
-def generate_improvement_tips(matches, overall_kda, radar_array):
+def generate_improvement_tips(matches, overall_kda, radar_array, primary_role=None, tier_name=None):
+    """유저 지표를 '같은 티어·역할 평균(실측 벤치마크)'과 비교해 수치 기반 개선 포인트 생성.
+    벤치마크 표본이 부족하면(가짜 숫자 금지) 라이다/폼 기반 폴백으로 안전 동작."""
     tips = []
-    avg_d = overall_kda.get('d', 0)
-    if avg_d >= 6:
-        tips.append({"icon": "💀", "type": "danger",
-            "title": f"평균 {avg_d}데스 — 생존력 개선 필요",
-            "desc": "라인전과 교전 시 과감한 진입보다 포지셔닝을 우선시하세요."})
-    if radar_array and len(radar_array) > 2 and radar_array[2] < 38:
-        tips.append({"icon": "👁️", "type": "warning",
-            "title": "시야 기여도 낮음",
-            "desc": "귀환마다 제어 와드를 구매하고, 리콜 전 강·정글 시야를 꼭 확인하세요."})
-    if radar_array and len(radar_array) > 5 and radar_array[5] < 38:
-        tips.append({"icon": "📍", "type": "warning",
-            "title": "팀파이트 합류율 낮음",
-            "desc": "미니맵으로 팀원의 교전 신호를 확인하고 로밍 타이밍을 개선하세요."})
-    kda_ratio = overall_kda.get('ratio', 0)
-    if kda_ratio >= 4.0:
-        tips.append({"icon": "🔥", "type": "good",
-            "title": f"KDA 상위권 — {kda_ratio}:1",
-            "desc": "현재 플레이 패턴이 효율적입니다. 이 챔피언/포지션 조합을 유지하세요!"})
-    if matches:
-        recent_5 = matches[:5]
-        rwr = sum(1 for m in recent_5 if m.get('win')) / len(recent_5) * 100
-        if rwr >= 60:
-            tips.append({"icon": "📈", "type": "good",
-                "title": f"최근 폼 상승 ({rwr:.0f}% 승률)",
-                "desc": "최근 5게임 흐름이 좋습니다. 현재 챔피언 풀을 유지하세요!"})
-        elif rwr <= 30:
-            tips.append({"icon": "📉", "type": "danger",
-                "title": f"최근 폼 하강 ({rwr:.0f}% 승률)",
-                "desc": "최근 흐름이 좋지 않습니다. 주력 챔피언이나 라인을 변경해보세요."})
+    tier_key = (tier_name or "").strip().split(" ")[0].lower()
+    bench = get_tier_benchmarks(tier_key, primary_role) if (tier_key and primary_role) else {}
+
+    # ── 1) 데이터 기반: 내 지표 vs 티어 평균 ──
+    if bench and matches:
+        role_games = [m for m in matches if m.get('role_en') == primary_role and m.get('metrics')]
+        if len(role_games) >= 3:
+            uavg = {}
+            for metric in BENCHMARK_METRICS:
+                vals = [m['metrics'].get(metric) for m in role_games if m['metrics'].get(metric) is not None]
+                if vals:
+                    uavg[metric] = sum(vals) / len(vals)
+            tkr = TIER_KR.get(tier_key, tier_key)
+            weak = []  # (상대격차, tip)
+            for metric, meta in BENCHMARK_METRICS.items():
+                if metric not in bench or metric not in uavg or bench[metric] <= 0:
+                    continue
+                u, b = uavg[metric], bench[metric]
+                deficit = (b - u) if meta['higher'] else (u - b)  # 양수 = 개선 필요
+                rel = deficit / abs(b)
+                if rel > 0.12:
+                    unit = meta['unit']
+                    word = "부족합니다" if meta['higher'] else "많습니다"
+                    weak.append((rel, {"icon": "📊", "type": "danger" if rel > 0.28 else "warning",
+                        "title": f"{meta['kr']} {round(u,1)}{unit} — {tkr} 평균({round(b,1)}{unit})보다 {round(abs(b-u),1)}{unit} {word}",
+                        "desc": meta['advice']}))
+            weak.sort(key=lambda x: -x[0])
+            tips.extend(t for _, t in weak[:2])
+            # 강점 1개 (티어 평균 대비 우수)
+            for metric, meta in BENCHMARK_METRICS.items():
+                if meta['higher'] and metric in bench and metric in uavg and bench[metric] > 0 and uavg[metric] >= bench[metric] * 1.15:
+                    tips.append({"icon": "🔥", "type": "good",
+                        "title": f"{meta['kr']} {round(uavg[metric],1)}{meta['unit']} — {tkr} 평균 이상 👍",
+                        "desc": "이 강점을 적극 살려 게임을 주도하세요."})
+                    break
+
+    # ── 2) 폴백: 벤치마크 미확보 시 라이다/폼 기반 (가짜 수치 없이) ──
     if not tips:
-        tips.append({"icon": "⚖️", "type": "neutral",
-            "title": "전반적으로 안정적인 플레이",
-            "desc": "큰 약점 없이 균형 잡힌 플레이를 하고 있습니다. 세부 스탯을 꾸준히 개선하세요."})
+        avg_d = overall_kda.get('d', 0)
+        if avg_d >= 6:
+            tips.append({"icon": "💀", "type": "danger", "title": f"평균 {avg_d}데스 — 생존력 개선 필요",
+                "desc": "과감한 진입보다 포지셔닝을 우선시하세요."})
+        if radar_array and len(radar_array) > 2 and radar_array[2] < 38:
+            tips.append({"icon": "👁️", "type": "warning", "title": "시야 기여도 낮음",
+                "desc": "귀환마다 제어 와드를 구매하고, 리콜 전 시야를 확인하세요."})
+        kda_ratio = overall_kda.get('ratio', 0)
+        if kda_ratio >= 4.0:
+            tips.append({"icon": "🔥", "type": "good", "title": f"KDA 상위권 — {kda_ratio}:1",
+                "desc": "효율적인 플레이입니다. 현재 패턴을 유지하세요!"})
+        if not tips:
+            tips.append({"icon": "⚖️", "type": "neutral", "title": "전반적으로 안정적인 플레이",
+                "desc": "큰 약점 없이 균형 잡힌 플레이를 하고 있습니다."})
     return tips[:3]
 
-def recommend_champions(radar_array):
-    if not radar_array or sum(radar_array) == 0: return []
+# 라디아 축 → 추천 카테고리 + 어울리는 챔피언 클래스(DDragon tags)
+AXIS_RECO = {
+    '생존':     {"cat": "높은 '생존력'을 살릴 픽",   "icon": "🛡️", "tags": {"Tank", "Fighter"}},
+    '시야':     {"cat": "'시야 장악'을 극대화할 픽", "icon": "👁️", "tags": {"Support"}},
+    '전투':     {"cat": "'전투력' 기반 캐리 픽",     "icon": "⚔️", "tags": {"Assassin", "Fighter", "Mage"}},
+    '성장':     {"cat": "'성장' 스케일링 픽",        "icon": "📈", "tags": {"Marksman", "Mage"}},
+    '오브젝트': {"cat": "'오브젝트' 장악 픽",        "icon": "🐉", "tags": {"Tank", "Fighter"}},
+    '합류':     {"cat": "'합류·로밍'에 강한 픽",     "icon": "📍", "tags": {"Mage", "Support", "Tank"}},
+}
+NUM_TIER_LABEL = {"OP": "OP", "1": "1티어", "2": "2티어", "3": "3티어", "4": "4티어", "5": "5티어"}
+
+def recommend_champions(radar_array, primary_role=None):
+    """플레이스타일(라디아) × 현재 패치 메타(측정 티어·승률)를 교차검증해
+    카테고리별 3~4개 추천. 모든 추천은 현재 OP/1/2 티어 + 실측/예측 승률 근거."""
+    if not radar_array or sum(radar_array) == 0:
+        return []
     labels = ['전투', '성장', '시야', '생존', '오브젝트', '합류']
-    top_stat = labels[radar_array.index(max(radar_array))]
-    # ✅ MEDIUM 개선: 하드코딩 pool 대신 CHAMPION_TIERS + META_STATS에서 동적으로 추천
-    # 각 스탯 축에 어울리는 역할군 매핑
-    stat_to_roles = {
-        '전투':     ['JUNGLE', 'MIDDLE', 'TOP'],
-        '성장':     ['BOTTOM', 'MIDDLE', 'JUNGLE'],
-        '시야':     ['UTILITY', 'JUNGLE'],
-        '생존':     ['TOP', 'UTILITY', 'JUNGLE'],
-        '오브젝트': ['JUNGLE', 'TOP', 'UTILITY'],
-        '합류':     ['MIDDLE', 'UTILITY', 'TOP'],
-    }
-    target_roles = stat_to_roles.get(top_stat, ['TOP', 'JUNGLE', 'MIDDLE'])
+    order = sorted(range(len(radar_array)), key=lambda i: -radar_array[i])
+    top_axes = [labels[i] for i in order[:3]]  # 강점 상위 3축
 
-    candidates = []
-    for role in target_roles:
-        for c in CHAMPION_TIERS.get(role, []):
-            if c.get('tier') in ('S', 'A') and c.get('id'):
-                candidates.append({
-                    "id": c['id'],
-                    "kr": CHAMP_KR_MAP.get(c['id'], c['id']),
-                    "role": ROLE_MAP.get(role, role),
-                    "reason": f"'{top_stat}' 지향 플레이어에게 추천"
-                })
+    try:
+        tiers = build_champion_meta("emeraldplus")
+    except Exception:
+        tiers = {}
+    strong = []
+    for role, lst in tiers.items():
+        for c in lst:
+            if c.get('tier') in ('OP', '1', '2') and c.get('id'):
+                strong.append({**c, "tags": set(CHAMP_TAGS.get(c['id'], []))})
+    tier_rank = {"OP": 0, "1": 1, "2": 2}
+    strong.sort(key=lambda x: (tier_rank.get(x['tier'], 3), -x.get('wr', 0)))
 
-    # CHAMPION_TIERS에 충분한 데이터가 없으면 기존 풀로 폴백
-    if len(candidates) < 3:
-        fallback_pool = {
-            '전투':     [("Darius","다리우스","탑"), ("LeeSin","리 신","정글"), ("Zed","제드","미드")],
-            '성장':     [("Viego","비에고","정글"), ("Viktor","빅토르","미드"), ("Vayne","베인","원딜")],
-            '시야':     [("Thresh","쓰레쉬","서포터"), ("Karma","카르마","서포터"), ("LeeSin","리 신","정글")],
-            '생존':     [("Malphite","말파이트","탑"), ("Warwick","워윅","정글"), ("Lulu","룰루","서포터")],
-            '오브젝트': [("Amumu","아무무","정글"), ("Nautilus","노틸러스","서포터"), ("Aatrox","아트록스","탑")],
-            '합류':     [("Malphite","말파이트","탑"), ("Ahri","아리","미드"), ("Thresh","쓰레쉬","서포터")],
-        }
-        candidates = [{"id": c[0], "kr": c[1], "role": c[2], "reason": f"'{top_stat}' 지향 플레이어에게 추천"}
-                      for c in fallback_pool.get(top_stat, [])]
+    used, recs = set(), []
+    def add(c, cat, icon, axis=None):
+        tlabel = NUM_TIER_LABEL.get(c['tier'], c['tier'])
+        reason = (f"현재 {tlabel} · 승률 {c.get('wr',0)}% — 당신의 '{axis}' 강점과 시너지"
+                  if axis else f"현재 {tlabel} · 승률 {c.get('wr',0)}% — 패치 {CURRENT_PATCH_DISPLAY} 상위 메타")
+        recs.append({"id": c['id'], "kr": c['kr'],
+                     "role": c.get('role_kr', ROLE_KR.get(c.get('role_en', ''), '')),
+                     "cat": cat, "icon": icon, "tier": c['tier'],
+                     "tier_style": c.get('tier_style'), "wr": c.get('wr', 0), "reason": reason})
+        used.add(c['id'])
 
-    return candidates[:3]
+    # 강점 축별로 메타 상위 + 클래스 매칭 1픽씩
+    for axis in top_axes:
+        meta = AXIS_RECO.get(axis)
+        if not meta:
+            continue
+        for c in strong:
+            if c['id'] not in used and c['tags'] & meta['tags']:
+                add(c, meta['cat'], meta['icon'], axis)
+                break
+    # 조커/메타 픽: 남은 강챔 최상위 1개로 다양성 보강
+    for c in strong:
+        if c['id'] not in used and len(recs) < 4:
+            add(c, "지금 가장 강력한 메타 픽", "🔥")
+            break
+    return recs[:4]
 
 def get_challenger_leaderboard():
     cache_key = "leaderboard_kr_solo"
@@ -2271,7 +2390,13 @@ def collect():
                 m_json = raw.json()
                 if record_match_stats(m_json, m_id):
                     collected += 1
-                if m_json.get('info', {}).get('queueId', 0) in (420, 440):
+                info = m_json.get('info', {})
+                if info.get('queueId', 0) in (420, 440):
+                    # ★ 티어 벤치마크 적립: 표본 플레이어 본인 지표를 sampled 티어로
+                    dm = info.get('gameDuration', 0) / 60.0
+                    me = next((pp for pp in info.get('participants', []) if pp.get('puuid') == puuid), None)
+                    if me and me.get('teamPosition') in VALID_ROLES and dm >= 5:
+                        record_tier_benchmark(_extract_metrics(me, dm), tier, me['teamPosition'])
                     tl = riot_get(f"https://asia.api.riotgames.com/lol/match/v5/matches/{m_id}/timeline")
                     if tl.status_code == 200:
                         record_timeline_stats(tl.json(), m_json, m_id)
@@ -2468,9 +2593,9 @@ def search():
     live_game = get_live_game(searched_puuid)
     masteries = get_mastery(searched_puuid)
     
-    matches, overall_radar, primary_role, secondary_role, win, most, overall_kda, deep_tags, _, game_count, top_recent_champs, win_count, lose_count, banner_champ, repeat_encounters, recent_team_luck = get_match_details(searched_puuid, 0, 20, queue)
-    improvement_tips = generate_improvement_tips(matches, overall_kda, overall_radar)
-    champion_recs = recommend_champions(overall_radar)
+    matches, overall_radar, primary_role, secondary_role, win, most, overall_kda, deep_tags, _, game_count, top_recent_champs, win_count, lose_count, banner_champ, repeat_encounters, recent_team_luck = get_match_details(searched_puuid, 0, 20, queue, player_tier=tier_name)
+    improvement_tips = generate_improvement_tips(matches, overall_kda, overall_radar, primary_role, tier_name)
+    champion_recs = recommend_champions(overall_radar, primary_role)
 
     # ★ 모스트 챔피언 맞춤 패치 변화 (DDragon 버전 비교)
     patch_changes = []
@@ -2495,6 +2620,29 @@ def search():
         else:
             break
 
+    # ★ Req2-A: 최근 게임 포지션 분포 (본인 데이터)
+    pos_counts = {}
+    for m in matches:
+        r = m.get('role_en')
+        if r in ROLE_KR:
+            pos_counts[r] = pos_counts.get(r, 0) + 1
+    pos_total = sum(pos_counts.values()) or 1
+    position_dist = [{"role": r, "role_kr": ROLE_KR[r], "count": pos_counts[r],
+                      "pct": round(pos_counts[r] / pos_total * 100)}
+                     for r in ["TOP", "JUNGLE", "MIDDLE", "BOTTOM", "UTILITY"] if pos_counts.get(r, 0) > 0]
+    position_dist.sort(key=lambda x: -x['count'])
+
+    # ★ Req2-B: 자주 함께한 듀오 승률 (아군으로 2판 이상 동행)
+    duo_stats = []
+    for e in repeat_encounters:
+        a = e.get('as_ally', 0)
+        if a >= 2:
+            w = e.get('as_ally_win', 0)
+            duo_stats.append({"name": e['name'], "tag": e['tag'], "champ_img": e['champ_img'],
+                              "champ_kr": e['champ_kr'], "games": a, "wins": w, "wr": round(w / a * 100)})
+    duo_stats.sort(key=lambda x: (-x['games'], -x['wr']))
+    duo_stats = duo_stats[:5]
+
     # 템플릿에 보낼 데이터를 딕셔너리로 구조화
     render_payload = {
         "page": 'search',
@@ -2512,6 +2660,7 @@ def search():
         "streak_count": streak_count, "streak_type": streak_type,
         "repeat_encounters": repeat_encounters,
         "recent_team_luck": recent_team_luck,
+        "position_dist": position_dist, "duo_stats": duo_stats,
         "patch_changes": patch_changes, "current_patch": CURRENT_PATCH_DISPLAY,
     }
 
