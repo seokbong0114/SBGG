@@ -3,7 +3,40 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SB.GG - 프리미엄 롤 전적 분석</title>
+    {# ── 페이지별 동적 SEO / 공유 미리보기(OG) ── #}
+    {% set _base = 'https://sbgg.onrender.com' %}
+    {% set ns = namespace(
+        title='SB.GG - 프리미엄 롤 전적·메타·챔피언 분석',
+        desc='소환사 전적 분석, 챔피언 메타 티어, 룬·빌드, 공식 패치노트까지. 한국 서버 롤 분석은 SB.GG.',
+        image='https://ddragon.leagueoflegends.com/cdn/img/champion/splash/Ahri_0.jpg') %}
+    {% if page == 'champion' and champ %}
+        {% set ns.title = champ.kr ~ ' 룬·빌드·카운터·운영법 - SB.GG' %}
+        {% set ns.desc = champ.kr ~ ' 룬·스펠·아이템 빌드와 카운터, 에메랄드+ 고티어 운영법을 한눈에. 패치 ' ~ current_patch ~ ' ' ~ champ.kr ~ ' 공략.' %}
+        {% set ns.image = 'https://ddragon.leagueoflegends.com/cdn/img/champion/splash/' ~ champ.id ~ '_0.jpg' %}
+    {% elif page == 'patch' %}
+        {% set ns.title = '패치 ' ~ current_patch ~ ' 노트 — 챔피언·아이템·스킬 계수 - SB.GG' %}
+        {% set ns.desc = '리그 오브 레전드 패치 ' ~ current_patch ~ ' 공식 변경사항. 버프/너프 챔피언과 아이템, 스킬 계수까지 한글로 정리.' %}
+    {% elif page == 'meta' %}
+        {% set ns.title = '챔피언 메타 티어리스트 (패치 ' ~ current_patch ~ ') - SB.GG' %}
+        {% set ns.desc = '라인별 챔피언 티어·승률·픽률·밴률. 실측 수집 데이터 기반 패치 ' ~ current_patch ~ ' 메타 분석.' %}
+    {% elif page == 'multi' or page == 'search' %}
+        {% set ns.title = '소환사 전적 분석 - SB.GG' %}
+        {% set ns.desc = '소환사 최근 전적, 멀티 성능 레이더, 게임별 등급과 분석 태그. SB.GG에서 확인하세요.' %}
+    {% endif %}
+    <title>{{ ns.title }}</title>
+    <meta name="description" content="{{ ns.desc }}">
+    <link rel="canonical" href="{{ _base }}{{ request.path }}">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="SB.GG">
+    <meta property="og:locale" content="ko_KR">
+    <meta property="og:title" content="{{ ns.title }}">
+    <meta property="og:description" content="{{ ns.desc }}">
+    <meta property="og:image" content="{{ ns.image }}">
+    <meta property="og:url" content="{{ _base }}{{ request.path }}">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="{{ ns.title }}">
+    <meta name="twitter:description" content="{{ ns.desc }}">
+    <meta name="twitter:image" content="{{ ns.image }}">
     <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@400;600;800;900&family=Montserrat:wght@800;900&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
