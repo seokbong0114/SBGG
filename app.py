@@ -1279,6 +1279,7 @@ def get_match_details(puuid, start=0, count=20, queue=None, collect_stats=True):
     total_k, total_d, total_a, total_vision, total_kp, win_count, lose_count = 0, 0, 0, 0, 0, 0, 0
     recent_champ_stats = {}
     coplayer_tracker = {}  # ★ 과거 매칭 추적: 최근 N판 동반 플레이어 누적
+    team_luck_scores = []  # ★ 팀운: 게임별 (내 팀원 평균 - 적팀 평균) op_score 차이
 
     for m_id in match_ids:
         try:  # ✅ 버그 수정 3: 매치 1개 실패해도 나머지 계속 처리
@@ -1402,6 +1403,12 @@ def get_match_details(puuid, start=0, count=20, queue=None, collect_stats=True):
             main_player_data['red_team'] = sorted([p for p in participants_details if p['teamId'] == 200], key=lambda x: ROLE_ORDER.get(x['role_en'], 6))
 
             teammates = [t for t in participants_details if t['teamId'] == main_player_data['teamId'] and t['puuid'] != puuid]
+            # ★ 팀운(이 판): 내 팀원(나 제외) 평균 vs 적팀 평균 op_score → 팀원이 잘했는지
+            enemies = [t for t in participants_details if t['teamId'] != main_player_data['teamId']]
+            if teammates and enemies:
+                tl = (sum(t['score'] for t in teammates) / len(teammates)) - (sum(e['score'] for e in enemies) / len(enemies))
+                main_player_data['team_luck_score'] = round(tl, 1)
+                team_luck_scores.append(tl)
             if teammates:
                 score_diff = main_player_data['score'] - (sum(t['score'] for t in teammates) / len(teammates))
                 if score_diff > 12 and not main_player_data['win']: main_player_data['team_luck'], main_player_data['team_luck_class'] = "억까 😭", "luck-bad"
@@ -1488,7 +1495,21 @@ def get_match_details(puuid, start=0, count=20, queue=None, collect_stats=True):
     repeat_encounters.sort(key=lambda x: -x['count'])
     repeat_encounters = repeat_encounters[:8]
 
-    return matches, overall_radar, primary_role, secondary_role, win_rate, most, overall_kda, deep_tags, puuid, len(matches), top_recent_champs, win_count, lose_count, banner_champ, repeat_encounters
+    # ★ 최근 7게임 평균 팀운 지표 (팀원 vs 적팀 성과 기반 추정 — 재미용 지표)
+    recent_team_luck = None
+    if team_luck_scores:
+        recent = team_luck_scores[:7]
+        avg = sum(recent) / len(recent)
+        idx = max(0, min(100, round(50 + avg * 2)))  # 50=중립, 차이 클수록 ±
+        if idx >= 63:   label, cls, desc = "팀운 좋음 😊", "tl-good",   "최근 팀원들이 적팀보다 좋은 활약"
+        elif idx >= 54: label, cls, desc = "팀운 약간 좋음 🙂", "tl-ok", "팀원 활약이 평균 이상"
+        elif idx > 46:  label, cls, desc = "팀운 평범 😐", "tl-normal", "팀원·적팀 활약이 비슷"
+        elif idx > 37:  label, cls, desc = "팀운 약간 아쉬움 😕", "tl-bad", "팀원 활약이 평균 이하"
+        else:           label, cls, desc = "팀운 나쁨 😩", "tl-vbad",   "최근 팀원들이 적팀보다 부진"
+        recent_team_luck = {"index": idx, "label": label, "cls": cls, "desc": desc,
+                            "games": len(recent), "avg_diff": round(avg, 1)}
+
+    return matches, overall_radar, primary_role, secondary_role, win_rate, most, overall_kda, deep_tags, puuid, len(matches), top_recent_champs, win_count, lose_count, banner_champ, repeat_encounters, recent_team_luck
 
 def get_multi_search_summary(name, tag):
     try:
@@ -2447,7 +2468,7 @@ def search():
     live_game = get_live_game(searched_puuid)
     masteries = get_mastery(searched_puuid)
     
-    matches, overall_radar, primary_role, secondary_role, win, most, overall_kda, deep_tags, _, game_count, top_recent_champs, win_count, lose_count, banner_champ, repeat_encounters = get_match_details(searched_puuid, 0, 20, queue)
+    matches, overall_radar, primary_role, secondary_role, win, most, overall_kda, deep_tags, _, game_count, top_recent_champs, win_count, lose_count, banner_champ, repeat_encounters, recent_team_luck = get_match_details(searched_puuid, 0, 20, queue)
     improvement_tips = generate_improvement_tips(matches, overall_kda, overall_radar)
     champion_recs = recommend_champions(overall_radar)
 
@@ -2490,6 +2511,7 @@ def search():
         "grade_dist": grade_dist, "grade_style_map": GRADE_STYLE,
         "streak_count": streak_count, "streak_type": streak_type,
         "repeat_encounters": repeat_encounters,
+        "recent_team_luck": recent_team_luck,
         "patch_changes": patch_changes, "current_patch": CURRENT_PATCH_DISPLAY,
     }
 
@@ -2590,7 +2612,7 @@ def more_matches():
     puuid = request.args.get('puuid')
     start = int(request.args.get('start', 20))
     queue = request.args.get('queue', 'all')
-    matches, _, _, _, _, _, _, _, _, _, _, _, _, _, _ = get_match_details(puuid, start, 20, queue, collect_stats=False)
+    matches, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _ = get_match_details(puuid, start, 20, queue, collect_stats=False)
     return render_template('index.html', page='search', matches=matches, ajax=True, searched_puuid=puuid, latest_version=LATEST_VERSION)
 
 @app.route('/growth')

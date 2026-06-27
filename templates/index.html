@@ -1383,6 +1383,28 @@
                 </div>
             </div>
             
+            {% if recent_team_luck %}
+            <div class="glass-panel" style="margin-top: 16px; padding: 18px 22px;">
+                <div style="display:flex; align-items:center; justify-content:space-between; gap:16px; flex-wrap:wrap;">
+                    <div style="display:flex; align-items:center; gap:11px;">
+                        <span style="font-size:22px;">🍀</span>
+                        <div>
+                            <div style="font-size:14px; font-weight:900;">최근 {{ recent_team_luck.games }}게임 팀운 —
+                                <span style="color:{% if recent_team_luck.index >= 54 %}#4ade80{% elif recent_team_luck.index > 46 %}#fbbf24{% else %}#f87171{% endif %};">{{ recent_team_luck.label }}</span>
+                            </div>
+                            <div style="font-size:11px; color:var(--text-muted); margin-top:3px;">{{ recent_team_luck.desc }} · 팀원 vs 적팀 활약 기반 추정 지표</div>
+                        </div>
+                    </div>
+                    <div style="flex:1; min-width:190px; max-width:400px;">
+                        <div style="position:relative; height:10px; border-radius:6px; background:linear-gradient(to right, #f87171 0%, #fbbf24 50%, #4ade80 100%);">
+                            <div title="팀운 지수 {{ recent_team_luck.index }}/100" style="position:absolute; top:-4px; left:calc({{ recent_team_luck.index }}% - 9px); width:18px; height:18px; border-radius:50%; background:#fff; border:3px solid #1e293b; box-shadow:0 2px 6px rgba(0,0,0,0.55);"></div>
+                        </div>
+                        <div style="display:flex; justify-content:space-between; font-size:10px; color:var(--text-muted); margin-top:6px; font-weight:700;"><span>팀운 나쁨</span><span>평범</span><span>팀운 좋음</span></div>
+                    </div>
+                </div>
+            </div>
+            {% endif %}
+
             <div class="radar-grid">
                 <div class="radar-card glass-panel">
                     <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
