@@ -1884,6 +1884,8 @@ def get_live_challenger_games():
             if not puuid:
                 continue
             g_res = riot_get(f"https://kr.api.riotgames.com/lol/spectator/v5/active-games/by-puuid/{puuid}")
+            if g_res.status_code == 403:
+                break  # 개인 키는 Spectator 미허용 → 호출 낭비 방지 (Production Key 승인 시 자동 작동)
             if g_res.status_code != 200:
                 continue
             game = g_res.json()
@@ -2066,32 +2068,11 @@ def logout():
     return redirect('/')
 
 # ================= 라우팅 =================
-def get_free_rotation():
-    """이번 주 무료 로테이션 챔피언 (Riot 공식 Champion-Rotations v3). 캐시 6시간.
-    응답 구조: {'sr': [championId...], 'newplayer': [...]}. 공식 데이터라 100% 정확."""
-    cache_key = "free_rotation"
-    cached, updated = db_read(cache_key)
-    if cached and int(time.time()) - updated < 21600:  # 6시간
-        return json.loads(cached)
-    try:
-        r = riot_get("https://kr.api.riotgames.com/lol/platform/v3/champion-rotations")
-        if r.status_code != 200:
-            return json.loads(cached) if cached else None
-        ids = r.json().get('sr', [])  # 일반(소환사의 협곡) 무료 로테이션
-        champs = []
-        for cid in ids:
-            en = CHAMP_KEYS.get(str(cid))
-            if en:
-                champs.append({"id": en, "kr": CHAMP_KR_MAP.get(en, en)})
-        if not champs:
-            return json.loads(cached) if cached else None
-        champs.sort(key=lambda c: c["kr"])
-        result = {"champs": champs, "count": len(champs)}
-        db_write(cache_key, result, int(time.time()))
-        return result
-    except Exception as e:
-        print(f"무료 로테이션 조회 에러: {e}")
-        return json.loads(cached) if cached else None
+@app.route('/live_games')
+def live_games_api():
+    """홈 '실시간 천상계 라이브' 위젯용 — 비동기 로드(JSON). 기존 관전 백엔드 재사용."""
+    games, _ = get_live_challenger_games()
+    return jsonify({"games": (games or [])[:3], "version": LATEST_VERSION})
 
 @app.route('/')
 def index():
@@ -2104,11 +2085,10 @@ def index():
         if lst:
             meta_top.append(lst[0])  # 이미 티어·승률순 정렬 + role_kr/tier_style 포함
     patch_highlights = get_patch_highlights()  # 이번 패치 버프/너프 (캐시)
-    free_rotation = get_free_rotation()        # 이번 주 무료 로테이션 (공식 API)
     return render_template('index.html', page='home', roster_data=GLOBAL_ROSTER_DATA,
                            pro_gamers=PRO_GAMERS, latest_version=LATEST_VERSION,
                            meta_top=meta_top, current_patch=CURRENT_PATCH_DISPLAY,
-                           patch_highlights=patch_highlights, free_rotation=free_rotation,
+                           patch_highlights=patch_highlights,
                            total_games=get_stats_total_games(), stats_basis=STATS_BASIS_LABEL)
 
 def build_champion_meta(rank_tier="emeraldplus"):
