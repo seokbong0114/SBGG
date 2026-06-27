@@ -89,9 +89,13 @@
         .search-btn:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(244, 63, 94, 0.6); }
         .search-btn:active { transform: scale(0.95); }
 
-        .home-hero { position: relative; padding: 120px 20px 60px; text-align: center; display: flex; flex-direction: column; align-items: center; overflow: hidden; }
+        .home-hero { position: relative; padding: 48px 20px 30px; text-align: center; display: flex; flex-direction: column; align-items: center; overflow: hidden; }
         .home-hero::before { content: ''; position: absolute; top: -50%; left: 50%; transform: translateX(-50%); width: 800px; height: 800px; background: radial-gradient(circle, rgba(139, 92, 246, 0.15) 0%, rgba(0,0,0,0) 70%); z-index: -1; pointer-events: none; }
-        .home-title { font-family: 'Montserrat'; font-size: 90px; font-weight: 900; margin-bottom: 40px; letter-spacing: -2px; }
+        .home-title { font-family: 'Montserrat'; font-size: 64px; font-weight: 900; margin-bottom: 22px; letter-spacing: -2px; }
+        .home-quicknav { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 22px; max-width: 720px; width: 100%; }
+        .hq-item { background: rgba(255,255,255,0.05); border: var(--border-glass); border-radius: 14px; padding: 11px 18px; color: var(--text-main); font-weight: 800; font-size: 14px; text-decoration: none; transition: 0.2s; white-space: nowrap; }
+        .hq-item:hover { background: rgba(244,63,94,0.15); border-color: rgba(244,63,94,0.4); transform: translateY(-2px); }
+        @media (max-width: 480px) { .hq-item { padding: 9px 13px; font-size: 13px; } .home-quicknav { gap: 7px; } }
         
         .recent-chips-container { display: flex; gap: 10px; margin-top: 20px; flex-wrap: wrap; justify-content: center; width: 100%; max-width: 700px; margin-left: auto; margin-right: auto; }
         .recent-chip { background: rgba(255,255,255,0.05); border: var(--border-glass); padding: 8px 16px; border-radius: 20px; font-size: 13px; color: var(--text-muted); cursor: pointer; transition: 0.2s; font-weight: 600; }
@@ -368,7 +372,8 @@
             /* 매치 카드: 6열 → 2열로 재배치 */
             .match-card { grid-template-columns: 1fr 1fr !important; row-gap: 12px; column-gap: 10px; padding: 14px !important; }
 
-            .home-title { font-size: 56px !important; margin-bottom: 28px !important; }
+            .home-title { font-size: 48px !important; margin-bottom: 18px !important; }
+            .home-hero { padding: 32px 20px 24px !important; }
         }
         @media (max-width: 480px) {
             [style*="repeat(5, 1fr)"] { grid-template-columns: repeat(2, 1fr) !important; }
@@ -659,6 +664,13 @@
                 </form>
             </div>
             <div class="recent-chips-container" id="recentChips"></div>
+            <div class="home-quicknav">
+                <a href="/meta" class="hq-item">📊 메타 분석</a>
+                <a href="/patch" class="hq-item">📰 패치노트</a>
+                <a href="/leaderboard" class="hq-item">👑 래더 랭킹</a>
+                <a href="/spectate" class="hq-item">🔴 천상계 관전</a>
+                <a href="/duo" class="hq-item">🤝 듀오 찾기</a>
+            </div>
         </div>
 
         <div class="main-container" style="display: grid; grid-template-columns: 1.5fr 1fr; margin-bottom: 100px;">
@@ -687,16 +699,6 @@
                 <div class="glass-panel" style="padding: 25px;">
                     <div style="font-size: 18px; font-weight: 800; margin-bottom: 15px;">⭐ 즐겨찾기</div>
                     <div id="fav-list" style="display: flex; flex-direction: column; gap: 10px;"></div>
-                </div>
-                <div class="glass-panel" style="padding: 25px;">
-                    <div style="font-size: 18px; font-weight: 800; margin-bottom: 15px;">🚀 퀵 메뉴</div>
-                    <div class="quick-menu-list">
-                        <a href="/meta" class="quick-menu-item"><b>📊 메타 분석</b><span>패치 {{ current_patch }} ➔</span></a>
-                        <a href="/patch" class="quick-menu-item"><b>📰 패치노트</b><span>공식 {{ current_patch }} ➔</span></a>
-                        <a href="/leaderboard" class="quick-menu-item"><b>👑 래더 랭킹</b><span>바로가기 ➔</span></a>
-                        <a href="/spectate" class="quick-menu-item"><b>🔴 천상계 관전</b><span>바로가기 ➔</span></a>
-                        <a href="/duo" class="quick-menu-item"><b>🤝 듀오 찾기</b><span>바로가기 ➔</span></a>
-                    </div>
                 </div>
             </div>
         </div>
