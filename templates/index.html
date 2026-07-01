@@ -136,7 +136,7 @@
         /* 💡 수정 1: 프로필 배너 높이 확장 및 얼굴 포커싱, 반복 금지 적용 */
         .profile-banner { position: relative; width: 100%; height: 360px; display: flex; align-items: flex-end; padding-bottom: 40px; background-size: cover; background-repeat: no-repeat; background-position: center 15%; border-bottom: none; }
         .profile-banner::before { content: ''; position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: linear-gradient(to bottom, rgba(15,23,42,0) 0%, rgba(15,23,42,1) 100%); }
-        .profile-content { position: relative; z-index: 1; max-width: 1080px; width: 100%; margin: 0 auto; padding: 0 20px; display: flex; gap: 30px; align-items: flex-end; }
+        .profile-content { position: relative; z-index: 1; max-width: 1080px; width: 100%; box-sizing: border-box; margin: 0 auto; padding: 0 20px; display: flex; gap: 30px; align-items: flex-end; }
         
         .profile-icon-wrap { position: relative; display: inline-block; width: 120px; height: 120px; flex-shrink: 0; }
         .profile-icon { width: 100%; height: 100%; border-radius: 28px; border: 2px solid rgba(255,255,255,0.15); box-shadow: 0 15px 30px rgba(0,0,0,0.6); object-fit: cover; }
@@ -341,6 +341,9 @@
         .privacy-ul li b, .privacy-p b { color: #e2e8f0; }
 
         .scoreboard-container { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; padding: 15px; }
+        /* details가 닫혀 있을 때 내용을 실제로 숨김 (display:grid/flex가 네이티브 접기를 덮어쓰던 버그 수정) */
+        details:not([open]) > .scoreboard-container,
+        details:not([open]) > .ai-build-body { display: none; }
         
         .team-box { border-radius: 12px; padding: 15px; border: var(--border-glass); box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
         .blue-team-box { background: linear-gradient(180deg, rgba(59, 130, 246, 0.08) 0%, rgba(15, 23, 42, 0.4) 100%); border-top: 4px solid var(--blue-team); }
@@ -404,6 +407,15 @@
             .kpi-row { gap: 8px !important; }
             .kpi-row .glass-panel { padding: 14px 6px !important; }
             .kpi-val { font-size: 21px !important; }
+            /* 전적 분석 프로필 배너 — 좁은 화면에서 아이콘/이름을 세로로 분리해 겹침·오버플로우 방지 */
+            .profile-content { flex-wrap: wrap; gap: 14px !important; }
+            .profile-icon-wrap { width: 84px !important; height: 84px !important; }
+            .profile-name-h1 { font-size: 24px !important; max-width: calc(100vw - 40px) !important; }
+            .profile-name-h1 span { font-size: 14px !important; }
+        }
+        @media (max-width: 820px) {
+            .profile-content { gap: 18px !important; }
+            .profile-name-h1 { font-size: 30px; }
         }
     </style>
 </head>
@@ -1314,12 +1326,12 @@
                     <div class="level-badge">Lv. {{ level }}</div>
                 </div>
                 <div style="padding-bottom: 20px;">
-                    <h1 style="margin:0 0 5px 0; font-size: 36px; font-weight: 900; letter-spacing:-1px; text-shadow: 0 4px 10px rgba(0,0,0,0.5); display: flex; align-items: center;">
-                        {{ name }} <span style="color: rgba(255,255,255,0.5); font-size: 20px; font-weight: 600; margin-left:5px;">#{{ tag }}</span>
+                    <h1 class="profile-name-h1" style="margin:0 0 5px 0; font-size: 36px; font-weight: 900; letter-spacing:-1px; text-shadow: 0 4px 10px rgba(0,0,0,0.5); display: flex; align-items: center; flex-wrap: wrap; row-gap: 6px; max-width: 100%; box-sizing: border-box;">
+                        <span style="min-width: 0; overflow-wrap: break-word;">{{ name }}</span> <span style="color: rgba(255,255,255,0.5); font-size: 20px; font-weight: 600; margin-left:5px; flex-shrink: 0;">#{{ tag }}</span>
                         {% if live_game.isPlaying %}
                         <div class="live-badge"><div class="live-dot"></div>현재 게임 중 ({{ live_game.minutes }}분)</div>
                         {% endif %}
-                        <button id="favBtn" onclick="toggleFavorite('{{ name }}', '{{ tag }}', '{{ profile_icon_id }}', '{{ level }}')" style="background:none; border:none; cursor:pointer; font-size:30px; margin-left:15px; transition:0.2s; padding:0; outline:none;" title="즐겨찾기">☆</button>
+                        <button id="favBtn" onclick="toggleFavorite('{{ name }}', '{{ tag }}', '{{ profile_icon_id }}', '{{ level }}')" style="background:none; border:none; cursor:pointer; font-size:30px; margin-left:15px; flex-shrink: 0; transition:0.2s; padding:0; outline:none;" title="즐겨찾기">☆</button>
                     </h1>
                     <div style="display: flex; align-items: center; font-size: 20px; font-weight: 800; text-shadow: 0 2px 5px rgba(0,0,0,0.5);">
                         {% if tier_name != 'unranked' %}<img src="https://opgg-static.akamaized.net/images/medals_new/{{ tier_name }}.png" class="tier-icon">{% endif %}
@@ -1432,7 +1444,7 @@
             </div>
             {% endif %}
 
-            <div class="radar-grid">
+            <div class="radar-grid" style="margin-top: 32px; padding-top: 28px; border-top: var(--divider);">
                 <div class="radar-card glass-panel">
                     <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
                         <div class="section-title" style="margin:0;">종합 능력치</div>
@@ -1463,7 +1475,7 @@
 
             <!-- ★ 모스트 챔피언 맞춤 패치 변화 -->
             {% if patch_changes %}
-            <div class="glass-panel" style="padding: 22px 24px; margin-top: 24px;">
+            <div class="glass-panel" style="padding: 24px 26px; margin-top: 32px;">
                 <div style="display:flex; align-items:center; gap:10px; margin-bottom:6px;">
                     <div class="section-title" style="margin:0;">🔔 내 챔피언 패치 변화</div>
                     <span style="font-size:11px; background:rgba(244,63,94,0.15); color:#fda4af; border:1px solid rgba(244,63,94,0.3); border-radius:6px; padding:2px 8px; font-weight:800;">패치 {{ current_patch }}</span>
@@ -1501,8 +1513,8 @@
 
             <!-- ★ 모스트 챔피언 플레이스타일 분석 -->
             {% if top_recent_champs %}
-            <div style="margin-top:24px;">
-                <div class="section-title" style="margin-bottom:14px;">🏆 모스트 챔피언 플레이스타일 분석</div>
+            <div style="margin-top:32px;">
+                <div class="section-title" style="margin-bottom:16px;">🏆 모스트 챔피언 플레이스타일 분석</div>
                 <div class="most-champ-grid" style="display:grid; grid-template-columns:repeat({{ top_recent_champs|length }}, 1fr); gap:16px; margin-bottom:8px;">
                 {% for c in top_recent_champs %}
                 <div class="glass-panel" style="padding:22px 20px;">
@@ -1587,7 +1599,7 @@
 
             <!-- ★ 포지션 분포 + 듀오 승률 위젯 (본인 데이터 기반) -->
             {% if position_dist or duo_stats %}
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 16px;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 32px;">
                 {% if position_dist %}
                 <div class="glass-panel" style="padding: 22px 25px;">
                     <div class="section-title" style="margin-bottom: 16px;">🧭 최근 {{ game_count }}게임 포지션 분포</div>
@@ -1627,7 +1639,7 @@
 
             <!-- ★ YOUR.GG 스타일 개선 피드백 + 챔피언 추천 -->
             {% if improvement_tips or champion_recs %}
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 20px;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 32px;">
                 {% if improvement_tips %}
                 <div class="glass-panel" style="padding: 22px 25px;">
                     <div class="section-title" style="margin-bottom: 16px;">🔍 플레이 개선 포인트</div>
@@ -1696,8 +1708,8 @@
             </div>
             {% endif %}
 
-            <div id="recent-matches" style="display: flex; justify-content: space-between; align-items: center; margin-top: 24px; margin-bottom: 12px; scroll-margin-top: 80px;">
-                <div class="section-title" style="margin: 0;">최근 전적</div>
+            <div id="recent-matches" style="display: flex; justify-content: space-between; align-items: center; margin-top: 40px; padding-top: 32px; border-top: var(--divider); margin-bottom: 14px; scroll-margin-top: 80px;">
+                <div class="section-title" style="margin: 0; font-size: 18px;">최근 전적</div>
             </div>
 
             <div id="dynamic-champ-filters" class="champ-filter-container" style="display: none;"></div>
