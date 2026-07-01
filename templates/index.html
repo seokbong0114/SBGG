@@ -41,20 +41,37 @@
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root {
-            --bg-base: #0f172a; 
-            --bg-panel: rgba(30, 41, 59, 0.7); 
-            --bg-panel-hover: rgba(51, 65, 85, 0.9);
-            --border-glass: 1px solid rgba(255, 255, 255, 0.1);
-            
-            --text-main: #f8fafc; --text-muted: #94a3b8;
-            
-            --win-color: #3b82f6; --lose-color: #ef4444;
-            --point-color: #f43f5e; --cs-color: #f59e0b;
+            /* ── 배경 · 패널 ── */
+            --bg-base: #0f172a;
+            --bg-panel: rgba(30, 41, 59, 0.72);
+            --bg-panel-hover: rgba(51, 65, 85, 0.92);
+            --bg-elev: rgba(38, 52, 78, 0.9);
+            --border-glass: 1px solid rgba(148, 175, 214, 0.12);
+            --divider: 1px solid rgba(148, 175, 214, 0.10);
+
+            /* ── 텍스트 명도 4단계 ── */
+            --text-strong: #ffffff;
+            --text-main: #f1f5f9;
+            --text-muted: #94a3b8;
+            --text-dim: #64748b;
+
+            /* ── 포인트 컬러 (시안 메인 체계) ── */
+            --point-color: #38bdf8;          /* 핵심 강조·링크·활성 (시안) */
+            --accent: #38bdf8;
+            --accent-soft: rgba(56, 189, 248, 0.14);
+            --win-color: #4ade80;            /* 승 / 긍정 (민트) */
+            --lose-color: #f87171;           /* 패 / 부정 (코랄) */
+            --cs-color: #fbbf24;             /* 특수강조 · CS (오렌지) */
+            --blue-team: #3b82f6;            /* 블루팀 전용 */
+
+            /* ── 그림자 (입체감) ── */
+            --shadow-card: 0 8px 24px rgba(0, 0, 0, 0.30);
+            --shadow-elev: 0 18px 46px rgba(0, 0, 0, 0.5);
         }
         
         body { background-color: var(--bg-base); color: var(--text-main); font-family: 'Pretendard', sans-serif; margin: 0; padding: 0; min-height: 100vh; display: flex; flex-direction: column; overflow-x: hidden; }
 
-        .glass-panel { background: var(--bg-panel); border: var(--border-glass); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border-radius: 16px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
+        .glass-panel { background: var(--bg-panel); border: var(--border-glass); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border-radius: 16px; box-shadow: var(--shadow-card); }
 
         .top-nav { position: sticky; top: 0; z-index: 1000; background-color: rgba(15, 23, 42, 0.75); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); padding: 15px 40px; display: flex; align-items: center; justify-content: space-between; border-bottom: var(--border-glass); transition: 0.3s; }
         .logo-wrapper { font-family: 'Montserrat', sans-serif; font-size: 28px; text-decoration: none; display: flex; align-items: center; cursor: pointer; color: white; letter-spacing: -1px; z-index: 2; }
@@ -63,7 +80,7 @@
         
         .home-search-wrapper { position: relative; max-width: 700px; width: 100%; margin: 0 auto; }
         .home-search-box { background-color: rgba(255,255,255,0.05); border-radius: 30px; padding: 8px 8px 8px 30px; display: flex; align-items: center; border: var(--border-glass); backdrop-filter: blur(20px); box-shadow: 0 8px 32px rgba(0,0,0,0.5); transition: 0.3s; }
-        .home-search-box:focus-within { box-shadow: 0 8px 32px rgba(244, 63, 94, 0.3); border-color: rgba(244, 63, 94, 0.4); }
+        .home-search-box:focus-within { box-shadow: 0 8px 32px rgba(56, 189, 248, 0.28); border-color: rgba(56, 189, 248, 0.45); }
         .home-search-box textarea, .home-search-box input[type="text"] { border: none; outline: none; font-size: 18px; color: white; font-family: 'Pretendard'; font-weight: 800; background: transparent; width: 100%; height: 26px; line-height: 26px; padding: 0; margin-top: 2px; display: block; }
         .home-search-box input[type="text"]::placeholder { color: rgba(255,255,255,0.35); font-weight: 600; }
         /* 브라우저 자동완성(autofill) 흰색 배경 제거 — 글래스모피즘 테마 유지 */
@@ -106,8 +123,8 @@
         .role-tabs { display: flex; gap: 10px; margin-bottom: 15px; border-bottom: 1px solid rgba(255,255,255,0.1); padding-bottom: 10px; }
         .role-tab { background: transparent; border: none; color: var(--text-muted); font-size: 16px; font-weight: 800; cursor: pointer; padding: 5px 15px; transition: 0.2s; position: relative; }
         .role-tab:hover { color: white; }
-        .role-tab.active { color: var(--win-color); }
-        .role-tab.active::after { content: ''; position: absolute; bottom: -11px; left: 0; width: 100%; height: 3px; background: var(--win-color); border-radius: 3px 3px 0 0; }
+        .role-tab.active { color: var(--point-color); }
+        .role-tab.active::after { content: ''; position: absolute; bottom: -11px; left: 0; width: 100%; height: 3px; background: var(--point-color); border-radius: 3px 3px 0 0; }
         
         .page-title { font-size: 28px; font-weight: 900; margin-bottom: 10px; display: flex; align-items: center; gap: 10px; }
         .quick-menu-list { display: flex; flex-direction: column; gap: 10px; }
@@ -137,7 +154,7 @@
         .queue-filter { display: flex; gap: 4px; margin-bottom: -1px; padding-left: 20px; position: relative; z-index: 5; }
         .queue-btn { background: rgba(255, 255, 255, 0.03); color: var(--text-muted); padding: 12px 24px; border-radius: 12px 12px 0 0; text-decoration: none; font-weight: 800; font-size: 14px; transition: 0.2s; border: var(--border-glass); border-bottom: none; }
         .queue-btn:hover { background: rgba(255, 255, 255, 0.08); color: white; }
-        .queue-btn.active { background: rgba(30, 41, 59, 0.8); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); color: white; padding-bottom: 13px; border-top: 2px solid var(--win-color); border-bottom: 1px solid transparent; }
+        .queue-btn.active { background: rgba(30, 41, 59, 0.8); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); color: white; padding-bottom: 13px; border-top: 2px solid var(--point-color); border-bottom: 1px solid transparent; }
         
         .summary-dashboard { background: rgba(30, 41, 59, 0.8); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border-radius: 16px; border-top-left-radius: 0; border: var(--border-glass); display: flex; overflow: hidden; position: relative; z-index: 1; }
 
@@ -153,12 +170,12 @@
         .champ-filter-btn img { width: 22px; height: 22px; border-radius: 50%; }
         .champ-filter-btn .cnt { background: rgba(255,255,255,0.1); padding: 2px 6px; border-radius: 10px; font-size: 11px; }
         .champ-filter-btn:hover { background: rgba(255,255,255,0.1); color: white; }
-        .champ-filter-btn.active { background: var(--win-color); color: white; border-color: var(--win-color); }
+        .champ-filter-btn.active { background: var(--point-color); color: #05242e; border-color: var(--point-color); }
         .champ-filter-btn.active .cnt { background: rgba(0,0,0,0.2); }
 
         .match-card { background: var(--bg-panel); border-radius: 16px; display: grid; grid-template-columns: 100px 130px 120px 140px 1fr 100px; gap: 15px; align-items: center; padding: 14px 20px; margin-bottom: 8px; transition: 0.2s; border: 1px solid transparent; position: relative; overflow: hidden; }
         .match-card:hover { transform: translateY(-2px); box-shadow: 0 10px 20px rgba(0,0,0,0.4); }
-        .match-card.win { border-left: 4px solid var(--win-color); background: linear-gradient(90deg, rgba(59, 130, 246, 0.08) 0%, var(--bg-panel) 50%); border-top: 1px solid rgba(59, 130, 246, 0.2); }
+        .match-card.win { border-left: 4px solid var(--win-color); background: linear-gradient(90deg, rgba(74, 222, 128, 0.08) 0%, var(--bg-panel) 50%); border-top: 1px solid rgba(74, 222, 128, 0.2); }
         .match-card.lose { border-left: 4px solid var(--lose-color); background: linear-gradient(90deg, rgba(239, 68, 68, 0.08) 0%, var(--bg-panel) 50%); border-top: 1px solid rgba(239, 68, 68, 0.2); }
 
         .badge-pill { padding: 4px 12px; border-radius: 20px; font-size: 11px; font-weight: 800; display: inline-block; text-align: center; min-width: 50px; letter-spacing: 0.5px; }
@@ -326,7 +343,7 @@
         .scoreboard-container { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; padding: 15px; }
         
         .team-box { border-radius: 12px; padding: 15px; border: var(--border-glass); box-shadow: 0 4px 15px rgba(0,0,0,0.2); }
-        .blue-team-box { background: linear-gradient(180deg, rgba(59, 130, 246, 0.08) 0%, rgba(15, 23, 42, 0.4) 100%); border-top: 4px solid var(--win-color); }
+        .blue-team-box { background: linear-gradient(180deg, rgba(59, 130, 246, 0.08) 0%, rgba(15, 23, 42, 0.4) 100%); border-top: 4px solid var(--blue-team); }
         .red-team-box { background: linear-gradient(180deg, rgba(239, 68, 68, 0.08) 0%, rgba(15, 23, 42, 0.4) 100%); border-top: 4px solid var(--lose-color); }
         
         .score-table { width: 100%; border-collapse: collapse; font-size: 12px; text-align: left; }
@@ -1231,7 +1248,7 @@
                     <div style="background: rgba(0,0,0,0.3); padding: 15px; border-radius: 14px;">
                         <!-- 블루팀 -->
                         <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 10px;">
-                            <span style="font-size: 11px; font-weight: 800; color: var(--win-color); width: 40px; flex-shrink: 0;">블루</span>
+                            <span style="font-size: 11px; font-weight: 800; color: var(--blue-team); width: 40px; flex-shrink: 0;">블루</span>
                             <div style="display: flex; gap: 6px;">
                                 {% for champ in game.blue_champs %}
                                 <img src="https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/champion/{{ champ.id }}.png"
