@@ -451,8 +451,11 @@
                 </div>
                 
                 <div style="display: flex; flex-direction: column; align-items: center; justify-content: center;">
-                    <div style="font-size: 18px; font-weight: 900; letter-spacing: 0.5px;">{{ match.k }} <span style="color:var(--text-muted); font-weight:600;">/</span> <span style="color:var(--point-color)">{{ match.d }}</span> <span style="color:var(--text-muted); font-weight:600;">/</span> {{ match.a }}</div>
-                    <div style="font-size: 13px; color: var(--text-muted); margin-top: 5px; font-weight: 600;">{{ match.kda_ratio }}:1 평점</div>
+                    <div style="font-size: 18px; font-weight: 900; letter-spacing: 0.5px; color: var(--text-strong);">{{ match.k }} <span style="color:var(--text-dim); font-weight:600;">/</span> {{ match.d }} <span style="color:var(--text-dim); font-weight:600;">/</span> {{ match.a }}</div>
+                    {% set kr = match.kda_ratio %}
+                    <div style="font-size: 13px; margin-top: 5px; font-weight: 800;
+                        color: {% if kr >= 5 %}#c084fc{% elif kr >= 4 %}var(--cs-color){% elif kr >= 3 %}var(--point-color){% elif kr >= 2 %}var(--win-color){% else %}var(--text-muted){% endif %};
+                        {% if kr >= 5 %}text-shadow: 0 0 12px rgba(192,132,252,0.55);{% endif %}">{{ kr }}:1 평점</div>
                 </div>
                 
                 <div style="display: flex; align-items: center; justify-content: flex-start; gap: 4px;">
