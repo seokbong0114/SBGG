@@ -680,7 +680,6 @@
                     <button type="submit" class="search-btn" style="font-size:16px; padding:12px 28px; border-radius:20px; margin-left:10px; height:100%; flex-shrink:0; white-space:nowrap;">검색</button>
                 </form>
             </div>
-            <div class="recent-chips-container" id="recentChips"></div>
             <div class="home-quicknav">
                 <a href="/meta" class="hq-item">📊 메타 분석</a>
                 <a href="/patch" class="hq-item">📰 패치노트</a>
@@ -714,8 +713,12 @@
 
             <div style="display: flex; flex-direction: column; gap: 20px;">
                 <div class="glass-panel" style="padding: 25px;">
-                    <div style="font-size: 18px; font-weight: 800; margin-bottom: 15px;">⭐ 즐겨찾기</div>
+                    <div style="font-size: 17px; font-weight: 900; letter-spacing: -0.3px; margin-bottom: 16px;">⭐ 즐겨찾기</div>
                     <div id="fav-list" style="display: flex; flex-direction: column; gap: 10px;"></div>
+                </div>
+                <div class="glass-panel" style="padding: 25px;">
+                    <div style="font-size: 17px; font-weight: 900; letter-spacing: -0.3px; margin-bottom: 16px;">🕘 최근 검색</div>
+                    <div id="recent-list" style="display: flex; flex-direction: column; gap: 10px;"></div>
                 </div>
             </div>
         </div>
@@ -950,8 +953,15 @@
         <script>
             document.addEventListener("DOMContentLoaded", () => {
                 const recentList = JSON.parse(localStorage.getItem('sbgg_recent') || '[]');
-                if (recentList.length > 0) document.getElementById('recentChips').innerHTML = recentList.map(s => `<div class="recent-chip" onclick="applySearch('${s.name}', '${s.tag}')">${s.name} <span style="opacity:0.5">#${s.tag}</span></div>`).join('');
-                
+                const recentContainer = document.getElementById('recent-list');
+                if (recentContainer) {
+                    if (recentList.length > 0) {
+                        recentContainer.innerHTML = recentList.slice(0, 6).map(s => `<div style="display:flex; align-items:center; gap:12px; padding:12px 14px; background:rgba(255,255,255,0.02); border-radius:12px; cursor:pointer; transition:0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.05)'" onmouseout="this.style.background='rgba(255,255,255,0.02)'" onclick="applySearch('${s.name}','${s.tag}')"><span style="font-size:15px;">🔍</span><div style="flex-grow:1; min-width:0; overflow:hidden;"><b style="font-size:15px; color:#fff;">${s.name}</b> <span style="font-size:12px; color:var(--text-dim);">#${s.tag}</span></div><span style="color:var(--point-color); font-weight:900;">➔</span></div>`).join('');
+                    } else {
+                        recentContainer.innerHTML = '<div style="text-align:center; padding:30px 0; color:var(--text-muted); font-size:13px;">최근 검색 기록이 없습니다.</div>';
+                    }
+                }
+
                 const favs = JSON.parse(localStorage.getItem('sbgg_favs') || '[]');
                 const favContainer = document.getElementById('fav-list');
                 if(favs.length > 0) {
@@ -1357,10 +1367,10 @@
                 {% if game_count > 0 %}
                 <div class="summary-dashboard">
                     <div style="flex: 1; padding: 30px 25px; display: flex; flex-direction: column; justify-content: center; align-items: center; border-right: var(--border-glass);">
-                        <div style="font-size: 13px; color: var(--text-muted); font-weight:600; margin-bottom: 20px;">최근 {{ game_count }}게임 승률</div>
-                        <div style="position: relative; width: 110px; height: 110px;">
+                        <div style="font-size: 12px; color: var(--text-muted); font-weight: 700; letter-spacing: 0.4px; margin-bottom: 20px;">최근 {{ game_count }}게임 승률</div>
+                        <div style="position: relative; width: 114px; height: 114px;">
                             <canvas id="winRateChart"></canvas>
-                            <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 22px; font-weight: 900; color: {% if win_rate >= 50 %}var(--win-color){% else %}var(--lose-color){% endif %};">{{ win_rate }}%</div>
+                            <div style="position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-family: 'Montserrat', sans-serif; font-size: 30px; font-weight: 900; letter-spacing: -0.5px; color: {% if win_rate >= 50 %}var(--win-color){% else %}var(--lose-color){% endif %}; text-shadow: 0 0 18px {% if win_rate >= 50 %}rgba(74,222,128,0.35){% else %}rgba(248,113,113,0.35){% endif %};">{{ win_rate }}%</div>
                         </div>
                         <div style="font-size: 14px; font-weight: 800; margin-top: 20px;">
                             <span style="color: var(--win-color);">{{ win_count }}승</span> <span style="color:var(--text-muted); font-weight:400; margin:0 5px;">/</span> <span style="color: var(--lose-color);">{{ lose_count }}패</span>
@@ -1376,16 +1386,16 @@
                     </div>
                     
                     <div style="flex: 1; padding: 30px 25px; display: flex; flex-direction: column; justify-content: center; align-items: center; border-right: var(--border-glass);">
-                        <div style="font-size: 13px; color: var(--text-muted); font-weight:600;">평균 KDA</div>
-                        <div style="font-size: 26px; font-weight: 900; margin: 12px 0 5px 0; letter-spacing: 1px;">{{ overall_kda.k }} <span style="color:var(--text-muted); font-weight:600; font-size:20px;">/</span> <span style="color:var(--point-color)">{{ overall_kda.d }}</span> <span style="color:var(--text-muted); font-weight:600; font-size:20px;">/</span> {{ overall_kda.a }}</div>
-                        <div style="font-size: 16px; color: var(--win-color); font-weight: 800;">{{ overall_kda.ratio }}:1</div>
+                        <div style="font-size: 12px; color: var(--text-muted); font-weight: 700; letter-spacing: 0.4px;">평균 KDA</div>
+                        <div style="font-family: 'Montserrat', sans-serif; font-size: 30px; font-weight: 900; margin: 12px 0 5px 0; letter-spacing: 0.5px;">{{ overall_kda.k }} <span style="color:var(--text-dim); font-weight:600; font-size:20px;">/</span> <span style="color:var(--lose-color)">{{ overall_kda.d }}</span> <span style="color:var(--text-dim); font-weight:600; font-size:20px;">/</span> {{ overall_kda.a }}</div>
+                        <div style="font-size: 17px; color: var(--win-color); font-weight: 900;">{{ overall_kda.ratio }} : 1</div>
                         <div style="font-size: 14px; margin-top: 20px; color: var(--text-muted); font-weight:600;">
                             팀 킬 관여율 <b style="color: white; font-size:16px;">{{ (matches|map(attribute='kp')|sum / game_count)|round|int }}%</b>
                         </div>
                     </div>
 
                     <div style="flex: 1.5; padding: 30px 25px; display: flex; flex-direction: column; justify-content: center; align-items: flex-start; padding-left: 45px;">
-                        <div style="font-size: 13px; color: var(--text-muted); font-weight:600; margin-bottom: 20px;">최근 플레이한 챔피언</div>
+                        <div style="font-size: 12px; color: var(--text-muted); font-weight: 700; letter-spacing: 0.4px; margin-bottom: 20px;">최근 플레이한 챔피언</div>
                         <div style="width: 100%;">
                             {% for c in top_recent_champs %}
                             <div style="display: flex; align-items: center; gap: 15px; width: 100%; margin-bottom: 15px;">
