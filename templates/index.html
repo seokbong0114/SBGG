@@ -472,16 +472,16 @@
 
         /* ═══ 팀 골드 격차 그래프 (실측 타임라인) ═══ */
         details:not([open]) > .gold-graph-wrap { display: none; }
-        .gold-graph-wrap { margin: 4px 0 14px; }
-        .gold-graph-loading { padding: 22px; text-align: center; font-size: 12px; font-weight: 700; color: var(--text-muted); background: var(--bg-elev); border: var(--border-glass); border-radius: 12px; }
-        .gold-graph-card { background: var(--bg-elev); border: var(--border-glass); border-radius: 12px; padding: 12px 14px 8px; }
-        .gold-graph-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; flex-wrap: wrap; gap: 6px; }
-        .gold-graph-title { font-size: 12px; font-weight: 800; color: var(--text-muted); display: flex; align-items: center; gap: 7px; }
+        .gold-graph-wrap { margin: 4px 0 10px; }
+        .gold-graph-loading { padding: 12px; text-align: center; font-size: 11px; font-weight: 700; color: var(--text-muted); background: var(--bg-elev); border: var(--border-glass); border-radius: 10px; }
+        .gold-graph-card { background: var(--bg-elev); border: var(--border-glass); border-radius: 10px; padding: 8px 12px 6px; }
+        .gold-graph-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 5px; flex-wrap: wrap; gap: 4px; }
+        .gold-graph-title { font-size: 11px; font-weight: 800; color: var(--text-muted); display: flex; align-items: center; gap: 6px; }
         .gold-graph-title b { color: var(--text-main); }
-        .gg-legend { display: flex; align-items: center; gap: 12px; font-size: 11px; font-weight: 700; }
+        .gg-legend { display: flex; align-items: center; gap: 10px; font-size: 10px; font-weight: 700; }
         .gg-legend span { display: inline-flex; align-items: center; gap: 5px; }
         .gg-dot { width: 9px; height: 9px; border-radius: 3px; display: inline-block; }
-        .gold-graph-card svg { width: 100%; height: auto; display: block; }
+        .gold-graph-card svg { width: 100%; height: 100px; display: block; }
         .gg-final { font-size: 12px; font-weight: 900; }
     </style>
 </head>
@@ -2890,7 +2890,7 @@
         }
         function renderGoldGraph(j) {
             var s = j.series, dur = j.duration || (s.length - 1);
-            var W = 700, H = 200, padL = 8, padR = 8, padT = 16, padB = 26;
+            var W = 700, H = 130, padL = 8, padR = 8, padT = 10, padB = 20;
             var Hp = H - padT - padB, zeroY = padT + Hp / 2;
             var maxAbs = 1000;
             for (var i = 0; i < s.length; i++) { if (Math.abs(s[i].diff) > maxAbs) maxAbs = Math.abs(s[i].diff); }
