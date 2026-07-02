@@ -2132,6 +2132,25 @@
             </div>
         </div>
 
+        <!-- ★ '지금 살까?' 한 줄 결론 (현재 티어 기반) -->
+        {% set _verdict = {
+            'OP': ('🔥', '지금 최상위 메타 — 강력 추천', '#ff5500', 'rgba(255,85,0,0.10)', 'rgba(255,85,0,0.35)'),
+            '1':  ('✅', '1티어 강챔 — 지금 하기 아주 좋음', '#4ade80', 'rgba(74,222,128,0.10)', 'rgba(74,222,128,0.3)'),
+            '2':  ('👍', '상위권 무난한 픽 — 충분히 좋음', '#38bdf8', 'rgba(56,189,248,0.10)', 'rgba(56,189,248,0.3)'),
+            '3':  ('⚖️', '평범한 티어 — 숙련도로 커버 가능', '#94a3b8', 'rgba(148,163,184,0.08)', 'rgba(148,163,184,0.25)'),
+            '4':  ('⚠️', '이번 패치엔 다소 불리 — 신중히', '#fbbf24', 'rgba(251,191,36,0.10)', 'rgba(251,191,36,0.3)'),
+            '5':  ('🚫', '현재 메타에서 약세 — 비추천', '#f87171', 'rgba(248,113,113,0.10)', 'rgba(248,113,113,0.3)')
+        } %}
+        {% set _v = _verdict.get(champ.tier, _verdict['3']) %}
+        <div class="glass-panel" style="padding: 16px 22px; margin-bottom: 24px; display: flex; align-items: center; gap: 12px; background: {{ _v[3] }}; border: 1px solid {{ _v[4] }};">
+            <span style="font-size: 22px; flex-shrink: 0;">{{ _v[0] }}</span>
+            <div style="flex: 1; min-width: 0;">
+                <div style="font-size: 11px; color: var(--text-muted); font-weight: 700; letter-spacing: 0.3px;">이 챔피언 지금 할까?</div>
+                <div style="font-size: 15px; font-weight: 900; color: {{ _v[2] }}; margin-top: 2px;">{{ _v[1] }}</div>
+            </div>
+            <span style="font-size: 12px; color: var(--text-muted); font-weight: 700; flex-shrink: 0;">패치 {{ current_patch }} · {% if champ.source == '실측' %}실측 {{ champ.sample }}게임{% else %}예측{% endif %}</span>
+        </div>
+
         <!-- 스킬 구성 (DDragon 실시간 · 모든 챔피언) -->
         {% if skills %}
         <div class="glass-panel" style="padding: 24px; margin-bottom: 24px;">
@@ -2316,10 +2335,9 @@
                     </div>
                     {% endif %}
                     {% else %}
-                    <div style="text-align: center; padding: 24px 12px; color: var(--text-muted);">
-                        <div style="font-size: 34px; margin-bottom: 10px;">📡</div>
-                        <div style="font-size: 14px; font-weight: 800; color: #e2e8f0; margin-bottom: 6px;">빌드 데이터 수집 중</div>
-                        <div style="font-size: 12px; line-height: 1.6;">실제 매치에서 룬·스펠·아이템·스킬 순서를 수집하고 있습니다.<br>표본이 쌓이면 <b style="color:#4ade80;">실측 추천 빌드</b>가 자동으로 표시됩니다.<br>위 <b style="color:#93c5fd;">스킬 구성</b>은 공식 최신 데이터입니다.</div>
+                    <div style="display: flex; align-items: center; gap: 10px; padding: 14px 16px; color: var(--text-muted); font-size: 12.5px; line-height: 1.5;">
+                        <span style="font-size: 18px; flex-shrink: 0;">📡</span>
+                        <span><b style="color: #e2e8f0;">추천 빌드 수집 중</b> — 실제 매치 표본이 쌓이면 실측 룬·아이템·스킬이 자동 표시됩니다. (위 스킬 구성은 공식 데이터)</span>
                     </div>
                     {% endif %}
                 </div>
@@ -2367,11 +2385,10 @@
                 </div>
                 {% endif %}
                 {% else %}
-                <div class="glass-panel" style="padding: 24px; margin-bottom: 20px;">
-                    <div class="section-title" style="margin-bottom: 16px;">⚔️ 카운터 상성</div>
-                    <div style="text-align: center; padding: 18px 12px; color: var(--text-muted);">
-                        <div style="font-size: 30px; margin-bottom: 10px;">📊</div>
-                        <div style="font-size: 13px; line-height: 1.7;">라인 맞대결 승률을 실제 매치에서<br>수집하고 있습니다. 표본이 쌓이면<br>신뢰도 높은 카운터 상성이 표시됩니다.</div>
+                <div class="glass-panel" style="padding: 16px 20px; margin-bottom: 20px;">
+                    <div style="display: flex; align-items: center; gap: 10px; color: var(--text-muted); font-size: 12.5px; line-height: 1.5;">
+                        <span style="font-size: 18px; flex-shrink: 0;">📊</span>
+                        <span><b style="color: #e2e8f0;">카운터 상성 수집 중</b> — 라인 맞대결 표본이 쌓이면 신뢰도 높은 상성이 표시됩니다.</span>
                     </div>
                 </div>
                 {% endif %}
@@ -2407,9 +2424,9 @@
                         document.addEventListener('DOMContentLoaded',function(){var f=document.querySelector('.guide-tab');if(f)f.click();});
                     </script>
                     {% else %}
-                    <div style="text-align: center; padding: 22px 12px; color: var(--text-muted);">
-                        <div style="font-size: 30px; margin-bottom: 10px;">🧭</div>
-                        <div style="font-size: 13px; line-height: 1.7;">이 챔피언의 <b style="color:#34d399;">{{ champ_guide.bracket }} 운영법</b>은<br>준비 중입니다. 곧 업데이트됩니다.</div>
+                    <div style="display: flex; align-items: center; gap: 10px; color: var(--text-muted); font-size: 12.5px; line-height: 1.5;">
+                        <span style="font-size: 18px; flex-shrink: 0;">🧭</span>
+                        <span><b style="color: #34d399;">{{ champ_guide.bracket }} 운영법</b> 준비 중 — 곧 업데이트됩니다.</span>
                     </div>
                     {% endif %}
                 </div>
