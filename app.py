@@ -1074,6 +1074,189 @@ def render_lp_sparkline(history):
             f'<path d="{line}" fill="none" stroke="{col}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>'
             f'</svg>')
 
+# ═══════════════════════════════════════════════════════════════════════
+#  ★ 동적 OG 공유 카드 (카카오톡·디스코드·X 링크 미리보기)
+#    · Pillow로 1200×630 브랜디드 카드를 서버사이드 렌더.
+#    · 생성 결과 JPEG를 영구 DB(Neon)에 base64로 캐시 → 카드는 '최초 1회만' 생성,
+#      이후 전부 캐시에서 즉시 서빙. Render 무료 플랜 콜드스타트에 강함.
+#    · Pillow 부재/생성 실패 시 DDragon 스플래시로 폴백 → 미리보기가 절대 안 깨짐.
+# ═══════════════════════════════════════════════════════════════════════
+import functools
+import base64
+from io import BytesIO
+
+_APP_DIR = os.path.dirname(os.path.abspath(__file__))
+_OG_FONT_DIR = os.path.join(_APP_DIR, 'static', 'fonts')
+OG_W, OG_H = 1200, 630
+
+@functools.lru_cache(maxsize=8)
+def _og_font(weight, size):
+    """Pretendard 폰트 로드(캐시). weight: 'xb'(ExtraBold) | 'b'(Bold)."""
+    from PIL import ImageFont
+    fname = 'Pretendard-ExtraBold.otf' if weight == 'xb' else 'Pretendard-Bold.otf'
+    return ImageFont.truetype(os.path.join(_OG_FONT_DIR, fname), size)
+
+def _og_text_w(draw, text, font):
+    b = draw.textbbox((0, 0), text, font=font)
+    return b[2] - b[0]
+
+def _og_shadow_text(draw, xy, text, font, fill, anchor=None, off=(4, 4)):
+    """가독성용 그림자 텍스트."""
+    x, y = xy
+    draw.text((x + off[0], y + off[1]), text, font=font, fill=(6, 10, 20), anchor=anchor)
+    draw.text((x, y), text, font=font, fill=fill, anchor=anchor)
+
+def _og_vgrad(top, bottom):
+    """세로 그라디언트 RGB 배경(OG 크기)."""
+    from PIL import Image, ImageDraw
+    img = Image.new('RGB', (OG_W, OG_H))
+    d = ImageDraw.Draw(img)
+    for y in range(OG_H):
+        t = y / (OG_H - 1)
+        col = tuple(int(top[i] + (bottom[i] - top[i]) * t) for i in range(3))
+        d.line([(0, y), (OG_W, y)], fill=col)
+    return img
+
+def _og_hgrad(size, colors):
+    """가로 멀티스톱 그라디언트 RGB 이미지(로고 텍스트 채움용)."""
+    from PIL import Image, ImageDraw
+    w, h = size
+    img = Image.new('RGB', size, colors[0])
+    d = ImageDraw.Draw(img)
+    n = len(colors) - 1
+    for x in range(w):
+        t = (x / max(w - 1, 1)) * n
+        seg = min(int(t), n - 1)
+        lt = t - seg
+        c0, c1 = colors[seg], colors[seg + 1]
+        col = tuple(int(c0[i] + (c1[i] - c0[i]) * lt) for i in range(3))
+        d.line([(x, 0), (x, h)], fill=col)
+    return img
+
+def _og_logo(draw, x, y, size):
+    """좌상단 SB.GG 로고 — 'SB' 코럴 + '.GG' 화이트."""
+    f = _og_font('xb', size)
+    _og_shadow_text(draw, (x, y), 'SB', f, (244, 63, 94))
+    _og_shadow_text(draw, (x + _og_text_w(draw, 'SB', f), y), '.GG', f, (255, 255, 255))
+
+def _og_chip(draw, x, y, text):
+    """반투명 라운드 칩(시안) — 패치 표기 등."""
+    f = _og_font('b', 30)
+    tw = _og_text_w(draw, text, f)
+    h = 48
+    draw.rounded_rectangle([x, y, x + tw + 44, y + h], radius=h // 2,
+                           fill=(56, 189, 248, 38), outline=(56, 189, 248), width=2)
+    draw.text((x + 22, y + h / 2), text, font=f, fill=(125, 211, 252), anchor='lm')
+
+def _og_champion_card(champ_id, champ_kr, patch):
+    """챔피언 카드: 스플래시 배경 + 다크 그라디언트 + 로고 + 한글명 + 서브 + 패치칩."""
+    from PIL import Image, ImageDraw
+    resample = getattr(getattr(Image, 'Resampling', Image), 'LANCZOS', 1)
+    bg = None
+    try:
+        r = requests.get(f"https://ddragon.leagueoflegends.com/cdn/img/champion/splash/{champ_id}_0.jpg", timeout=6)
+        if r.status_code == 200:
+            src = Image.open(BytesIO(r.content)).convert('RGB')
+            sw, sh = src.size
+            scale = max(OG_W / sw, OG_H / sh)
+            nw, nh = int(sw * scale + 0.5), int(sh * scale + 0.5)
+            src = src.resize((nw, nh), resample)
+            left = (nw - OG_W) // 2
+            top = min(max(int(nh * 0.05), 0), max(nh - OG_H, 0))  # 얼굴이 잘 나오도록 살짝 위 크롭
+            bg = src.crop((left, top, left + OG_W, top + OG_H))
+    except Exception:
+        bg = None
+    if bg is None:
+        bg = _og_vgrad((15, 23, 42), (30, 41, 59))
+    # 하단 강조 다크 오버레이 (텍스트 가독성)
+    overlay = Image.new('RGBA', (OG_W, OG_H), (0, 0, 0, 0))
+    od = ImageDraw.Draw(overlay)
+    for y in range(OG_H):
+        t = y / (OG_H - 1)
+        a = int(min(1.0, max(0.0, (t - 0.15) / 0.85)) ** 1.3 * 238)
+        od.line([(0, y), (OG_W, y)], fill=(5, 9, 18, a))
+    base = Image.alpha_composite(bg.convert('RGBA'), overlay)
+    draw = ImageDraw.Draw(base)
+    _og_logo(draw, 60, 50, 52)
+    # 챔피언 한글명 (폭 초과 시 자동 축소)
+    name_size = 112
+    fn = _og_font('xb', name_size)
+    while _og_text_w(draw, champ_kr, fn) > OG_W - 120 and name_size > 60:
+        name_size -= 6
+        fn = _og_font('xb', name_size)
+    name_y = OG_H - 216
+    _og_chip(draw, 62, name_y - 62, f'패치 {patch}')
+    _og_shadow_text(draw, (60, name_y), champ_kr, fn, (255, 255, 255))
+    _og_shadow_text(draw, (62, name_y + name_size + 10), '룬 · 스펠 · 아이템 빌드 · 카운터',
+                    _og_font('b', 38), (203, 213, 225))
+    return base.convert('RGB')
+
+def _og_brand_card(kind, patch):
+    """브랜드 카드(홈/메타/패치/검색): 네이비 그라디언트 + 글로우 + 그라디언트 로고 + 문구."""
+    from PIL import Image, ImageDraw, ImageFilter
+    base = _og_vgrad((13, 20, 38), (23, 33, 56)).convert('RGBA')
+    glow = Image.new('RGBA', (OG_W, OG_H), (0, 0, 0, 0))
+    gd = ImageDraw.Draw(glow)
+    gd.ellipse([OG_W - 540, -280, OG_W + 180, 300], fill=(56, 189, 248, 60))
+    gd.ellipse([-240, OG_H - 240, 340, OG_H + 240], fill=(139, 92, 246, 48))
+    base = Image.alpha_composite(base, glow.filter(ImageFilter.GaussianBlur(95)))
+    draw = ImageDraw.Draw(base)
+    # 대형 그라디언트 로고 (중앙 상단)
+    logo_f = _og_font('xb', 156)
+    logo_txt = 'SB.GG'
+    lw = _og_text_w(draw, logo_txt, logo_f)
+    box = (lw + 24, 210)
+    mask = Image.new('L', box, 0)
+    ImageDraw.Draw(mask).text((0, 0), logo_txt, font=logo_f, fill=255)
+    grad = _og_hgrad(box, [(251, 113, 133), (244, 63, 94), (139, 92, 246)])
+    base.paste(grad, ((OG_W - box[0]) // 2, 138), mask)
+    draw = ImageDraw.Draw(base)
+    info = {
+        'home':   ('프리미엄 롤 전적 · 메타 · 챔피언 분석', '소환사 검색 · 챔피언 공략 · 실시간 메타'),
+        'meta':   ('챔피언 메타 티어리스트', f'라인별 티어 · 승률 · 픽률  (패치 {patch})'),
+        'patch':  (f'패치 {patch} 패치노트', '챔피언 · 아이템 · 스킬 변경사항 한글 정리'),
+        'search': ('소환사 전적 분석', '멀티 성능 레이더 · 게임별 등급 · 분석 태그'),
+    }.get(kind, ('프리미엄 롤 전적 · 메타 · 챔피언 분석', '소환사 검색 · 챔피언 공략 · 실시간 메타'))
+    _og_shadow_text(draw, (OG_W // 2, 408), info[0], _og_font('xb', 54), (241, 245, 249), anchor='mm')
+    _og_shadow_text(draw, (OG_W // 2, 480), info[1], _og_font('b', 34), (148, 163, 184), anchor='mm')
+    return base.convert('RGB')
+
+def _og_encode(img):
+    buf = BytesIO()
+    img.save(buf, format='JPEG', quality=86, optimize=True)
+    return buf.getvalue()
+
+def get_og_card(kind, champ_id=None):
+    """OG 카드 JPEG bytes 반환(캐시 우선). 실패 시 None → 라우트에서 스플래시 폴백.
+    kind: 'champion' | 'home' | 'meta' | 'patch' | 'search'."""
+    patch = CURRENT_PATCH_DISPLAY
+    if kind == 'champion':
+        champ_id = champ_ddragon_id(champ_id)
+        if champ_id not in CHAMP_KR_MAP:
+            return None
+        cache_key = f"og#champion#{champ_id}#{patch}"
+    else:
+        if kind not in ('home', 'meta', 'patch', 'search'):
+            kind = 'home'
+        cache_key = f"og#{kind}#{patch}"
+    raw, _ = db_read(cache_key)
+    if raw:
+        try:
+            return base64.b64decode(json.loads(raw))
+        except Exception:
+            pass
+    try:
+        if kind == 'champion':
+            img = _og_champion_card(champ_id, CHAMP_KR_MAP[champ_id], patch)
+        else:
+            img = _og_brand_card(kind, patch)
+        jpg = _og_encode(img)
+        db_write(cache_key, base64.b64encode(jpg).decode('ascii'), int(time.time()))
+        return jpg
+    except Exception as e:
+        print(f"OG 카드 생성 실패 [{cache_key}]: {e}")
+        return None
+
 def get_live_game(puuid):
     res = riot_get(f"https://kr.api.riotgames.com/lol/spectator/v5/active-games/by-puuid/{puuid}")
     if res.status_code == 200: return {'isPlaying': True, 'minutes': max(res.json().get('gameLength', 0) // 60, 0)}
@@ -2973,6 +3156,27 @@ def robots_txt():
         'Sitemap: https://sbgg.onrender.com/sitemap.xml',
     ]
     return '\n'.join(lines), 200, {'Content-Type': 'text/plain; charset=utf-8'}
+
+# ─── 동적 OG 공유 카드 이미지 ───
+_OG_SPLASH_FALLBACK = "https://ddragon.leagueoflegends.com/cdn/img/champion/splash/Ahri_0.jpg"
+
+def _og_response(jpg, fallback_url):
+    if jpg is None:
+        return redirect(fallback_url, code=302)
+    return app.response_class(jpg, mimetype='image/jpeg',
+                              headers={'Cache-Control': 'public, max-age=86400'})
+
+@app.route('/og/champion/<champ_id>.jpg')
+def og_champion(champ_id):
+    """챔피언 공유 카드 — 스플래시 + 한글명 + 빌드 문구. 실패 시 원본 스플래시로 폴백."""
+    cid = champ_ddragon_id(champ_id)
+    return _og_response(get_og_card('champion', champ_id),
+                        f"https://ddragon.leagueoflegends.com/cdn/img/champion/splash/{cid}_0.jpg")
+
+@app.route('/og/<kind>.jpg')
+def og_brand(kind):
+    """브랜드 공유 카드(home/meta/patch/search)."""
+    return _og_response(get_og_card(kind), _OG_SPLASH_FALLBACK)
 
 @app.route('/more_matches')
 def more_matches():

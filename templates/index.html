@@ -9,20 +9,23 @@
     {% set ns = namespace(
         title='SB.GG - 프리미엄 롤 전적·메타·챔피언 분석',
         desc='소환사 전적 분석, 챔피언 메타 티어, 룬·빌드, 공식 패치노트까지. 한국 서버 롤 분석은 SB.GG.',
-        image='https://ddragon.leagueoflegends.com/cdn/img/champion/splash/Ahri_0.jpg') %}
+        image=_base ~ '/og/home.jpg') %}
     {% if page == 'champion' and champ %}
         {% set ns.title = champ.kr ~ ' 룬·빌드·카운터·운영법 - SB.GG' %}
         {% set ns.desc = champ.kr ~ ' 룬·스펠·아이템 빌드와 카운터, 에메랄드+ 고티어 운영법을 한눈에. 패치 ' ~ current_patch ~ ' ' ~ champ.kr ~ ' 공략.' %}
-        {% set ns.image = 'https://ddragon.leagueoflegends.com/cdn/img/champion/splash/' ~ champ.id ~ '_0.jpg' %}
+        {% set ns.image = _base ~ '/og/champion/' ~ champ.id ~ '.jpg' %}
     {% elif page == 'patch' %}
         {% set ns.title = '패치 ' ~ current_patch ~ ' 노트 — 챔피언·아이템·스킬 계수 - SB.GG' %}
         {% set ns.desc = '리그 오브 레전드 패치 ' ~ current_patch ~ ' 공식 변경사항. 버프/너프 챔피언과 아이템, 스킬 계수까지 한글로 정리.' %}
+        {% set ns.image = _base ~ '/og/patch.jpg' %}
     {% elif page == 'meta' %}
         {% set ns.title = '챔피언 메타 티어리스트 (패치 ' ~ current_patch ~ ') - SB.GG' %}
         {% set ns.desc = '라인별 챔피언 티어·승률·픽률·밴률. 실측 수집 데이터 기반 패치 ' ~ current_patch ~ ' 메타 분석.' %}
+        {% set ns.image = _base ~ '/og/meta.jpg' %}
     {% elif page == 'multi' or page == 'search' %}
         {% set ns.title = '소환사 전적 분석 - SB.GG' %}
         {% set ns.desc = '소환사 최근 전적, 멀티 성능 레이더, 게임별 등급과 분석 태그. SB.GG에서 확인하세요.' %}
+        {% set ns.image = _base ~ '/og/search.jpg' %}
     {% endif %}
     <title>{{ ns.title }}</title>
     <meta name="description" content="{{ ns.desc }}">
@@ -33,6 +36,10 @@
     <meta property="og:title" content="{{ ns.title }}">
     <meta property="og:description" content="{{ ns.desc }}">
     <meta property="og:image" content="{{ ns.image }}">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:image:type" content="image/jpeg">
+    <meta property="og:image:alt" content="{{ ns.title }}">
     <meta property="og:url" content="{{ _base }}{{ request.path }}">
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="{{ ns.title }}">
