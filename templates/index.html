@@ -706,86 +706,21 @@
                 <a href="/meta" class="hq-item">📊 메타 분석</a>
                 <a href="/patch" class="hq-item">📰 패치노트</a>
                 <a href="/leaderboard" class="hq-item">👑 래더 랭킹</a>
-                <a href="/spectate" class="hq-item">🔴 천상계 관전</a>
                 <a href="/duo" class="hq-item">🤝 듀오 찾기</a>
             </div>
         </div>
 
-        <div class="main-container" style="display: grid; grid-template-columns: 1.5fr 1fr; margin-bottom: 100px;">
+        <!-- ★ 개인화 우선: 즐겨찾기 + 최근 검색 (재방문 핵심 동선) -->
+        <div class="main-container" style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 40px;">
             <div class="glass-panel" style="padding: 25px;">
-                <div style="font-size: 18px; font-weight: 800; margin-bottom: 20px; display: flex; align-items: center; gap: 8px;">
-                    🔥 주목받는 프로게이머 & 네임드 전적
-                </div>
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
-                    {% for pro in pro_gamers %}
-                    <div style="display: flex; align-items: center; gap: 12px; padding: 15px; border-radius: 12px; background: rgba(255,255,255,0.02); cursor: pointer; transition: 0.2s; border: 1px solid transparent;" onmouseover="this.style.background='rgba(255,255,255,0.05)'; this.style.borderColor='rgba(255,255,255,0.1)'; this.style.transform='translateY(-3px)';" onmouseout="this.style.background='rgba(255,255,255,0.02)'; this.style.borderColor='transparent'; this.style.transform='translateY(0)';" onclick="applySearch('{{ pro.riot_id }}', '{{ pro.tag }}')">
-                        <img src="https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/champion/{{ pro.champ }}.png" style="width: 45px; height: 45px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.1);">
-                        <div style="display: flex; flex-direction: column; flex-grow: 1;">
-                            <div style="display: flex; align-items: center; gap: 6px;">
-                                <span style="background: rgba(244, 63, 94, 0.2); color: #fda4af; padding: 2px 6px; border-radius: 6px; font-size: 10px; font-weight: 800;">{{ pro.team }}</span>
-                                <b style="font-size: 15px; color: white;">{{ pro.name }}</b>
-                            </div>
-                            <span style="font-size: 12px; color: var(--text-muted); margin-top: 3px;">{{ pro.riot_id }} <span style="opacity:0.5">#{{ pro.tag }}</span></span>
-                        </div>
-                        <div style="color: var(--point-color); font-weight: 900; font-size: 18px;">➔</div>
-                    </div>
-                    {% endfor %}
-                </div>
+                <div style="font-size: 17px; font-weight: 900; letter-spacing: -0.3px; margin-bottom: 16px;">⭐ 즐겨찾기</div>
+                <div id="fav-list" style="display: flex; flex-direction: column; gap: 10px;"></div>
             </div>
-
-            <div style="display: flex; flex-direction: column; gap: 20px;">
-                <div class="glass-panel" style="padding: 25px;">
-                    <div style="font-size: 17px; font-weight: 900; letter-spacing: -0.3px; margin-bottom: 16px;">⭐ 즐겨찾기</div>
-                    <div id="fav-list" style="display: flex; flex-direction: column; gap: 10px;"></div>
-                </div>
-                <div class="glass-panel" style="padding: 25px;">
-                    <div style="font-size: 17px; font-weight: 900; letter-spacing: -0.3px; margin-bottom: 16px;">🕘 최근 검색</div>
-                    <div id="recent-list" style="display: flex; flex-direction: column; gap: 10px;"></div>
-                </div>
+            <div class="glass-panel" style="padding: 25px;">
+                <div style="font-size: 17px; font-weight: 900; letter-spacing: -0.3px; margin-bottom: 16px;">🕘 최근 검색</div>
+                <div id="recent-list" style="display: flex; flex-direction: column; gap: 10px;"></div>
             </div>
         </div>
-
-        <!-- ★ 실시간 천상계 라이브 위젯 (죽었을 때 구경하기 · AJAX 비동기 로드) -->
-        <div class="main-container" style="margin-top: -40px; margin-bottom: 40px;">
-            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; flex-wrap: wrap; gap: 6px;">
-                <div style="font-size: 18px; font-weight: 900;">🔴 지금 천상계 LIVE <span style="font-size: 12px; color: var(--text-muted); font-weight: 700;">죽어서 기다릴 때 구경하기</span></div>
-            </div>
-            <div id="liveGames" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 14px;">
-                <div class="glass-panel" style="padding: 22px; text-align: center; color: var(--text-muted); font-size: 13px;">실시간 게임을 불러오는 중...</div>
-            </div>
-        </div>
-        <script>
-        (function(){
-            fetch('/live_games').then(function(r){return r.json();}).then(function(d){
-                var box = document.getElementById('liveGames');
-                if(!box) return;
-                if(!d.games || !d.games.length){
-                    box.innerHTML = '<div class="glass-panel" style="padding:26px 22px; text-align:center;"><div style="font-size:28px; margin-bottom:8px;">🔴</div><div style="font-size:14px; font-weight:800; color:#e2e8f0; margin-bottom:5px;">실시간 천상계 관전 준비 중</div><div style="font-size:12px; color:var(--text-muted); line-height:1.6;">Riot Production Key 승인 후<br>실시간 챌린저 게임이 자동으로 표시됩니다.</div></div>';
-                    return;
-                }
-                var ver = d.version;
-                function icons(arr){
-                    return (arr||[]).map(function(c){return '<img src="https://ddragon.leagueoflegends.com/cdn/'+ver+'/img/champion/'+c.id+'.png" title="'+c.kr+'" style="width:30px;height:30px;border-radius:50%;border:1px solid rgba(255,255,255,0.12);" onerror="this.style.opacity=0">';}).join('');
-                }
-                box.innerHTML = d.games.slice(0,2).map(function(g){
-                    return '<a href="/spectate" style="text-decoration:none;">'
-                      +'<div class="glass-panel" style="padding:18px; border:1px solid transparent; transition:0.2s;" onmouseover="this.style.borderColor=\'rgba(244,63,94,0.4)\';this.style.transform=\'translateY(-3px)\';" onmouseout="this.style.borderColor=\'transparent\';this.style.transform=\'translateY(0)\';">'
-                      +'<div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px;">'
-                        +'<div style="font-size:13px; font-weight:900; color:white;"><span style="color:#f87171;">●</span> '+g.summoner_name+' <span style="color:var(--text-muted); font-weight:700; font-size:11px;">#'+g.summoner_tag+'</span></div>'
-                        +'<div style="font-size:11px; color:var(--text-muted); font-weight:700;">'+g.queue+' · '+g.time+'</div>'
-                      +'</div>'
-                      +'<div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">'
-                        +'<div style="display:flex; gap:4px;">'+icons(g.blue_champs)+'</div>'
-                        +'<div style="font-size:11px; font-weight:900; color:var(--text-muted);">VS</div>'
-                        +'<div style="display:flex; gap:4px;">'+icons(g.red_champs)+'</div>'
-                      +'</div></div></a>';
-                }).join('');
-            }).catch(function(){
-                var box=document.getElementById('liveGames');
-                if(box) box.innerHTML='<div class="glass-panel" style="padding:26px 22px; text-align:center;"><div style="font-size:28px; margin-bottom:8px;">🔴</div><div style="font-size:14px; font-weight:800; color:#e2e8f0; margin-bottom:5px;">실시간 천상계 관전 준비 중</div><div style="font-size:12px; color:var(--text-muted); line-height:1.6;">Riot Production Key 승인 후<br>실시간 챌린저 게임이 자동으로 표시됩니다.</div></div>';
-            });
-        })();
-        </script>
 
         <!-- ★ 패치 메타 위젯 -->
         <div class="main-container" style="margin-bottom: 60px;">
@@ -921,6 +856,26 @@
             {% endif %}
         </div>
         {% endif %}
+
+        <!-- ★ 주목받는 프로게이머 (부가 정보 → 하단 컴팩트 배치) -->
+        <div class="main-container" style="margin-bottom: 50px;">
+            <div style="font-size: 16px; font-weight: 900; margin-bottom: 14px; color: var(--text-main);">🔥 주목받는 프로게이머 전적 <span style="font-size: 12px; color: var(--text-muted); font-weight: 700;">클릭해 바로 조회</span></div>
+            <div class="glass-panel" style="padding: 16px;">
+                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 10px;">
+                    {% for pro in pro_gamers %}
+                    <div style="display: flex; align-items: center; gap: 10px; padding: 9px 12px; border-radius: 10px; background: rgba(255,255,255,0.02); cursor: pointer; transition: 0.2s; border: 1px solid transparent;" onmouseover="this.style.background='rgba(56,189,248,0.08)'; this.style.borderColor='rgba(56,189,248,0.3)';" onmouseout="this.style.background='rgba(255,255,255,0.02)'; this.style.borderColor='transparent';" onclick="applySearch('{{ pro.riot_id }}', '{{ pro.tag }}')">
+                        <img src="https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/champion/{{ pro.champ }}.png" style="width: 34px; height: 34px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.1); flex-shrink: 0;">
+                        <div style="min-width: 0; flex: 1;">
+                            <div style="display: flex; align-items: center; gap: 5px;">
+                                <span style="background: rgba(56,189,248,0.15); color: var(--point-color); padding: 1px 5px; border-radius: 5px; font-size: 9px; font-weight: 800; flex-shrink: 0;">{{ pro.team }}</span>
+                                <b style="font-size: 13px; color: white; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ pro.name }}</b>
+                            </div>
+                        </div>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
 
         <!-- 푸터 -->
         <footer style="max-width: 1080px; margin: 0 auto 50px auto; padding: 24px 20px 0 20px; border-top: 1px solid rgba(255,255,255,0.06); text-align: center;">
