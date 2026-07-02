@@ -1426,6 +1426,7 @@ def get_match_details(puuid, start=0, count=20, queue=None, collect_stats=True, 
                 if p['puuid'] == puuid:
                     main_player_data = participants_details[-1].copy()
                     main_player_data['championName_kr'] = CHAMP_KR_MAP.get(champ_en, champ_en)
+                    main_player_data['match_id'] = m_id  # 골드 그래프 온디맨드 조회용
                     main_player_data['game_type'] = game_type
                     main_player_data['cs_per_min'] = round(cs / duration_m, 1)
                     main_player_data['kda_ratio'] = round((k + a) / max(1, d), 2)
@@ -2861,7 +2862,9 @@ def generate_mock_timeline(summary):
     kills = sorted(rng.randint(2 * 60, dur * 60) for _ in range(k))
     cs10 = round(cspm * 10 * rng.uniform(0.82, 0.98)) if cspm else round(cs * (10 / max(dur, 1)))
     gd15 = int((k - d) * 250 + rng.randint(-600, 600) + (400 if win else -400))
-    vspm = round(rng.uniform(0.6, 1.4) + (0.6 if role == 'UTILITY' else 0), 2)
+    # 시야는 실제 값(vspm)이 넘어오면 그대로 사용(신뢰 원칙) — 없으면 합성
+    real_vspm = float(summary.get('vspm') or 0)
+    vspm = real_vspm if real_vspm else round(rng.uniform(0.6, 1.4) + (0.6 if role == 'UTILITY' else 0), 2)
     control_wards = rng.randint(0, 2) + (2 if role == 'UTILITY' else 0)
     early_deaths = sum(1 for t in deaths if t <= 14 * 60)
 
@@ -2871,8 +2874,8 @@ def generate_mock_timeline(summary):
         "kda": {"kills": k, "deaths": d, "assists": a, "kda_ratio": round((k + a) / max(1, d), 2)},
         "kill_participation_pct": kp,
         "cs_total": cs, "cs_per_min": round(cspm, 1), "cs_at_10min": cs10,
-        "gold_diff_at_15min": gd15, "vision_per_min": vspm, "control_wards_placed": control_wards,
-        "early_deaths_before_14min": early_deaths,
+        "gold_diff_at_15min": gd15, "vision_per_min": vspm, "vspm_real": bool(real_vspm),
+        "control_wards_placed": control_wards, "early_deaths_before_14min": early_deaths,
         "death_timestamps_sec": deaths, "kill_timestamps_sec": kills,
         "_source": "mock",  # 실측 타임라인 연동 시 'riot'
     }
@@ -2908,6 +2911,7 @@ def _demo_coach_report(tl):
     ⚠️ 신뢰 원칙: 합성 타임스탬프가 아닌 '실제 집계 수치'(데스·분당CS·킬관여·KDA·승패)에만 근거."""
     kda = tl['kda']; d = kda['deaths']; ratio = kda['kda_ratio']
     cspm = tl['cs_per_min']; kp = tl['kill_participation_pct']; res = tl['result']
+    role = tl.get('role', 'MIDDLE'); vspm = tl.get('vision_per_min', 0); vspm_real = tl.get('vspm_real')
     if d >= 8 or (ratio < 1.5 and d >= 6):
         if kp >= 60:
             # 교전 기여는 높은데 데스가 많음 → 진입/포지셔닝 문제로 구분
@@ -2917,7 +2921,7 @@ def _demo_coach_report(tl):
             prob = {"title": "데스 관리 실패", "detail": f"이번 게임 {d}데스(KDA {ratio})로, 킬 관여 {kp}%에 비해 죽는 횟수가 많았습니다. 사망 1회는 골드·경험치는 물론 오브젝트를 내주는 빌미가 됩니다."}
             sol = {"title": "무리한 진입 대신 생존 우선", "detail": "상대 정글 위치가 미확인일 때는 라인을 강하게 밀지 말고, 갱 회피 동선을 먼저 확보하세요. 애매한 교전은 한 발 빼는 판단이 KDA를 지킵니다."}
         hi = f"{d}데스 · KDA {ratio}"
-    elif cspm and cspm < 6:
+    elif cspm and cspm < 6 and role != 'UTILITY':
         prob = {"title": "분당 CS 저조", "detail": f"분당 CS가 {cspm}개로 성장 자원이 부족했습니다. 후반 캐리력이 떨어지는 직접적 원인입니다."}
         sol = {"title": "귀환·로밍 후 CS 회수 습관화", "detail": "귀환 직전 마지막 웨이브를 밀어 넣고, 복귀 후 놓친 CS를 최우선 회수하세요. 로밍 후에도 사이드 웨이브를 잊지 말고, 목표는 분당 7개 이상입니다."}
         hi = f"분당 CS {cspm}"
@@ -2925,6 +2929,11 @@ def _demo_coach_report(tl):
         prob = {"title": "킬 관여 저조", "detail": f"킬 관여율이 {kp}%로 팀 교전 기여가 낮았습니다. 사이드에 고립되어 합류가 늦었을 가능성이 큽니다."}
         sol = {"title": "오브젝트 30초 전 합류", "detail": "드래곤·전령 생성 30초 전에는 사이드 정리를 마치고 합류 동선을 잡으세요. 미니맵을 자주 확인해 팀 교전 신호를 놓치지 마세요."}
         hi = f"킬 관여 {kp}%"
+    elif vspm_real and vspm and ((role == 'UTILITY' and vspm < 1.3) or (role != 'UTILITY' and vspm < 0.55)):
+        low = "서포터 기준" if role == 'UTILITY' else "라이너 기준"
+        prob = {"title": "시야 장악 부족", "detail": f"분당 시야 점수가 {vspm}로 {low}으로도 낮은 편입니다. 시야 없는 곳에서의 교전은 갱·데스와 오브젝트 손실로 직결됩니다."}
+        sol = {"title": "제어 와드·스윕 습관화", "detail": "귀환마다 제어 와드 1개를 반드시 구매해 핵심 부쉬·오브젝트 주변에 설치하고, 스윕으로 상대 와드를 지우세요. 갱 경로에 미리 와드를 박아두면 데스가 크게 줄어듭니다."}
+        hi = f"분당 시야 {vspm}"
     elif ratio >= 4:
         prob = {"title": "강점 유지 — 다음 단계는 주도권 전환", "detail": f"KDA {ratio}, 킬 관여 {kp}%로 매우 안정적인 판이었습니다. 이제 잘 큰 이득을 '오브젝트/타워'로 환산하는 단계가 남았습니다."}
         sol = {"title": "이득을 스노우볼로", "detail": "킬·라인 우위를 얻은 직후 타워 압박이나 상대 정글 침투로 맵 주도권을 넓히세요. 개인 KDA를 넘어 팀 자원 격차를 만드는 것이 승률을 올립니다."}
@@ -2972,6 +2981,7 @@ def api_ai_coach():
         "champ": (data.get("champ") or "")[:40], "champ_kr": (data.get("champ_kr") or "")[:40],
         "k": data.get("k", 0), "d": data.get("d", 0), "a": data.get("a", 0),
         "kp": data.get("kp", 0), "cs": data.get("cs", 0), "cspm": data.get("cspm", 0),
+        "vspm": data.get("vspm", 0),
         "win": bool(data.get("win", False)), "role_en": (data.get("role") or "")[:12],
         "duration_min": data.get("dur", 28),
     }
@@ -2989,6 +2999,47 @@ def api_ai_coach():
     report, is_live = call_llm_coach(timeline)
     payload = {"report": report, "is_live": is_live, "data_source": timeline.get("_source", "mock")}
     db_write(cache_key, payload, now)
+    return jsonify({"ok": True, "cached": False, **payload})
+
+
+@app.route('/api/match_gold/<match_id>')
+def api_match_gold(match_id):
+    """스코어보드 펼칠 때 온디맨드로 해당 매치의 팀 총골드 추이(블루−레드)를 반환.
+    실제 Riot 타임라인 기반(신뢰 원칙). 타임라인은 불변 → 영구 캐시(검색당 추가 호출 0)."""
+    if not re.match(r'^[A-Z0-9_]{5,30}$', match_id or ''):
+        return jsonify({"ok": False, "msg": "잘못된 매치 ID"}), 400
+    cache_key = f"goldgraph#{match_id}"
+    cached, _ = db_read(cache_key)
+    if cached:
+        try:
+            return jsonify({"ok": True, "cached": True, **json.loads(cached)})
+        except Exception:
+            pass
+    try:
+        r = riot_get(f"https://asia.api.riotgames.com/lol/match/v5/matches/{match_id}/timeline")
+        if r.status_code != 200:
+            return jsonify({"ok": False, "msg": "타임라인을 불러올 수 없습니다."}), 502
+        frames = r.json().get('info', {}).get('frames', [])
+    except Exception as e:
+        print(f"골드 그래프 타임라인 에러: {e}")
+        return jsonify({"ok": False, "msg": "타임라인 조회 실패"}), 502
+
+    # Match-V5 규약: participantId 1~5 = 블루(100), 6~10 = 레드(200)
+    series, kills = [], []
+    for idx, f in enumerate(frames):
+        pf = f.get('participantFrames', {})
+        blue = sum(pf.get(str(i), {}).get('totalGold', 0) for i in range(1, 6))
+        red = sum(pf.get(str(i), {}).get('totalGold', 0) for i in range(6, 11))
+        series.append({"t": idx, "diff": blue - red})
+        for ev in f.get('events', []):
+            if ev.get('type') == 'CHAMPION_KILL':
+                kid = ev.get('killerId', 0)
+                team = 100 if 1 <= kid <= 5 else (200 if 6 <= kid <= 10 else 0)
+                if team:
+                    kills.append({"t": round(ev.get('timestamp', 0) / 60000, 2), "team": team})
+    payload = {"series": series, "kills": kills, "duration": max(0, len(frames) - 1),
+               "final_diff": series[-1]["diff"] if series else 0}
+    db_write(cache_key, payload, int(time.time()))
     return jsonify({"ok": True, "cached": False, **payload})
 
 

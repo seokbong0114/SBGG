@@ -469,6 +469,20 @@
         .coach-stat { display: inline-block; font-size: 12px; font-weight: 800; color: var(--point-color); background: var(--accent-soft); padding: 5px 11px; border-radius: 8px; }
         .coach-footnote { padding: 0 16px 14px; font-size: 11px; color: var(--text-dim); line-height: 1.6; }
         .coach-error { padding: 14px 16px; border-radius: 12px; background: rgba(248,113,113,0.1); border: 1px solid rgba(248,113,113,0.3); color: #fca5a5; font-size: 13px; font-weight: 700; }
+
+        /* ═══ 팀 골드 격차 그래프 (실측 타임라인) ═══ */
+        details:not([open]) > .gold-graph-wrap { display: none; }
+        .gold-graph-wrap { margin: 4px 0 14px; }
+        .gold-graph-loading { padding: 22px; text-align: center; font-size: 12px; font-weight: 700; color: var(--text-muted); background: var(--bg-elev); border: var(--border-glass); border-radius: 12px; }
+        .gold-graph-card { background: var(--bg-elev); border: var(--border-glass); border-radius: 12px; padding: 12px 14px 8px; }
+        .gold-graph-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; flex-wrap: wrap; gap: 6px; }
+        .gold-graph-title { font-size: 12px; font-weight: 800; color: var(--text-muted); display: flex; align-items: center; gap: 7px; }
+        .gold-graph-title b { color: var(--text-main); }
+        .gg-legend { display: flex; align-items: center; gap: 12px; font-size: 11px; font-weight: 700; }
+        .gg-legend span { display: inline-flex; align-items: center; gap: 5px; }
+        .gg-dot { width: 9px; height: 9px; border-radius: 3px; display: inline-block; }
+        .gold-graph-card svg { width: 100%; height: auto; display: block; }
+        .gg-final { font-size: 12px; font-weight: 900; }
     </style>
 </head>
 <body>
@@ -541,13 +555,15 @@
                     data-champ="{{ match.champ_img }}" data-champ-kr="{{ match.championName_kr }}"
                     data-k="{{ match.k }}" data-d="{{ match.d }}" data-a="{{ match.a }}"
                     data-kp="{{ match.kp }}" data-cs="{{ match.cs }}" data-cspm="{{ match.cs_per_min }}"
+                    data-vspm="{{ match.metrics.vspm }}"
                     data-win="{{ 1 if match.win else 0 }}" data-role="{{ match.role_en }}"
                     onclick="runAiCoach(this)">✨ AI 인게임 리포트 분석하기</button>
             </div>
             {% endif %}
 
-            <details>
+            <details class="scoreboard-details" data-match="{{ match.match_id }}">
                 <summary><span class="summary-icon">▼</span> 팀 상세 스코어보드 열기</summary>
+                <div class="gold-graph-wrap"></div>
                 <div class="scoreboard-container">
                     <div class="team-box blue-team-box">
                         <table class="score-table">
@@ -2819,7 +2835,15 @@
         async function runAiCoach(btn) {
             var wrap = btn.closest('.ai-coach-block');
             var box = wrap.querySelector('.ai-coach-result');
+            // 이미 리포트가 로드돼 있으면 재호출 없이 접기/펼치기 토글
+            if (box && box.dataset.loaded === '1') {
+                var willShow = box.style.display === 'none';
+                box.style.display = willShow ? '' : 'none';
+                btn.innerHTML = willShow ? '🔼 AI 리포트 접기' : '✨ AI 리포트 다시 보기';
+                return;
+            }
             if (!box) { box = document.createElement('div'); box.className = 'ai-coach-result'; wrap.appendChild(box); }
+            box.style.display = '';
             box.innerHTML = '<div class="ai-coach-skeleton">'
                 + '<div class="ai-coach-thinking"><span class="dot"></span> 코치가 이번 게임을 분석하고 있어요...</div>'
                 + '<div class="skel-line" style="width:58%"></div><div class="skel-line" style="width:100%"></div>'
@@ -2832,19 +2856,94 @@
                     body: JSON.stringify({
                         champ: d.champ, champ_kr: d.champKr,
                         k: +d.k, d: +d.d, a: +d.a, kp: +d.kp, cs: +d.cs, cspm: +d.cspm,
-                        win: d.win === '1', role: d.role
+                        vspm: +d.vspm, win: d.win === '1', role: d.role
                     })
                 });
                 var j = await res.json();
                 if (!j.ok) throw new Error(j.msg || '분석 실패');
                 box.innerHTML = renderCoachCard(j.report, j.is_live);
+                box.dataset.loaded = '1';
+                btn.innerHTML = '🔼 AI 리포트 접기';
             } catch (e) {
                 box.innerHTML = '<div class="coach-error">⚠️ 분석 중 문제가 발생했어요. 잠시 후 다시 시도해 주세요.</div>';
+                btn.innerHTML = '✨ AI 리포트 다시 보기';
             } finally {
                 btn.disabled = false;
-                btn.innerHTML = '✨ AI 리포트 다시 보기';
             }
         }
+
+        // ═══ 팀 골드 격차 그래프 (스코어보드 펼칠 때 온디맨드 로드) ═══
+        function loadGoldGraph(details) {
+            var wrap = details.querySelector('.gold-graph-wrap');
+            if (!wrap || wrap.dataset.loaded) return;
+            var mid = details.dataset.match;
+            if (!mid) return;
+            wrap.dataset.loaded = '1';
+            wrap.innerHTML = '<div class="gold-graph-loading">📈 골드 그래프 불러오는 중...</div>';
+            fetch('/api/match_gold/' + encodeURIComponent(mid))
+                .then(function (r) { return r.json(); })
+                .then(function (j) {
+                    if (!j.ok || !j.series || j.series.length < 2) { wrap.innerHTML = ''; return; }
+                    wrap.innerHTML = renderGoldGraph(j);
+                })
+                .catch(function () { wrap.innerHTML = ''; wrap.dataset.loaded = ''; });
+        }
+        function renderGoldGraph(j) {
+            var s = j.series, dur = j.duration || (s.length - 1);
+            var W = 700, H = 200, padL = 8, padR = 8, padT = 16, padB = 26;
+            var Hp = H - padT - padB, zeroY = padT + Hp / 2;
+            var maxAbs = 1000;
+            for (var i = 0; i < s.length; i++) { if (Math.abs(s[i].diff) > maxAbs) maxAbs = Math.abs(s[i].diff); }
+            var xFor = function (t) { return padL + (dur ? (t / dur) : 0) * (W - padL - padR); };
+            var yFor = function (v) { return zeroY - (v / maxAbs) * (Hp / 2); };
+            var pts = s.map(function (p) { return xFor(p.t).toFixed(1) + ',' + yFor(p.diff).toFixed(1); });
+            // 라인-제로 사이 면적 (위/아래를 클립으로 파랑/빨강 분리)
+            var area = 'M' + xFor(s[0].t).toFixed(1) + ',' + zeroY.toFixed(1)
+                + ' L' + pts.join(' L') + ' L' + xFor(s[s.length - 1].t).toFixed(1) + ',' + zeroY.toFixed(1) + ' Z';
+            var line = 'M' + pts.join(' L');
+            // 시간 눈금
+            var ticks = '';
+            var step = Math.max(1, Math.round(dur / 5));
+            for (var t = 0; t <= dur; t += step) {
+                var x = xFor(t).toFixed(1);
+                ticks += '<text x="' + x + '" y="' + (H - 8) + '" fill="#64748b" font-size="9" text-anchor="middle">' + t + '분</text>';
+            }
+            // 킬 마커 (하단 밴드)
+            var kbars = '';
+            (j.kills || []).forEach(function (k) {
+                var kx = xFor(k.t).toFixed(1);
+                var col = k.team === 100 ? 'rgba(59,130,246,0.55)' : 'rgba(239,68,68,0.55)';
+                var y0 = k.team === 100 ? (H - padB - 8) : (H - padB + 2);
+                kbars += '<rect x="' + kx + '" y="' + y0 + '" width="1.4" height="6" fill="' + col + '"/>';
+            });
+            var fd = j.final_diff || 0;
+            var lead = fd > 0 ? '<span class="gg-final" style="color:#60a5fa;">블루 +' + Math.abs(fd).toLocaleString() + '</span>'
+                : (fd < 0 ? '<span class="gg-final" style="color:#f87171;">레드 +' + Math.abs(fd).toLocaleString() + '</span>'
+                    : '<span class="gg-final" style="color:var(--text-muted);">동률</span>');
+            var svg = '<svg viewBox="0 0 ' + W + ' ' + H + '" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg">'
+                + '<defs>'
+                + '<linearGradient id="ggBlue" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3b82f6" stop-opacity="0.5"/><stop offset="1" stop-color="#3b82f6" stop-opacity="0.04"/></linearGradient>'
+                + '<linearGradient id="ggRed" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ef4444" stop-opacity="0.04"/><stop offset="1" stop-color="#ef4444" stop-opacity="0.5"/></linearGradient>'
+                + '<clipPath id="ggTop"><rect x="0" y="0" width="' + W + '" height="' + zeroY.toFixed(1) + '"/></clipPath>'
+                + '<clipPath id="ggBot"><rect x="0" y="' + zeroY.toFixed(1) + '" width="' + W + '" height="' + (H - zeroY).toFixed(1) + '"/></clipPath>'
+                + '</defs>'
+                + '<path d="' + area + '" fill="url(#ggBlue)" clip-path="url(#ggTop)"/>'
+                + '<path d="' + area + '" fill="url(#ggRed)" clip-path="url(#ggBot)"/>'
+                + '<line x1="' + padL + '" y1="' + zeroY.toFixed(1) + '" x2="' + (W - padR) + '" y2="' + zeroY.toFixed(1) + '" stroke="rgba(148,175,214,0.35)" stroke-width="1" stroke-dasharray="4 4"/>'
+                + '<path d="' + line + '" fill="none" stroke="rgba(226,232,240,0.85)" stroke-width="1.6" stroke-linejoin="round"/>'
+                + kbars + ticks
+                + '</svg>';
+            return '<div class="gold-graph-card">'
+                + '<div class="gold-graph-head">'
+                + '<div class="gold-graph-title">📈 <b>팀 골드 격차</b> 추이 <span style="color:var(--text-dim);font-weight:600;">(실측)</span></div>'
+                + '<div class="gg-legend"><span><i class="gg-dot" style="background:#3b82f6;"></i>블루 우세</span><span><i class="gg-dot" style="background:#ef4444;"></i>레드 우세</span>' + lead + '</div>'
+                + '</div>' + svg + '</div>';
+        }
+        document.addEventListener('DOMContentLoaded', function () {
+            document.querySelectorAll('.scoreboard-details').forEach(function (dt) {
+                dt.addEventListener('toggle', function () { if (dt.open) loadGoldGraph(dt); });
+            });
+        });
 
         // 인기/고승률 셋업 탭 전환
         function switchSetup(btn, idx) {
