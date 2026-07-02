@@ -2825,5 +2825,27 @@ def feedback():
 
     return jsonify({"ok": True, "msg": "소중한 의견 감사합니다!"})
 
-if __name__ == '__main__': 
+
+# ================= 에러 페이지 =================
+@app.errorhandler(404)
+def page_not_found(e):
+    return render_template(
+        'index.html', page='error',
+        error_code=404,
+        error_title='페이지를 찾을 수 없습니다',
+        error_desc='주소가 잘못되었거나 삭제된 페이지일 수 있습니다.'
+    ), 404
+
+
+@app.errorhandler(500)
+def internal_error(e):
+    return render_template(
+        'index.html', page='error',
+        error_code=500,
+        error_title='일시적인 오류가 발생했습니다',
+        error_desc='잠시 후 다시 시도해 주세요. 문제가 계속되면 피드백으로 알려주세요.'
+    ), 500
+
+
+if __name__ == '__main__':
     app.run(debug=True, port=5000)
