@@ -1003,6 +1003,77 @@ def get_league_info_by_puuid(puuid):
     except Exception: pass
     return "Unranked", "unranked"
 
+# ═══ 재방문 훅: 내 소환사 랭크 추적 ═══
+SOLO_TIER_ORDER = {'IRON': 0, 'BRONZE': 1, 'SILVER': 2, 'GOLD': 3, 'PLATINUM': 4,
+                   'EMERALD': 5, 'DIAMOND': 6, 'MASTER': 7, 'GRANDMASTER': 8, 'CHALLENGER': 9}
+SOLO_DIV_ORDER = {'IV': 0, 'III': 1, 'II': 2, 'I': 3}
+TIER_KR = {'IRON': '아이언', 'BRONZE': '브론즈', 'SILVER': '실버', 'GOLD': '골드',
+           'PLATINUM': '플래티넘', 'EMERALD': '에메랄드', 'DIAMOND': '다이아',
+           'MASTER': '마스터', 'GRANDMASTER': '그랜드마스터', 'CHALLENGER': '챌린저',
+           'UNRANKED': '언랭크'}
+
+def rank_to_abs(tier, rank, lp):
+    """티어+디비전+LP를 단조 증가 사다리 점수로 환산 — 승급 넘나드는 LP 증감 계산용."""
+    ti = SOLO_TIER_ORDER.get((tier or '').upper())
+    if ti is None:
+        return None  # 언랭
+    if ti >= 7:  # 마스터+ : 디비전 없음, LP 누적
+        return ti * 400 + (lp or 0)
+    return ti * 400 + SOLO_DIV_ORDER.get((rank or '').upper(), 0) * 100 + (lp or 0)
+
+def fetch_rank_snapshot(name, tag):
+    """소환사 솔로랭크 현재 상태 스냅샷. 실패 시 None, 언랭 시 tier=UNRANKED(abs=None)."""
+    try:
+        acc = get_summoner_info(name, tag)
+        if acc.status_code != 200:
+            return None
+        puuid = acc.json().get('puuid')
+        if not puuid:
+            return None
+        snap = {'puuid': puuid, 'tier': 'UNRANKED', 'rank': '', 'lp': 0,
+                'wins': 0, 'losses': 0, 'abs': None, 't': int(time.time())}
+        res = riot_get(f"https://kr.api.riotgames.com/lol/league/v4/entries/by-puuid/{puuid}")
+        if res.status_code == 200:
+            for q in res.json():
+                if q.get('queueType') == 'RANKED_SOLO_5x5':
+                    snap.update(tier=q.get('tier', 'UNRANKED'), rank=q.get('rank', ''),
+                                lp=q.get('leaguePoints', 0), wins=q.get('wins', 0),
+                                losses=q.get('losses', 0))
+                    snap['abs'] = rank_to_abs(snap['tier'], snap['rank'], snap['lp'])
+                    break
+        return snap
+    except Exception as e:
+        print(f"랭크 스냅샷 에러 [{name}#{tag}]: {e}")
+        return None
+
+def render_lp_sparkline(history):
+    """랭크 히스토리(abs 사다리점수)를 컴팩트 SVG 스파크라인으로 렌더. 2점 미만이면 빈 문자열."""
+    pts = [(h['t'], h['abs']) for h in history if h.get('abs') is not None]
+    if len(pts) < 2:
+        return ''
+    W, H, pad = 320, 64, 6
+    xs = [p[0] for p in pts]
+    ys = [p[1] for p in pts]
+    x0, x1 = min(xs), max(xs)
+    y0, y1 = min(ys), max(ys)
+    xr = (x1 - x0) or 1
+    yr = (y1 - y0) or 1
+    fx = lambda t: pad + (t - x0) / xr * (W - 2 * pad)
+    fy = lambda v: H - pad - (v - y0) / yr * (H - 2 * pad)
+    line = 'M' + ' L'.join(f"{fx(t):.1f},{fy(v):.1f}" for t, v in pts)
+    up = pts[-1][1] >= pts[0][1]
+    col = '#34d399' if up else '#f87171'
+    area = (f"M{fx(pts[0][0]):.1f},{H - pad} L"
+            + ' L'.join(f"{fx(t):.1f},{fy(v):.1f}" for t, v in pts)
+            + f" L{fx(pts[-1][0]):.1f},{H - pad} Z")
+    return (f'<svg viewBox="0 0 {W} {H}" preserveAspectRatio="none" style="width:100%;height:64px;display:block;">'
+            f'<defs><linearGradient id="lpspark" x1="0" y1="0" x2="0" y2="1">'
+            f'<stop offset="0" stop-color="{col}" stop-opacity="0.35"/>'
+            f'<stop offset="1" stop-color="{col}" stop-opacity="0.02"/></linearGradient></defs>'
+            f'<path d="{area}" fill="url(#lpspark)"/>'
+            f'<path d="{line}" fill="none" stroke="{col}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>'
+            f'</svg>')
+
 def get_live_game(puuid):
     res = riot_get(f"https://kr.api.riotgames.com/lol/spectator/v5/active-games/by-puuid/{puuid}")
     if res.status_code == 200: return {'isPlaying': True, 'minutes': max(res.json().get('gameLength', 0) // 60, 0)}
@@ -2220,6 +2291,93 @@ def login():
 def logout():
     session.clear()
     return redirect('/')
+
+@app.route('/me')
+def my_dashboard():
+    """재방문 훅 — 내 소환사 랭크 추적 대시보드. 지난 방문 이후 전적/LP 델타 표시."""
+    if not session.get('user_id'):
+        return redirect('/login')
+    uid = session['user_id']
+    riot_name = (session.get('riot_name') or '').strip()
+    riot_tag = (session.get('riot_tag') or '').strip().lstrip('#')
+
+    if not riot_name:
+        return render_template('index.html', page='dashboard', link_needed=True)
+
+    snap = fetch_rank_snapshot(riot_name, riot_tag)
+    if not snap:
+        return render_template('index.html', page='dashboard', fetch_error=True,
+                               riot_name=riot_name, riot_tag=riot_tag)
+
+    snap['tier_kr'] = TIER_KR.get(snap['tier'], snap['tier'])
+    snap['tier_low'] = snap['tier'].lower()
+
+    key = f"ranktrack#u{uid}"
+    raw, _ = db_read(key)
+    history = []
+    if raw:
+        try:
+            history = json.loads(raw)
+        except Exception:
+            history = []
+
+    prev = history[-1] if history else None
+    now = int(time.time())
+
+    delta = None
+    if prev:
+        pg = prev.get('wins', 0) + prev.get('losses', 0)
+        cg = snap['wins'] + snap['losses']
+        games_delta = cg - pg
+        lp_delta = None
+        if snap['abs'] is not None and prev.get('abs') is not None:
+            lp_delta = snap['abs'] - prev['abs']
+        delta = {
+            'games': games_delta,
+            'wins': snap['wins'] - prev.get('wins', 0),
+            'losses': snap['losses'] - prev.get('losses', 0),
+            'lp': lp_delta,
+            'wr': (round((snap['wins'] - prev.get('wins', 0)) / games_delta * 100) if games_delta > 0 else None),
+            'tier_changed': (snap['tier'] != prev.get('tier') or snap['rank'] != prev.get('rank')),
+            'prev_tier_kr': TIER_KR.get(prev.get('tier'), prev.get('tier')),
+            'prev_rank': prev.get('rank', ''),
+            'since': prev.get('t'),
+        }
+
+    # 스냅샷 적립 — 전적이 바뀌었거나(경기 수 변화) 12시간 경과 시에만 (빠른 새로고침 중복 방지)
+    should_append = (not prev) \
+        or ((snap['wins'] + snap['losses']) != (prev.get('wins', 0) + prev.get('losses', 0))) \
+        or (now - prev.get('t', 0) > 12 * 3600)
+    if should_append:
+        history.append({k: snap[k] for k in ('tier', 'rank', 'lp', 'wins', 'losses', 'abs', 't')})
+        history = history[-90:]
+        db_write(key, history, now)
+
+    total_games = snap['wins'] + snap['losses']
+    return render_template('index.html', page='dashboard', snap=snap, delta=delta,
+                           spark=render_lp_sparkline(history), first_visit=(prev is None),
+                           total_wr=(round(snap['wins'] / total_games * 100) if total_games else None),
+                           total_games=total_games, riot_name=riot_name, riot_tag=riot_tag)
+
+@app.route('/me/link', methods=['POST'])
+def my_link():
+    """대시보드에서 대표 소환사 연결/변경."""
+    if not session.get('user_id'):
+        return redirect('/login')
+    riot_name = (request.form.get('riot_name') or '').strip()
+    riot_tag = (request.form.get('riot_tag') or '').strip().lstrip('#')
+    if riot_name:
+        try:
+            conn = db_connect()
+            conn.execute("UPDATE users SET riot_name=?, riot_tag=? WHERE id=?",
+                         (riot_name, riot_tag, session['user_id']))
+            conn.commit()
+            conn.close()
+            session['riot_name'] = riot_name
+            session['riot_tag'] = riot_tag
+        except Exception as e:
+            print(f"소환사 연결 에러: {e}")
+    return redirect('/me')
 
 # ================= 라우팅 =================
 @app.route('/live_games')

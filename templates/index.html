@@ -319,8 +319,35 @@
         .nav-signup-btn { color: white; padding: 7px 14px; border-radius: 8px; background: var(--point-color); }
         .nav-signup-btn:hover { opacity: 0.85; }
         .nav-user { color: white; font-weight: 800; font-size: 13px; }
+        .nav-track-btn { color: #93c5fd; padding: 7px 12px; border-radius: 8px; border: 1px solid rgba(59,130,246,0.35); background: rgba(59,130,246,0.1); }
+        .nav-track-btn:hover { color: #dbeafe; border-color: rgba(59,130,246,0.6); background: rgba(59,130,246,0.18); }
         .nav-logout-btn { color: var(--text-muted); font-size: 12px; padding: 6px 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.1); }
         .nav-logout-btn:hover { color: #fca5a5; border-color: rgba(239,68,68,0.3); }
+        /* ═══ 재방문 훅: 내 전적 추적 대시보드 ═══ */
+        .dash-wrap { max-width: 560px; margin: 40px auto 60px; padding: 0 18px; }
+        .dash-head { display: flex; align-items: center; gap: 14px; margin-bottom: 22px; }
+        .dash-medal { width: 56px; height: 56px; flex-shrink: 0; }
+        .dash-name { font-size: 20px; font-weight: 900; color: var(--text-main); }
+        .dash-rank-now { font-size: 14px; font-weight: 800; color: #93c5fd; margin-top: 3px; }
+        .dash-rank-now .lp { color: var(--text-muted); font-weight: 700; }
+        .dash-delta-card { background: var(--bg-elev); border: var(--border-glass); border-radius: 16px; padding: 20px 22px; margin-bottom: 18px; }
+        .dash-delta-label { font-size: 12px; font-weight: 800; color: var(--text-muted); letter-spacing: 0.3px; margin-bottom: 14px; display: flex; align-items: center; gap: 6px; }
+        .dash-delta-row { display: flex; align-items: stretch; gap: 12px; }
+        .dash-stat { flex: 1; text-align: center; background: rgba(255,255,255,0.03); border-radius: 12px; padding: 14px 8px; }
+        .dash-stat-num { font-size: 24px; font-weight: 900; line-height: 1; }
+        .dash-stat-sub { font-size: 11px; font-weight: 700; color: var(--text-muted); margin-top: 6px; }
+        .dash-lp-up { color: #34d399; }
+        .dash-lp-down { color: #f87171; }
+        .dash-lp-flat { color: var(--text-muted); }
+        .dash-tier-change { margin-top: 14px; text-align: center; font-size: 13px; font-weight: 800; padding: 10px; border-radius: 10px; background: rgba(52,211,153,0.1); border: 1px solid rgba(52,211,153,0.25); color: #6ee7b7; }
+        .dash-tier-down { background: rgba(248,113,113,0.1); border-color: rgba(248,113,113,0.25); color: #fca5a5; }
+        .dash-empty { text-align: center; font-size: 14px; font-weight: 700; color: var(--text-muted); padding: 24px 12px; }
+        .dash-empty b { color: var(--text-main); }
+        .dash-spark-card { background: var(--bg-elev); border: var(--border-glass); border-radius: 16px; padding: 16px 18px 12px; }
+        .dash-spark-title { font-size: 12px; font-weight: 800; color: var(--text-muted); margin-bottom: 10px; }
+        .dash-back { display: inline-block; margin-top: 24px; color: var(--text-muted); font-size: 13px; font-weight: 700; text-decoration: none; }
+        .dash-back:hover { color: var(--text-main); }
+        .dash-link-form { display: flex; gap: 8px; margin-top: 16px; }
 
         /* 듀오 찾기 게시판 */
         .duo-label { display:block; font-size: 11px; font-weight: 800; color: var(--text-muted); margin-bottom: 6px; }
@@ -751,6 +778,7 @@
                 </button>
                 {% if current_user %}
                 <div class="nav-account">
+                    <a href="/me" class="nav-track-btn">📈 내 전적 추적</a>
                     <span class="nav-user">👤 {{ current_user.username }}</span>
                     <a href="/logout" class="nav-logout-btn">로그아웃</a>
                 </div>
@@ -2776,6 +2804,90 @@
             </form>
             <div class="auth-foot">이미 계정이 있으신가요? <a href="/login">로그인</a></div>
         </div>
+    </div>
+
+    {% elif page == 'dashboard' %}
+    <!-- ================= 내 전적 추적 대시보드 (재방문 훅) ================= -->
+    <nav class="top-nav">
+        <a href="/" class="logo-wrapper"><span class="logo-sb">Z</span></a>
+        <div class="nav-account">
+            <span class="nav-user">👤 {{ current_user.username if current_user else '' }}</span>
+            <a href="/logout" class="nav-logout-btn">로그아웃</a>
+        </div>
+    </nav>
+    <div class="dash-wrap">
+        {% if link_needed %}
+        <div class="dash-delta-card">
+            <div class="dash-delta-label">📈 내 소환사 연결</div>
+            <div class="dash-empty">아직 대표 소환사를 연결하지 않으셨어요.<br>연결하면 <b>방문할 때마다 내 LP·전적 변화</b>를 추적해 드립니다.</div>
+            <form action="/me/link" method="post" class="dash-link-form">
+                <input type="text" name="riot_name" class="auth-input" style="flex:1;" placeholder="소환사명" required>
+                <input type="text" name="riot_tag" class="auth-input" style="width:80px;" placeholder="KR1" value="KR1">
+                <button type="submit" class="auth-submit" style="width:auto; margin:0; padding:12px 18px;">연결</button>
+            </form>
+        </div>
+        {% elif fetch_error %}
+        <div class="dash-delta-card">
+            <div class="dash-delta-label">⚠️ 조회 실패</div>
+            <div class="dash-empty"><b>{{ riot_name }}#{{ riot_tag }}</b> 소환사 정보를 불러오지 못했어요.<br>소환사명을 다시 확인하거나 잠시 후 다시 시도해주세요.</div>
+            <form action="/me/link" method="post" class="dash-link-form">
+                <input type="text" name="riot_name" class="auth-input" style="flex:1;" placeholder="소환사명" value="{{ riot_name }}" required>
+                <input type="text" name="riot_tag" class="auth-input" style="width:80px;" placeholder="KR1" value="{{ riot_tag }}">
+                <button type="submit" class="auth-submit" style="width:auto; margin:0; padding:12px 18px;">다시 연결</button>
+            </form>
+        </div>
+        {% else %}
+        <div class="dash-head">
+            {% if snap.tier != 'UNRANKED' %}
+            <img src="https://opgg-static.akamaized.net/images/medals_new/{{ snap.tier_low }}.png" class="dash-medal" onerror="this.style.visibility='hidden'">
+            {% endif %}
+            <div>
+                <div class="dash-name">{{ riot_name }} <span style="font-size:13px; color:var(--text-muted); font-weight:700;">#{{ riot_tag }}</span></div>
+                <div class="dash-rank-now">
+                    {% if snap.tier == 'UNRANKED' %}언랭크
+                    {% else %}{{ snap.tier_kr }} {{ snap.rank }} <span class="lp">{{ snap.lp }} LP</span>{% endif %}
+                    {% if total_wr is not none %}<span class="lp"> · {{ total_games }}판 {{ total_wr }}%</span>{% endif %}
+                </div>
+            </div>
+        </div>
+
+        <div class="dash-delta-card">
+            <div class="dash-delta-label">✨ 지난 방문 이후</div>
+            {% if first_visit %}
+            <div class="dash-empty">추적을 시작했어요! 👋<br><b>다음 방문부터</b> 그동안의 LP·전적 변화를 여기서 보여드릴게요.</div>
+            {% elif delta and delta.games > 0 %}
+            <div class="dash-delta-row">
+                <div class="dash-stat">
+                    <div class="dash-stat-num" style="color:var(--text-main);">{{ delta.games }}<span style="font-size:14px;">판</span></div>
+                    <div class="dash-stat-sub">{{ delta.wins }}승 {{ delta.losses }}패{% if delta.wr is not none %} · {{ delta.wr }}%{% endif %}</div>
+                </div>
+                {% if delta.lp is not none %}
+                <div class="dash-stat">
+                    <div class="dash-stat-num {% if delta.lp > 0 %}dash-lp-up{% elif delta.lp < 0 %}dash-lp-down{% else %}dash-lp-flat{% endif %}">
+                        {% if delta.lp > 0 %}+{% endif %}{{ delta.lp }}
+                    </div>
+                    <div class="dash-stat-sub">LP 변화</div>
+                </div>
+                {% endif %}
+            </div>
+            {% if delta.tier_changed and delta.lp is not none %}
+            <div class="dash-tier-change {% if delta.lp < 0 %}dash-tier-down{% endif %}">
+                {% if delta.lp >= 0 %}🎉 {% else %}📉 {% endif %}{{ delta.prev_tier_kr }} {{ delta.prev_rank }} → <b>{{ snap.tier_kr }} {{ snap.rank }}</b>
+            </div>
+            {% endif %}
+            {% else %}
+            <div class="dash-empty">지난 방문 이후 <b>새로운 솔로랭크 전적</b>이 없어요.<br>한 판 하고 다시 확인해보세요! 🎮</div>
+            {% endif %}
+        </div>
+
+        {% if spark %}
+        <div class="dash-spark-card">
+            <div class="dash-spark-title">📊 LP 추이</div>
+            {{ spark | safe }}
+        </div>
+        {% endif %}
+        {% endif %}
+        <a href="/" class="dash-back">← 홈으로 돌아가기</a>
     </div>
 
     {% elif page == 'error' %}
