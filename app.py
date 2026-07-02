@@ -2928,6 +2928,52 @@ def riot_txt():
     # Riot Production API Key 사이트 소유권 검증 토큰
     return "c49dcec5-23e6-494c-b5d1-69f5e4d09a8a", 200, {'Content-Type': 'text/plain'}
 
+@app.route('/sitemap.xml')
+def sitemap_xml():
+    """동적 사이트맵 — 정적 페이지 + 전체 챔피언 상세 페이지. 검색엔진 색인 유도."""
+    base = 'https://sbgg.onrender.com'
+    today = time.strftime('%Y-%m-%d')
+    # (경로, 우선순위, 변경빈도)
+    entries = [
+        ('/', '1.0', 'daily'),
+        ('/meta', '0.9', 'daily'),
+        ('/patch', '0.9', 'weekly'),
+        ('/champions', '0.8', 'weekly'),
+        ('/leaderboard', '0.7', 'daily'),
+        ('/duo', '0.6', 'daily'),
+        ('/privacy', '0.3', 'monthly'),
+    ]
+    # 챔피언 상세 페이지 전체(색인 볼륨의 핵심)
+    for champ_en in sorted(CHAMP_KR_MAP.keys()):
+        entries.append((f'/champion/{champ_en}', '0.7', 'weekly'))
+    parts = ['<?xml version="1.0" encoding="UTF-8"?>',
+             '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">']
+    for path, priority, freq in entries:
+        parts.append(f'<url><loc>{base}{path}</loc><lastmod>{today}</lastmod>'
+                     f'<changefreq>{freq}</changefreq><priority>{priority}</priority></url>')
+    parts.append('</urlset>')
+    return '\n'.join(parts), 200, {'Content-Type': 'application/xml; charset=utf-8'}
+
+@app.route('/robots.txt')
+def robots_txt():
+    """검색 크롤러 지침 — 공개 페이지 허용, 개인/API/관리 경로 차단, 사이트맵 명시."""
+    lines = [
+        'User-agent: *',
+        'Allow: /',
+        'Disallow: /api/',
+        'Disallow: /admin/',
+        'Disallow: /login',
+        'Disallow: /signup',
+        'Disallow: /me',
+        'Disallow: /collect',
+        'Disallow: /more_matches',
+        'Disallow: /growth',
+        'Disallow: /duo/create',
+        '',
+        'Sitemap: https://sbgg.onrender.com/sitemap.xml',
+    ]
+    return '\n'.join(lines), 200, {'Content-Type': 'text/plain; charset=utf-8'}
+
 @app.route('/more_matches')
 def more_matches():
     puuid = request.args.get('puuid')
