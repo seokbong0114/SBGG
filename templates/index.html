@@ -327,7 +327,7 @@
         .nav-back-btn:hover { color: var(--text-main); border-color: rgba(255,255,255,0.25); }
         .auth-back-row { padding: 16px 40px 0; }
         /* 비회원 대상 재방문 훅 홍보 문구 */
-        .nav-track-hint { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 700; color: #93c5fd; text-decoration: none; padding: 3px 10px; border-radius: 999px; background: rgba(59,130,246,0.09); border: 1px solid rgba(59,130,246,0.22); white-space: nowrap; transition: 0.2s; }
+        .nav-track-hint { display: inline-flex; align-items: center; gap: 4px; font-size: 11px; font-weight: 700; color: #93c5fd; text-decoration: none; padding: 4px 12px; border-radius: 14px; background: rgba(59,130,246,0.09); border: 1px solid rgba(59,130,246,0.22); white-space: nowrap; text-align: right; line-height: 1.4; transition: 0.2s; }
         .nav-track-hint b { color: #dbeafe; font-weight: 800; }
         .nav-track-hint .spark { animation: hintspark 1.8s ease-in-out infinite; }
         @keyframes hintspark { 0%,100% { opacity: 0.6; transform: scale(0.92); } 50% { opacity: 1; transform: scale(1.12); } }
@@ -460,6 +460,8 @@
             .lb-panel { padding: 14px 10px !important; overflow-x: auto; -webkit-overflow-scrolling: touch; }
             .lb-table th, .lb-table td { padding: 11px 8px !important; }
             .lb-table th { font-size: 12px !important; }
+            .nav-track-hint { white-space: normal; max-width: 200px; align-items: flex-end; }
+            .nav-track-hint .spark { align-self: flex-start; margin-top: 2px; }
         }
         @media (max-width: 820px) {
             .profile-content { gap: 18px !important; }
@@ -798,7 +800,7 @@
                         <a href="/login" class="nav-login-btn">로그인</a>
                         <a href="/signup" class="nav-signup-btn">회원가입</a>
                     </div>
-                    <a href="/signup" class="nav-track-hint"><span class="spark">📈</span> 회원이 되면 <b>내 전적 추적</b>을 쓸 수 있어요</a>
+                    <a href="/signup" class="nav-track-hint"><span class="spark">📈</span> 회원이시라면 <b>내 전적 추적</b> 기능을 사용할 수 있어요</a>
                 </div>
                 {% endif %}
             </div>
