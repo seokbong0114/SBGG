@@ -2909,8 +2909,13 @@ def _demo_coach_report(tl):
     kda = tl['kda']; d = kda['deaths']; ratio = kda['kda_ratio']
     cspm = tl['cs_per_min']; kp = tl['kill_participation_pct']; res = tl['result']
     if d >= 8 or (ratio < 1.5 and d >= 6):
-        prob = {"title": "데스 관리 실패", "detail": f"이번 게임 {d}데스로 KDA {ratio}를 기록했습니다. 사망 1회는 골드·경험치 손실은 물론 오브젝트를 상대에게 내주는 빌미가 됩니다."}
-        sol = {"title": "무리한 진입 대신 생존 우선", "detail": "상대 정글 위치가 미확인일 때는 라인을 강하게 밀지 말고, 갱 회피 동선을 먼저 확보하세요. 애매한 교전은 한 발 빼는 판단이 KDA를 지킵니다."}
+        if kp >= 60:
+            # 교전 기여는 높은데 데스가 많음 → 진입/포지셔닝 문제로 구분
+            prob = {"title": "교전 포지셔닝 — 잦은 데스", "detail": f"킬 관여 {kp}%로 교전 기여는 높지만 {d}데스(KDA {ratio})로 이어졌습니다. 한타에서 너무 앞라인에서 잘리는 패턴이 반복됐을 가능성이 큽니다."}
+            sol = {"title": "진입 순서·거리 조절", "detail": "교전 시 가장 먼저 들어가지 말고, 상대 핵심 CC·궁을 뺀 뒤 2차로 진입하세요. 딜교 후 빠질 거리를 항상 확보하면 같은 기여도로 데스를 크게 줄일 수 있습니다."}
+        else:
+            prob = {"title": "데스 관리 실패", "detail": f"이번 게임 {d}데스(KDA {ratio})로, 킬 관여 {kp}%에 비해 죽는 횟수가 많았습니다. 사망 1회는 골드·경험치는 물론 오브젝트를 내주는 빌미가 됩니다."}
+            sol = {"title": "무리한 진입 대신 생존 우선", "detail": "상대 정글 위치가 미확인일 때는 라인을 강하게 밀지 말고, 갱 회피 동선을 먼저 확보하세요. 애매한 교전은 한 발 빼는 판단이 KDA를 지킵니다."}
         hi = f"{d}데스 · KDA {ratio}"
     elif cspm and cspm < 6:
         prob = {"title": "분당 CS 저조", "detail": f"분당 CS가 {cspm}개로 성장 자원이 부족했습니다. 후반 캐리력이 떨어지는 직접적 원인입니다."}
