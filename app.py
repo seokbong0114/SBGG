@@ -39,6 +39,16 @@ CACHE_EXPIRE_TIME = 300      # 캐시 만료 시간: 5분
 LEADERBOARD_CACHE_TIME = 600 # 래더 캐시: 10분
 SPECTATE_CACHE_TIME = 60     # 관전 캐시: 1분 (라이브 데이터)
 
+# 🧠 AI 인게임 코치 (킬러 기능) — 안전 게이팅
+#   AI_COACH_ENABLED : 기능 노출 여부 (기본 on)
+#   AI_COACH_LIVE    : 실제 LLM 호출 여부 (기본 off → 데모 리포트, 키·비용·환각 0)
+#   AI_COACH_MODEL   : 코치 모델 (품질 vs 비용). Anthropic 최신 권장.
+AI_COACH_ENABLED = os.getenv("AI_COACH_ENABLED", "1") == "1"
+AI_COACH_LIVE = os.getenv("AI_COACH_LIVE", "0") == "1"
+AI_COACH_MODEL = os.getenv("AI_COACH_MODEL", "claude-sonnet-5")
+ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY")
+AI_COACH_CACHE_TTL = 60 * 60 * 24 * 14  # AI 코치 리포트 캐시: 14일
+
 # ─── SQLite/Postgres 양립 DB 래퍼 ───
 # 코드는 ? 플레이스홀더로 작성하고, Postgres에서는 자동으로 %s로 변환.
 class _DBCursor:
@@ -2130,11 +2140,14 @@ def is_admin():
 # ================= 회원 인증 =================
 @app.context_processor
 def inject_user():
-    """모든 템플릿에서 current_user 사용 가능하도록 주입."""
+    """모든 템플릿에서 current_user / AI 코치 노출 여부 사용 가능하도록 주입."""
+    base = {'ai_coach_enabled': AI_COACH_ENABLED}
     if session.get('user_id'):
-        return {'current_user': {'id': session['user_id'], 'username': session.get('username'),
-                                 'riot_name': session.get('riot_name'), 'riot_tag': session.get('riot_tag')}}
-    return {'current_user': None}
+        base['current_user'] = {'id': session['user_id'], 'username': session.get('username'),
+                                'riot_name': session.get('riot_name'), 'riot_tag': session.get('riot_tag')}
+    else:
+        base['current_user'] = None
+    return base
 
 @app.route('/signup', methods=['GET', 'POST'])
 def signup():
@@ -2824,6 +2837,154 @@ def feedback():
         return jsonify({"ok": False, "msg": "저장 중 오류가 발생했습니다."}), 500
 
     return jsonify({"ok": True, "msg": "소중한 의견 감사합니다!"})
+
+
+# ═══════════════════════════════════════════════════════════════════════
+#  🧠 AI 인게임 코치 — 초개인화 코칭 리포트 (킬러 기능)
+#     현재: 실제 매치 요약값을 시드로 '가상 타임라인' 생성 → LLM(또는 데모) 코칭.
+#     프로덕션 키/타임라인 연동 시 generate_mock_timeline() 만 실제 파서로 교체.
+# ═══════════════════════════════════════════════════════════════════════
+
+def generate_mock_timeline(summary):
+    """실제 매치 요약(K/D/A·CS·킬관여·챔피언·승패)을 시드로 그럴듯한 '가상 타임라인'을 생성.
+    ⚠️ death/kill 타임스탬프는 합성값(데모 시연용). 실측 판단(데모 리포트)은 집계 수치만 사용.
+    프로덕션 키 발급 후 match-v5 timeline 파서로 이 함수만 교체하면 파이프라인이 그대로 실측 전환됨."""
+    k = int(summary.get('k', 0) or 0); d = int(summary.get('d', 0) or 0); a = int(summary.get('a', 0) or 0)
+    cs = int(summary.get('cs', 0) or 0); kp = int(summary.get('kp', 0) or 0)
+    cspm = float(summary.get('cspm', 0) or 0)
+    win = bool(summary.get('win', False))
+    role = summary.get('role_en') or 'MIDDLE'
+    dur = int(summary.get('duration_min', 28) or 28)
+    rng = random.Random(f"{summary.get('champ')}|{k}|{d}|{a}|{cs}|{kp}|{win}")
+
+    deaths = sorted(rng.randint(3 * 60, dur * 60) for _ in range(d))
+    kills = sorted(rng.randint(2 * 60, dur * 60) for _ in range(k))
+    cs10 = round(cspm * 10 * rng.uniform(0.82, 0.98)) if cspm else round(cs * (10 / max(dur, 1)))
+    gd15 = int((k - d) * 250 + rng.randint(-600, 600) + (400 if win else -400))
+    vspm = round(rng.uniform(0.6, 1.4) + (0.6 if role == 'UTILITY' else 0), 2)
+    control_wards = rng.randint(0, 2) + (2 if role == 'UTILITY' else 0)
+    early_deaths = sum(1 for t in deaths if t <= 14 * 60)
+
+    return {
+        "champion": summary.get('champ_kr') or summary.get('champ') or '알 수 없음',
+        "role": role, "result": "승리" if win else "패배", "game_duration_min": dur,
+        "kda": {"kills": k, "deaths": d, "assists": a, "kda_ratio": round((k + a) / max(1, d), 2)},
+        "kill_participation_pct": kp,
+        "cs_total": cs, "cs_per_min": round(cspm, 1), "cs_at_10min": cs10,
+        "gold_diff_at_15min": gd15, "vision_per_min": vspm, "control_wards_placed": control_wards,
+        "early_deaths_before_14min": early_deaths,
+        "death_timestamps_sec": deaths, "kill_timestamps_sec": kills,
+        "_source": "mock",  # 실측 타임라인 연동 시 'riot'
+    }
+
+
+COACH_SYSTEM_PROMPT = (
+    "너는 리그 오브 레전드 챌린저 전문 코치다. 반드시 아래 규칙을 지켜라.\n"
+    "1. 오직 <MATCH_DATA>에 주어진 수치에만 근거해 분석한다. 데이터에 없는 사실을 지어내지 마라.\n"
+    "2. 존재하지 않는 아이템·룬·챔피언·패치 내용을 언급하지 마라. 특정 아이템명을 확신할 수 없으면 '코어 아이템/방어 아이템'처럼 범주로만 말하라.\n"
+    "3. 핵심 문제점은 '정확히 1가지'만 짚는다. 데이터에서 가장 뚜렷한 약점을 골라라(예: 초반 데스 과다, 분당 CS 저조, 라인전 골드 열세, 시야 부족, 킬 관여 저조).\n"
+    "4. 그 문제에 대한 '구체적이고 실행 가능한 개선책 1가지'를 제시한다. 다음 게임에서 바로 적용할 행동 지침으로.\n"
+    "5. 근거 없는 칭찬·일반론('열심히 하세요')을 금지한다. 반드시 데이터의 수치를 인용하라.\n"
+    "6. 한국어로, 친근하지만 전문적인 코치 말투로 작성한다.\n"
+    "7. 반드시 아래 JSON 스키마로만 응답한다. JSON 외 텍스트·마크다운·코드펜스 금지.\n"
+    '{"headline":"한 줄 총평(25자 내외)",'
+    '"problem":{"title":"핵심 문제 제목","detail":"수치를 인용한 2~3문장"},'
+    '"solution":{"title":"개선책 제목","detail":"다음 게임 실행 지침 2~3문장"},'
+    '"stat_highlight":"가장 문제되는 핵심 수치 하나(예: 14분 내 데스 4회)"}'
+)
+
+
+def build_coach_prompt(timeline):
+    """LLM 전달용 (system, user) 프롬프트 구성."""
+    system = COACH_SYSTEM_PROMPT
+    user = ("다음은 분석 대상 1게임의 데이터다.\n<MATCH_DATA>\n"
+            + json.dumps(timeline, ensure_ascii=False, indent=2)
+            + "\n</MATCH_DATA>\n위 데이터만 근거로, 규칙에 따라 JSON 코칭 리포트를 작성하라.")
+    return system, user
+
+
+def _demo_coach_report(tl):
+    """LLM 없이도 UI/UX를 100% 검증할 수 있는 결정적 데모 리포트.
+    ⚠️ 신뢰 원칙: 합성 타임스탬프가 아닌 '실제 집계 수치'(데스·분당CS·킬관여·KDA·승패)에만 근거."""
+    kda = tl['kda']; d = kda['deaths']; ratio = kda['kda_ratio']
+    cspm = tl['cs_per_min']; kp = tl['kill_participation_pct']; res = tl['result']
+    if d >= 8 or (ratio < 1.5 and d >= 6):
+        prob = {"title": "데스 관리 실패", "detail": f"이번 게임 {d}데스로 KDA {ratio}를 기록했습니다. 사망 1회는 골드·경험치 손실은 물론 오브젝트를 상대에게 내주는 빌미가 됩니다."}
+        sol = {"title": "무리한 진입 대신 생존 우선", "detail": "상대 정글 위치가 미확인일 때는 라인을 강하게 밀지 말고, 갱 회피 동선을 먼저 확보하세요. 애매한 교전은 한 발 빼는 판단이 KDA를 지킵니다."}
+        hi = f"{d}데스 · KDA {ratio}"
+    elif cspm and cspm < 6:
+        prob = {"title": "분당 CS 저조", "detail": f"분당 CS가 {cspm}개로 성장 자원이 부족했습니다. 후반 캐리력이 떨어지는 직접적 원인입니다."}
+        sol = {"title": "귀환·로밍 후 CS 회수 습관화", "detail": "귀환 직전 마지막 웨이브를 밀어 넣고, 복귀 후 놓친 CS를 최우선 회수하세요. 로밍 후에도 사이드 웨이브를 잊지 말고, 목표는 분당 7개 이상입니다."}
+        hi = f"분당 CS {cspm}"
+    elif kp < 45:
+        prob = {"title": "킬 관여 저조", "detail": f"킬 관여율이 {kp}%로 팀 교전 기여가 낮았습니다. 사이드에 고립되어 합류가 늦었을 가능성이 큽니다."}
+        sol = {"title": "오브젝트 30초 전 합류", "detail": "드래곤·전령 생성 30초 전에는 사이드 정리를 마치고 합류 동선을 잡으세요. 미니맵을 자주 확인해 팀 교전 신호를 놓치지 마세요."}
+        hi = f"킬 관여 {kp}%"
+    elif ratio >= 4:
+        prob = {"title": "강점 유지 — 다음 단계는 주도권 전환", "detail": f"KDA {ratio}, 킬 관여 {kp}%로 매우 안정적인 판이었습니다. 이제 잘 큰 이득을 '오브젝트/타워'로 환산하는 단계가 남았습니다."}
+        sol = {"title": "이득을 스노우볼로", "detail": "킬·라인 우위를 얻은 직후 타워 압박이나 상대 정글 침투로 맵 주도권을 넓히세요. 개인 KDA를 넘어 팀 자원 격차를 만드는 것이 승률을 올립니다."}
+        hi = f"KDA {ratio} · 킬관여 {kp}%"
+    else:
+        prob = {"title": "라인전 주도권 부족", "detail": f"{res}한 게임이지만 KDA {ratio}, 킬 관여 {kp}%로 결정적 주도권을 만들지는 못했습니다. 무난했지만 캐리로 이어지진 않았습니다."}
+        sol = {"title": "정글 동선 읽고 능동적 플레이", "detail": "상대 정글이 반대 사이드에 보이면 라인 우선권을 살려 로밍하거나 상대 정글을 침범해 격차를 만드세요. 수동적으로 파밍만 하지 말고 이니시 각을 찾으세요."}
+        hi = f"KDA {ratio} · 킬관여 {kp}%"
+    return {
+        "headline": f"{res} · {prob['title']}",
+        "problem": prob, "solution": sol, "stat_highlight": hi, "_demo": True,
+    }
+
+
+def call_llm_coach(timeline):
+    """실제 LLM 호출 또는 데모 폴백. (report_dict, is_live) 반환."""
+    if not (AI_COACH_LIVE and ANTHROPIC_API_KEY):
+        return _demo_coach_report(timeline), False
+    try:
+        import anthropic
+        client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+        system, user = build_coach_prompt(timeline)
+        msg = client.messages.create(
+            model=AI_COACH_MODEL, max_tokens=700, temperature=0.4,
+            system=system, messages=[{"role": "user", "content": user}],
+        )
+        raw = msg.content[0].text.strip()
+        m = re.search(r'\{.*\}', raw, re.S)  # 코드펜스 등 방어적 JSON 추출
+        if not m:
+            return _demo_coach_report(timeline), False
+        report = json.loads(m.group(0))
+        report["_demo"] = False
+        return report, True
+    except Exception as e:
+        print(f"AI 코치 LLM 에러: {e}")
+        return _demo_coach_report(timeline), False
+
+
+@app.route('/api/ai_coach', methods=['POST'])
+def api_ai_coach():
+    if not AI_COACH_ENABLED:
+        return jsonify({"ok": False, "msg": "AI 코치 기능이 비활성화되어 있습니다."}), 403
+    data = request.get_json(silent=True) or {}
+    summary = {
+        "champ": (data.get("champ") or "")[:40], "champ_kr": (data.get("champ_kr") or "")[:40],
+        "k": data.get("k", 0), "d": data.get("d", 0), "a": data.get("a", 0),
+        "kp": data.get("kp", 0), "cs": data.get("cs", 0), "cspm": data.get("cspm", 0),
+        "win": bool(data.get("win", False)), "role_en": (data.get("role") or "")[:12],
+        "duration_min": data.get("dur", 28),
+    }
+    sig = hashlib.md5(json.dumps(summary, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()[:16]
+    live_tag = "live" if (AI_COACH_LIVE and ANTHROPIC_API_KEY) else "demo"
+    cache_key = f"aicoach#{live_tag}#{sig}"
+    now = int(time.time())
+    cached, ts = db_read(cache_key)
+    if cached and (now - ts) < AI_COACH_CACHE_TTL:
+        try:
+            return jsonify({"ok": True, "cached": True, **json.loads(cached)})
+        except Exception:
+            pass
+    timeline = generate_mock_timeline(summary)
+    report, is_live = call_llm_coach(timeline)
+    payload = {"report": report, "is_live": is_live, "data_source": timeline.get("_source", "mock")}
+    db_write(cache_key, payload, now)
+    return jsonify({"ok": True, "cached": False, **payload})
 
 
 # ================= 에러 페이지 =================

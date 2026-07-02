@@ -438,6 +438,37 @@
         /* 브랜드 에러 페이지 */
         .error-wrap { min-height: 70vh; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 40px 20px; gap: 6px; }
         .error-code { font-family: 'Montserrat', sans-serif; font-size: 96px; font-weight: 900; line-height: 1; background: linear-gradient(115deg, #38bdf8 0%, #8b5cf6 100%); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; letter-spacing: -3px; }
+
+        /* ═══ AI 인게임 코치 ═══ */
+        .ai-coach-block { margin: 10px 0 2px; }
+        .ai-coach-btn { width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 11px 16px; border: none; border-radius: 12px; cursor: pointer; font-size: 14px; font-weight: 800; letter-spacing: -0.2px; color: #06131c; background: linear-gradient(100deg, #38bdf8 0%, #818cf8 55%, #c084fc 100%); box-shadow: 0 6px 18px rgba(56,189,248,0.22); transition: 0.2s; }
+        .ai-coach-btn:hover { transform: translateY(-1px); box-shadow: 0 10px 24px rgba(129,140,248,0.34); filter: brightness(1.05); }
+        .ai-coach-btn:disabled { cursor: default; opacity: 0.65; transform: none; box-shadow: none; }
+        .ai-coach-result { margin-top: 10px; }
+        /* 스켈레톤 로딩 */
+        .ai-coach-skeleton { border-radius: 14px; padding: 18px; background: var(--bg-elev); border: var(--border-glass); }
+        .ai-coach-thinking { display: flex; align-items: center; gap: 9px; margin-bottom: 15px; font-size: 13px; font-weight: 800; color: var(--point-color); }
+        .ai-coach-thinking .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--point-color); animation: coachpulse 1s ease-in-out infinite; }
+        @keyframes coachpulse { 0%,100% { opacity: 0.35; transform: scale(0.8); } 50% { opacity: 1; transform: scale(1.1); } }
+        .skel-line { height: 12px; border-radius: 6px; background: linear-gradient(90deg, rgba(148,175,214,0.08) 25%, rgba(148,175,214,0.20) 37%, rgba(148,175,214,0.08) 63%); background-size: 400% 100%; animation: skelshimmer 1.3s ease infinite; margin-bottom: 10px; }
+        @keyframes skelshimmer { 0% { background-position: 100% 50%; } 100% { background-position: 0 50%; } }
+        /* 결과 카드 — 코치 메신저 느낌 */
+        .coach-card { border-radius: 16px; overflow: hidden; border: 1px solid rgba(129,140,248,0.28); background: linear-gradient(180deg, rgba(56,189,248,0.06), var(--bg-elev)); box-shadow: 0 10px 30px rgba(0,0,0,0.32); animation: coachfade 0.35s ease; }
+        @keyframes coachfade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+        .coach-card-head { display: flex; align-items: center; gap: 10px; padding: 13px 16px; background: linear-gradient(100deg, rgba(56,189,248,0.16), rgba(192,132,252,0.12)); border-bottom: 1px solid rgba(129,140,248,0.2); }
+        .coach-avatar { width: 34px; height: 34px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 18px; background: linear-gradient(135deg, #38bdf8, #c084fc); flex-shrink: 0; }
+        .coach-headline { font-size: 14px; font-weight: 900; color: var(--text-strong); line-height: 1.4; }
+        .coach-demo-badge { margin-left: auto; flex-shrink: 0; font-size: 10px; font-weight: 800; padding: 3px 8px; border-radius: 6px; background: rgba(251,191,36,0.15); color: #fbbf24; border: 1px solid rgba(251,191,36,0.35); }
+        .coach-live-badge { margin-left: auto; flex-shrink: 0; font-size: 10px; font-weight: 800; padding: 3px 8px; border-radius: 6px; background: rgba(74,222,128,0.15); color: #86efac; border: 1px solid rgba(74,222,128,0.35); }
+        .coach-body { padding: 16px; display: flex; flex-direction: column; gap: 13px; }
+        .coach-sec-label { display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 800; padding: 3px 9px; border-radius: 7px; margin-bottom: 7px; }
+        .coach-sec-label.problem { background: rgba(248,113,113,0.14); color: #fca5a5; border: 1px solid rgba(248,113,113,0.3); }
+        .coach-sec-label.solution { background: rgba(74,222,128,0.14); color: #86efac; border: 1px solid rgba(74,222,128,0.3); }
+        .coach-sec-title { font-size: 14px; font-weight: 800; color: var(--text-main); margin-bottom: 4px; }
+        .coach-sec-detail { font-size: 13px; line-height: 1.7; color: var(--text-muted); }
+        .coach-stat { display: inline-block; font-size: 12px; font-weight: 800; color: var(--point-color); background: var(--accent-soft); padding: 5px 11px; border-radius: 8px; }
+        .coach-footnote { padding: 0 16px 14px; font-size: 11px; color: var(--text-dim); line-height: 1.6; }
+        .coach-error { padding: 14px 16px; border-radius: 12px; background: rgba(248,113,113,0.1); border: 1px solid rgba(248,113,113,0.3); color: #fca5a5; font-size: 13px; font-weight: 700; }
     </style>
 </head>
 <body>
@@ -503,7 +534,18 @@
                     <div class="badge-pill {{ match.team_luck_class }}">{{ match.team_luck }}</div>
                 </div>
             </div>
-            
+
+            {% if ai_coach_enabled %}
+            <div class="ai-coach-block">
+                <button type="button" class="ai-coach-btn"
+                    data-champ="{{ match.champ_img }}" data-champ-kr="{{ match.championName_kr }}"
+                    data-k="{{ match.k }}" data-d="{{ match.d }}" data-a="{{ match.a }}"
+                    data-kp="{{ match.kp }}" data-cs="{{ match.cs }}" data-cspm="{{ match.cs_per_min }}"
+                    data-win="{{ 1 if match.win else 0 }}" data-role="{{ match.role_en }}"
+                    onclick="runAiCoach(this)">✨ AI 인게임 리포트 분석하기</button>
+            </div>
+            {% endif %}
+
             <details>
                 <summary><span class="summary-icon">▼</span> 팀 상세 스코어보드 열기</summary>
                 <div class="scoreboard-container">
@@ -2759,6 +2801,50 @@
         });
         // 뒤로가기 복원(bfcache) 시 오버레이 잔상 제거
         window.addEventListener('pageshow', function () { var el = document.getElementById('searchLoading'); if (el) el.classList.remove('on'); });
+
+        // ═══ AI 인게임 코치 ═══
+        function _esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+        function renderCoachCard(r, isLive) {
+            r = r || {}; var p = r.problem || {}, s = r.solution || {};
+            var badge = isLive ? '<span class="coach-live-badge">AI 실측</span>' : '<span class="coach-demo-badge">데모 · 예시 분석</span>';
+            var stat = r.stat_highlight ? '<div><span class="coach-stat">📊 ' + _esc(r.stat_highlight) + '</span></div>' : '';
+            var foot = isLive ? '' : '<div class="coach-footnote">⚙️ 실제 게임 수치(K/D/A·CS·킬관여) 기반 예시 리포트입니다. 프로덕션 키·타임라인 연동 시 초 단위 실측 분석으로 전환됩니다.</div>';
+            return '<div class="coach-card">'
+                + '<div class="coach-card-head"><div class="coach-avatar">🧠</div><div class="coach-headline">' + _esc(r.headline) + '</div>' + badge + '</div>'
+                + '<div class="coach-body">'
+                + '<div><span class="coach-sec-label problem">🔍 핵심 문제</span><div class="coach-sec-title">' + _esc(p.title) + '</div><div class="coach-sec-detail">' + _esc(p.detail) + '</div></div>'
+                + '<div><span class="coach-sec-label solution">💡 개선책</span><div class="coach-sec-title">' + _esc(s.title) + '</div><div class="coach-sec-detail">' + _esc(s.detail) + '</div></div>'
+                + stat + '</div>' + foot + '</div>';
+        }
+        async function runAiCoach(btn) {
+            var wrap = btn.closest('.ai-coach-block');
+            var box = wrap.querySelector('.ai-coach-result');
+            if (!box) { box = document.createElement('div'); box.className = 'ai-coach-result'; wrap.appendChild(box); }
+            box.innerHTML = '<div class="ai-coach-skeleton">'
+                + '<div class="ai-coach-thinking"><span class="dot"></span> 코치가 이번 게임을 분석하고 있어요...</div>'
+                + '<div class="skel-line" style="width:58%"></div><div class="skel-line" style="width:100%"></div>'
+                + '<div class="skel-line" style="width:90%"></div><div class="skel-line" style="width:74%;margin-bottom:0"></div></div>';
+            btn.disabled = true;
+            var d = btn.dataset;
+            try {
+                var res = await fetch('/api/ai_coach', {
+                    method: 'POST', headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        champ: d.champ, champ_kr: d.champKr,
+                        k: +d.k, d: +d.d, a: +d.a, kp: +d.kp, cs: +d.cs, cspm: +d.cspm,
+                        win: d.win === '1', role: d.role
+                    })
+                });
+                var j = await res.json();
+                if (!j.ok) throw new Error(j.msg || '분석 실패');
+                box.innerHTML = renderCoachCard(j.report, j.is_live);
+            } catch (e) {
+                box.innerHTML = '<div class="coach-error">⚠️ 분석 중 문제가 발생했어요. 잠시 후 다시 시도해 주세요.</div>';
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '✨ AI 리포트 다시 보기';
+            }
+        }
 
         // 인기/고승률 셋업 탭 전환
         function switchSetup(btn, idx) {
