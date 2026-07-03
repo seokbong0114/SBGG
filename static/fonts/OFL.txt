@@ -92,3 +92,9 @@ INCLUDING ANY GENERAL, SPECIAL, INDIRECT, INCIDENTAL, OR CONSEQUENTIAL
 DAMAGES, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
 FROM, OUT OF THE USE OR INABILITY TO USE THE FONT SOFTWARE OR FROM
 OTHER DEALINGS IN THE FONT SOFTWARE.
+
+=== 번들 폰트 안내 ===
+이 저장소는 다음 SIL Open Font License 1.1 폰트를 포함합니다:
+- Pretendard (Copyright 2021 Kil Hyung-jin) — 한글 본문/제목
+- Montserrat (Copyright 2011 The Montserrat Project Authors, https://github.com/JulietaUla/Montserrat) — Z 로고
+위 라이선스 전문은 아래에 있으며 두 폰트 모두 동일한 OFL-1.1 조건으로 배포됩니다.

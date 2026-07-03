@@ -1083,11 +1083,13 @@ def render_lp_sparkline(history):
 # ═══════════════════════════════════════════════════════════════════════
 import functools
 import base64
+import math
 from io import BytesIO
 
 _APP_DIR = os.path.dirname(os.path.abspath(__file__))
 _OG_FONT_DIR = os.path.join(_APP_DIR, 'static', 'fonts')
 OG_W, OG_H = 1200, 630
+OG_VER = 'v2'  # 렌더 버전 — 디자인 변경 시 올리면 기존 캐시 자동 무효화
 
 @functools.lru_cache(maxsize=8)
 def _og_font(weight, size):
@@ -1095,6 +1097,17 @@ def _og_font(weight, size):
     from PIL import ImageFont
     fname = 'Pretendard-ExtraBold.otf' if weight == 'xb' else 'Pretendard-Bold.otf'
     return ImageFont.truetype(os.path.join(_OG_FONT_DIR, fname), size)
+
+@functools.lru_cache(maxsize=8)
+def _og_font_mont(size):
+    """Montserrat Black — 사이트 'Z' 로고 전용(가변폰트 Black 인스턴스)."""
+    from PIL import ImageFont
+    f = ImageFont.truetype(os.path.join(_OG_FONT_DIR, 'Montserrat.ttf'), size)
+    try:
+        f.set_variation_by_name('Black')
+    except Exception:
+        pass
+    return f
 
 def _og_text_w(draw, text, font):
     b = draw.textbbox((0, 0), text, font=font)
@@ -1133,11 +1146,32 @@ def _og_hgrad(size, colors):
         d.line([(x, 0), (x, h)], fill=col)
     return img
 
-def _og_logo(draw, x, y, size):
-    """좌상단 SB.GG 로고 — 'SB' 코럴 + '.GG' 화이트."""
-    f = _og_font('xb', size)
-    _og_shadow_text(draw, (x, y), 'SB', f, (244, 63, 94))
-    _og_shadow_text(draw, (x + _og_text_w(draw, 'SB', f), y), '.GG', f, (255, 255, 255))
+def _og_build_z(size):
+    """사이트와 동일한 그라디언트 'Z' 로고(RGBA) — Montserrat Black + skewX(-12°) 슬랜트."""
+    from PIL import Image, ImageDraw
+    f = _og_font_mont(size)
+    bb = ImageDraw.Draw(Image.new('L', (10, 10))).textbbox((0, 0), 'Z', font=f)
+    gw, gh = bb[2] - bb[0], bb[3] - bb[1]
+    pad = max(int(size * 0.14), 6)
+    W, H = gw + pad * 2, gh + pad * 2
+    mask = Image.new('L', (W, H), 0)
+    ImageDraw.Draw(mask).text((pad - bb[0], pad - bb[1]), 'Z', font=f, fill=255)
+    grad = _og_hgrad((W, H), [(251, 113, 133), (244, 63, 94), (139, 92, 246)])
+    logo = Image.new('RGBA', (W, H), (0, 0, 0, 0))
+    logo.paste(grad, (0, 0), mask)
+    sh = math.tan(math.radians(12))  # skewX(-12°): 상단이 오른쪽으로(정방향 슬랜트)
+    resample = getattr(getattr(Image, 'Resampling', Image), 'BICUBIC', 3)
+    return logo.transform((W + int(sh * H + 0.5), H), Image.AFFINE, (1, sh, -sh * H, 0, 1, 0), resample=resample)
+
+def _og_paste_z(base, logo, x, y):
+    """Z 로고를 base(RGBA)에 드롭섀도우와 함께 합성."""
+    from PIL import Image
+    off = max(int(logo.height * 0.03), 2)
+    alpha = logo.split()[3]
+    shadow = Image.new('RGBA', logo.size, (6, 10, 20, 0))
+    shadow.putalpha(alpha.point(lambda a: int(a * 0.55)))
+    base.alpha_composite(shadow, (x + off, y + off + 1))
+    base.alpha_composite(logo, (x, y))
 
 def _og_chip(draw, x, y, text):
     """반투명 라운드 칩(시안) — 패치 표기 등."""
@@ -1177,7 +1211,7 @@ def _og_champion_card(champ_id, champ_kr, patch):
         od.line([(0, y), (OG_W, y)], fill=(5, 9, 18, a))
     base = Image.alpha_composite(bg.convert('RGBA'), overlay)
     draw = ImageDraw.Draw(base)
-    _og_logo(draw, 60, 50, 52)
+    _og_paste_z(base, _og_build_z(58), 58, 44)  # 좌상단 Z 로고
     # 챔피언 한글명 (폭 초과 시 자동 축소)
     name_size = 112
     fn = _og_font('xb', name_size)
@@ -1201,15 +1235,9 @@ def _og_brand_card(kind, patch):
     gd.ellipse([-240, OG_H - 240, 340, OG_H + 240], fill=(139, 92, 246, 48))
     base = Image.alpha_composite(base, glow.filter(ImageFilter.GaussianBlur(95)))
     draw = ImageDraw.Draw(base)
-    # 대형 그라디언트 로고 (중앙 상단)
-    logo_f = _og_font('xb', 156)
-    logo_txt = 'SB.GG'
-    lw = _og_text_w(draw, logo_txt, logo_f)
-    box = (lw + 24, 210)
-    mask = Image.new('L', box, 0)
-    ImageDraw.Draw(mask).text((0, 0), logo_txt, font=logo_f, fill=255)
-    grad = _og_hgrad(box, [(251, 113, 133), (244, 63, 94), (139, 92, 246)])
-    base.paste(grad, ((OG_W - box[0]) // 2, 138), mask)
+    # 대형 Z 로고 (중앙 상단) — 사이트 홈 히어로와 동일
+    z = _og_build_z(230)
+    _og_paste_z(base, z, (OG_W - z.width) // 2, 108)
     draw = ImageDraw.Draw(base)
     info = {
         'home':   ('프리미엄 롤 전적 · 메타 · 챔피언 분석', '소환사 검색 · 챔피언 공략 · 실시간 메타'),
@@ -1234,11 +1262,11 @@ def get_og_card(kind, champ_id=None):
         champ_id = champ_ddragon_id(champ_id)
         if champ_id not in CHAMP_KR_MAP:
             return None
-        cache_key = f"og#champion#{champ_id}#{patch}"
+        cache_key = f"og#{OG_VER}#champion#{champ_id}#{patch}"
     else:
         if kind not in ('home', 'meta', 'patch', 'search'):
             kind = 'home'
-        cache_key = f"og#{kind}#{patch}"
+        cache_key = f"og#{OG_VER}#{kind}#{patch}"
     raw, _ = db_read(cache_key)
     if raw:
         try:
