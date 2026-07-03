@@ -637,6 +637,7 @@
                     data-kp="{{ match.kp }}" data-cs="{{ match.cs }}" data-cspm="{{ match.cs_per_min }}"
                     data-vspm="{{ match.metrics.vspm }}"
                     data-win="{{ 1 if match.win else 0 }}" data-role="{{ match.role_en }}"
+                    data-match="{{ match.match_id }}" data-pid="{{ match.participant_id }}" data-opp-pid="{{ match.opp_participant_id or '' }}"
                     onclick="runAiCoach(this)">✨ AI 인게임 리포트 분석하기</button>
             </div>
             {% endif %}
@@ -2994,11 +2995,17 @@
 
         // ═══ AI 인게임 코치 ═══
         function _esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
-        function renderCoachCard(r, isLive) {
+        function renderCoachCard(r, isLive, dataSource) {
             r = r || {}; var p = r.problem || {}, s = r.solution || {};
-            var badge = isLive ? '<span class="coach-live-badge">AI 실측</span>' : '<span class="coach-demo-badge">데모 · 예시 분석</span>';
+            var real = dataSource === 'riot';
+            var badge = isLive ? '<span class="coach-live-badge">AI 심층 분석</span>'
+                : (real ? '<span class="coach-live-badge">실측 타임라인 분석</span>'
+                        : '<span class="coach-demo-badge">데모 · 예시 분석</span>');
             var stat = r.stat_highlight ? '<div><span class="coach-stat">📊 ' + _esc(r.stat_highlight) + '</span></div>' : '';
-            var foot = isLive ? '' : '<div class="coach-footnote">⚙️ 실제 게임 수치(K/D/A·CS·킬관여) 기반 예시 리포트입니다. 프로덕션 키·타임라인 연동 시 초 단위 실측 분석으로 전환됩니다.</div>';
+            var foot = '';
+            if (!isLive) foot = real
+                ? '<div class="coach-footnote">⚙️ 실제 경기 타임라인(초 단위 데스·CS@10·15분 라인 골드격차)을 분석한 리포트입니다. AI 심층 코칭은 순차 오픈됩니다.</div>'
+                : '<div class="coach-footnote">⚙️ 실제 게임 수치(K/D/A·CS·킬관여) 기반 예시 리포트입니다. 타임라인 연동 시 초 단위 실측 분석으로 전환됩니다.</div>';
             return '<div class="coach-card">'
                 + '<div class="coach-card-head"><div class="coach-avatar">🧠</div><div class="coach-headline">' + _esc(r.headline) + '</div>' + badge + '</div>'
                 + '<div class="coach-body">'
@@ -3030,12 +3037,14 @@
                     body: JSON.stringify({
                         champ: d.champ, champ_kr: d.champKr,
                         k: +d.k, d: +d.d, a: +d.a, kp: +d.kp, cs: +d.cs, cspm: +d.cspm,
-                        vspm: +d.vspm, win: d.win === '1', role: d.role
+                        vspm: +d.vspm, win: d.win === '1', role: d.role,
+                        match_id: d.match || '', pid: d.pid ? +d.pid : null,
+                        opp_pid: d.oppPid ? +d.oppPid : null
                     })
                 });
                 var j = await res.json();
                 if (!j.ok) throw new Error(j.msg || '분석 실패');
-                box.innerHTML = renderCoachCard(j.report, j.is_live);
+                box.innerHTML = renderCoachCard(j.report, j.is_live, j.data_source);
                 box.dataset.loaded = '1';
                 btn.innerHTML = '🔼 AI 리포트 접기';
             } catch (e) {

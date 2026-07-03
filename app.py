@@ -1717,7 +1717,8 @@ def get_match_details(puuid, start=0, count=20, queue=None, collect_stats=True, 
                 items = [p.get(f'item{i}', 0) for i in range(7)]
 
                 participants_details.append({
-                    'puuid': p['puuid'], 'name': p.get('riotIdGameName', 'Unknown'),
+                    'puuid': p['puuid'], 'participantId': p.get('participantId'),
+                    'name': p.get('riotIdGameName', 'Unknown'),
                     'tag': p.get('riotIdTagline', ''), 'champ_img': champ_en,
                     'champ_kr': CHAMP_KR_MAP.get(champ_en, champ_en),
                     'teamId': p['teamId'], 'win': p['win'], 'role_en': p.get('teamPosition', ''),
@@ -1731,6 +1732,7 @@ def get_match_details(puuid, start=0, count=20, queue=None, collect_stats=True, 
                     main_player_data = participants_details[-1].copy()
                     main_player_data['championName_kr'] = CHAMP_KR_MAP.get(champ_en, champ_en)
                     main_player_data['match_id'] = m_id  # 골드 그래프 온디맨드 조회용
+                    main_player_data['participant_id'] = p.get('participantId')  # AI 코치 실측 타임라인 조회용
                     main_player_data['game_type'] = game_type
                     main_player_data['cs_per_min'] = round(cs / duration_m, 1)
                     main_player_data['kda_ratio'] = round((k + a) / max(1, d), 2)
@@ -1779,6 +1781,14 @@ def get_match_details(puuid, start=0, count=20, queue=None, collect_stats=True, 
 
             if main_player_data is None:
                 continue  # 이 매치에 검색한 소환사가 없으면 스킵
+
+            # ★ AI 코치 실측 타임라인용: 같은 라인 상대(반대 팀 동일 포지션) participantId
+            _my_role = main_player_data.get('role_en')
+            _my_team = main_player_data.get('teamId')
+            _opp = next((q for q in participants_details
+                         if _my_role in VALID_ROLES and q.get('role_en') == _my_role
+                         and q.get('teamId') != _my_team), None) if _my_role else None
+            main_player_data['opp_participant_id'] = _opp.get('participantId') if _opp else None
 
             participants_details.sort(key=lambda x: x['score'], reverse=True)
             win_mvp, lose_ace = False, False
@@ -3320,8 +3330,8 @@ def feedback():
 
 # ═══════════════════════════════════════════════════════════════════════
 #  🧠 AI 인게임 코치 — 초개인화 코칭 리포트 (킬러 기능)
-#     현재: 실제 매치 요약값을 시드로 '가상 타임라인' 생성 → LLM(또는 데모) 코칭.
-#     프로덕션 키/타임라인 연동 시 generate_mock_timeline() 만 실제 파서로 교체.
+#     match-v5 타임라인 실측 우선 → 실패 시 가상 타임라인 폴백 → LLM(또는 데모) 코칭.
+#     실측: 초 단위 데스/킬 타임스탬프·CS@10·15분 라인 골드격차·제어와드(개인 키로 조회 가능).
 # ═══════════════════════════════════════════════════════════════════════
 
 def generate_mock_timeline(summary):
@@ -3359,6 +3369,95 @@ def generate_mock_timeline(summary):
     }
 
 
+def _fetch_timeline_info(match_id):
+    """Match-V5 타임라인의 info(frames+participants) 반환. 실패 시 None.
+    타임라인은 개인 키로도 조회 가능(spectator-v5 403과 달리 허용)."""
+    try:
+        r = riot_get(f"https://asia.api.riotgames.com/lol/match/v5/matches/{match_id}/timeline")
+        if r.status_code != 200:
+            return None
+        return r.json().get('info', {})
+    except Exception as e:
+        print(f"AI코치 타임라인 조회 에러 [{match_id}]: {e}")
+        return None
+
+
+def build_real_timeline(summary, match_id, pid, opp_pid=None):
+    """실제 match-v5 타임라인에서 초 단위 데스/킬·CS@10·15분 라인 골드격차·제어와드를 실측.
+    generate_mock_timeline과 동일한 스키마를 반환하되 구간값·타임스탬프가 모두 실측(_source='riot').
+    집계값(K/D/A·CS·킬관여·vspm)은 카드 표시값과 일치하도록 summary를 그대로 사용.
+    타임라인 조회 실패 시 None 반환(호출부가 mock으로 폴백). 타임라인 불변 → 영구 캐시."""
+    if not (match_id and pid):
+        return None
+    cache_key = f"aitl#{match_id}#{pid}#{opp_pid or 0}"
+    cached, _ = db_read(cache_key)
+    if cached:
+        try:
+            return json.loads(cached)
+        except Exception:
+            pass
+    info = _fetch_timeline_info(match_id)
+    if not info:
+        return None
+    frames = info.get('frames', [])
+    if not frames:
+        return None
+
+    deaths, kills, assists, control_wards = [], [], [], 0
+    for f in frames:
+        for ev in f.get('events', []):
+            et = ev.get('type')
+            if et == 'CHAMPION_KILL':
+                ts = int(ev.get('timestamp', 0)) // 1000
+                if ev.get('victimId') == pid:
+                    deaths.append(ts)
+                elif ev.get('killerId') == pid:
+                    kills.append(ts)
+                elif pid in (ev.get('assistingParticipantIds') or []):
+                    assists.append(ts)
+            elif et == 'WARD_PLACED' and ev.get('creatorId') == pid and ev.get('wardType') == 'CONTROL_WARD':
+                control_wards += 1
+    deaths.sort(); kills.sort()
+
+    def _pf(frame, who):
+        return frame.get('participantFrames', {}).get(str(who), {})
+
+    # 프레임은 1분 간격(index 0=0:00). CS@10·골드@15는 해당 프레임에서 실측.
+    f10 = frames[10] if len(frames) > 10 else frames[-1]
+    f15 = frames[15] if len(frames) > 15 else frames[-1]
+    pf10 = _pf(f10, pid)
+    cs10 = pf10.get('minionsKilled', 0) + pf10.get('jungleMinionsKilled', 0)
+    gd15 = None
+    if opp_pid:
+        my_g = _pf(f15, pid).get('totalGold', 0)
+        op_g = _pf(f15, opp_pid).get('totalGold', 0)
+        if my_g and op_g:
+            gd15 = my_g - op_g
+    early_deaths = sum(1 for t in deaths if t <= 14 * 60)
+
+    k = int(summary.get('k', 0) or 0); d = int(summary.get('d', 0) or 0); a = int(summary.get('a', 0) or 0)
+    cs = int(summary.get('cs', 0) or 0); kp = int(summary.get('kp', 0) or 0)
+    cspm = float(summary.get('cspm', 0) or 0)
+    win = bool(summary.get('win', False))
+    role = summary.get('role_en') or 'MIDDLE'
+    dur = int(summary.get('duration_min', 28) or 28)
+    real_vspm = float(summary.get('vspm') or 0)
+
+    tl = {
+        "champion": summary.get('champ_kr') or summary.get('champ') or '알 수 없음',
+        "role": role, "result": "승리" if win else "패배", "game_duration_min": dur,
+        "kda": {"kills": k, "deaths": d, "assists": a, "kda_ratio": round((k + a) / max(1, d), 2)},
+        "kill_participation_pct": kp,
+        "cs_total": cs, "cs_per_min": round(cspm, 1), "cs_at_10min": cs10,
+        "gold_diff_at_15min": gd15, "vision_per_min": real_vspm, "vspm_real": bool(real_vspm),
+        "control_wards_placed": control_wards, "early_deaths_before_14min": early_deaths,
+        "death_timestamps_sec": deaths, "kill_timestamps_sec": kills,
+        "_source": "riot",
+    }
+    db_write(cache_key, tl, int(time.time()))
+    return tl
+
+
 COACH_SYSTEM_PROMPT = (
     "너는 리그 오브 레전드 챌린저 전문 코치다. 반드시 아래 규칙을 지켜라.\n"
     "1. 오직 <MATCH_DATA>에 주어진 수치에만 근거해 분석한다. 데이터에 없는 사실을 지어내지 마라.\n"
@@ -3390,6 +3489,29 @@ def _demo_coach_report(tl):
     kda = tl['kda']; d = kda['deaths']; ratio = kda['kda_ratio']
     cspm = tl['cs_per_min']; kp = tl['kill_participation_pct']; res = tl['result']
     role = tl.get('role', 'MIDDLE'); vspm = tl.get('vision_per_min', 0); vspm_real = tl.get('vspm_real')
+
+    # ── 실측 타임라인(_source='riot')에서만 가능한 초 단위/구간 진단 (최우선) ──
+    src = tl.get('_source'); early = tl.get('early_deaths_before_14min', 0)
+    gd15 = tl.get('gold_diff_at_15min')
+    if src == 'riot' and early >= 3:
+        first_t = (tl.get('death_timestamps_sec') or [None])[0]
+        when = f" 첫 데스 {first_t // 60}분 {first_t % 60}초," if isinstance(first_t, int) else ""
+        if kp >= 60:
+            sol = {"title": "초반은 안전하게, 교전은 2선 진입", "detail": "라인전 단계(14분 전)에는 무리한 딜교·다이브를 자제하고 시야부터 확보하세요. 킬 관여는 이미 높으니 초반만 안정적으로 넘기면 중후반 캐리력이 크게 올라갑니다."}
+        else:
+            sol = {"title": "정글 위치 확인 후 라인 관리", "detail": "상대 정글이 미확인일 때는 라인을 과도하게 밀지 말고 갱 회피 동선을 먼저 잡으세요. 초반 14분을 데스 없이 넘기는 것을 다음 게임 최우선 목표로 삼으세요."}
+        prob = {"title": f"라인전 초반 붕괴 — 14분 내 {early}데스",
+                "detail": f"게임 초반 14분 안에{when} {early}번 잡혔습니다. 초반 데스는 라인전 주도권과 골드 격차로 직결돼 게임 전체를 어렵게 만드는 가장 큰 손실입니다."}
+        return {"headline": f"{res} · 라인전 초반 붕괴", "problem": prob, "solution": sol,
+                "stat_highlight": f"14분 내 데스 {early}회", "_demo": True}
+    if src == 'riot' and gd15 is not None and gd15 <= -1200:
+        items = max(1, round(abs(gd15) / 1100))
+        prob = {"title": f"라인전 골드 열세 — 15분 {abs(gd15):,}골드 뒤짐",
+                "detail": f"15분 시점 같은 라인 상대보다 골드가 {abs(gd15):,} 뒤처졌습니다(약 아이템 {items}개 차이). 라인전에서 벌어진 격차가 중반 캐리력 저하로 이어졌습니다."}
+        sol = {"title": "불리할 땐 손실 최소화 · 안전 파밍", "detail": "열세일 때는 딜교를 거는 대신 CS 수급과 생존을 우선하고, 정글 호응으로 격차를 좁히세요. 15분까지 골드 차를 ±0에 가깝게 유지하는 것만으로도 승률이 크게 오릅니다."}
+        return {"headline": f"{res} · 라인전 골드 열세", "problem": prob, "solution": sol,
+                "stat_highlight": f"15분 골드 -{abs(gd15):,}", "_demo": True}
+
     if d >= 8 or (ratio < 1.5 and d >= 6):
         if kp >= 60:
             # 교전 기여는 높은데 데스가 많음 → 진입/포지셔닝 문제로 구분
@@ -3463,7 +3585,22 @@ def api_ai_coach():
         "win": bool(data.get("win", False)), "role_en": (data.get("role") or "")[:12],
         "duration_min": data.get("dur", 28),
     }
-    sig = hashlib.md5(json.dumps(summary, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()[:16]
+    # 실측 타임라인 식별자(검증) — match_id + 검색 플레이어/라인 상대 participantId
+    match_id = (data.get("match_id") or "")
+    if not re.match(r'^[A-Z0-9_]{5,30}$', match_id):
+        match_id = ""
+
+    def _as_pid(v):
+        try:
+            n = int(v)
+            return n if 1 <= n <= 10 else None
+        except (TypeError, ValueError):
+            return None
+    pid = _as_pid(data.get("pid"))
+    opp_pid = _as_pid(data.get("opp_pid"))
+
+    sig_src = json.dumps(summary, sort_keys=True, ensure_ascii=False) + f"|{match_id}|{pid}"
+    sig = hashlib.md5(sig_src.encode("utf-8")).hexdigest()[:16]
     live_tag = "live" if (AI_COACH_LIVE and ANTHROPIC_API_KEY) else "demo"
     cache_key = f"aicoach#{live_tag}#{sig}"
     now = int(time.time())
@@ -3473,7 +3610,7 @@ def api_ai_coach():
             return jsonify({"ok": True, "cached": True, **json.loads(cached)})
         except Exception:
             pass
-    timeline = generate_mock_timeline(summary)
+    timeline = build_real_timeline(summary, match_id, pid, opp_pid) or generate_mock_timeline(summary)
     report, is_live = call_llm_coach(timeline)
     payload = {"report": report, "is_live": is_live, "data_source": timeline.get("_source", "mock")}
     db_write(cache_key, payload, now)
