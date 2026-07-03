@@ -1218,19 +1218,76 @@
         </nav>
         <div class="main-container">
             <div class="page-title">🏆 리그 오브 레전드 챔피언 도감 <span style="font-size: 14px; color: var(--text-muted); font-weight: 600;">(v{{ latest_version }})</span></div>
-            <div class="glass-panel" style="padding: 30px; text-align: center;">
-                <div style="font-size: 18px; font-weight: 800; margin-bottom: 10px;">데이터베이스 서버 준비 중 🛠️</div>
-                <div style="font-size: 14px; color: var(--text-muted); margin-bottom: 30px;">정확한 실시간 픽률, 승률, 밴률 통계는 시스템 구축 후 업데이트 될 예정입니다.</div>
-                <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(80px, 1fr)); gap: 20px;">
-                    {% for c_en, c_kr in all_champs.items() %}
-                    <div style="display: flex; flex-direction: column; align-items: center; gap: 8px;">
-                        <img src="https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/champion/{{ c_en }}.png" style="width: 100%; border-radius: 16px; border: var(--border-glass);">
-                        <span style="font-size: 13px; font-weight: 600; color: white;">{{ c_kr }}</span>
-                    </div>
+
+            <!-- 검색 + 라인 필터 -->
+            <div class="glass-panel" style="padding: 20px 22px; margin-bottom: 20px;">
+                <input type="text" id="champSearch" placeholder="🔍 챔피언 이름 검색 (예: 아리, ahri)" autocomplete="off"
+                       oninput="filterChamps()"
+                       style="width: 100%; box-sizing: border-box; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); border-radius: 12px; padding: 13px 16px; color: white; font-size: 15px; font-weight: 700; font-family: 'Pretendard'; outline: none; transition: 0.2s;"
+                       onfocus="this.style.borderColor='var(--point-color)'" onblur="this.style.borderColor='rgba(255,255,255,0.12)'">
+                <div id="roleFilter" style="display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px;">
+                    <button type="button" class="champ-role-btn active" data-role="ALL" onclick="setRole(this,'ALL')">전체</button>
+                    {% for r_en, r_kr in role_kr.items() %}
+                    <button type="button" class="champ-role-btn" data-role="{{ r_en }}" onclick="setRole(this,'{{ r_en }}')">{{ r_kr }}</button>
                     {% endfor %}
                 </div>
             </div>
+
+            <div id="champCount" style="font-size: 13px; color: var(--text-muted); font-weight: 700; margin-bottom: 14px;"></div>
+
+            <div id="champGrid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(88px, 1fr)); gap: 16px;">
+                {% for c_en, c_kr in all_champs.items() %}
+                <a href="/champion/{{ c_en }}" class="champ-card"
+                   data-name-kr="{{ c_kr }}" data-name-en="{{ c_en|lower }}"
+                   data-roles="{{ champ_roles.get(c_en, [])|join(',') }}"
+                   style="display: flex; flex-direction: column; align-items: center; gap: 8px; text-decoration: none;">
+                    <img src="https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/champion/{{ c_en }}.png"
+                         loading="lazy" alt="{{ c_kr }}"
+                         style="width: 100%; border-radius: 16px; border: var(--border-glass); transition: 0.2s;">
+                    <span style="font-size: 13px; font-weight: 700; color: white; text-align: center;">{{ c_kr }}</span>
+                </a>
+                {% endfor %}
+            </div>
+            <div id="champEmpty" style="display: none; text-align: center; padding: 50px 20px; color: var(--text-muted); font-weight: 700;">
+                일치하는 챔피언이 없습니다 🔍
+            </div>
         </div>
+
+        <style>
+            .champ-role-btn { background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.12); color: var(--text-muted); font-weight: 800; font-size: 13px; font-family: 'Pretendard'; padding: 8px 16px; border-radius: 10px; cursor: pointer; transition: 0.2s; }
+            .champ-role-btn:hover { color: white; border-color: rgba(255,255,255,0.3); }
+            .champ-role-btn.active { background: var(--point-color); color: white; border-color: var(--point-color); }
+            .champ-card:hover img { border-color: var(--point-color); transform: translateY(-4px); box-shadow: 0 8px 20px rgba(244,63,94,0.25); }
+        </style>
+        <script>
+            let _champRole = 'ALL';
+            function _normalize(s) { return (s || '').toLowerCase().replace(/\s+/g, ''); }
+            function filterChamps() {
+                const q = _normalize(document.getElementById('champSearch').value);
+                const cards = document.querySelectorAll('#champGrid .champ-card');
+                let shown = 0;
+                cards.forEach(card => {
+                    const kr = card.dataset.nameKr || '';
+                    const en = card.dataset.nameEn || '';
+                    const roles = (card.dataset.roles || '').split(',');
+                    const matchName = !q || kr.includes(q) || _normalize(kr).includes(q) || en.includes(q);
+                    const matchRole = _champRole === 'ALL' || roles.includes(_champRole);
+                    const show = matchName && matchRole;
+                    card.style.display = show ? 'flex' : 'none';
+                    if (show) shown++;
+                });
+                document.getElementById('champCount').textContent = shown + '명의 챔피언';
+                document.getElementById('champEmpty').style.display = shown === 0 ? 'block' : 'none';
+                document.getElementById('champGrid').style.display = shown === 0 ? 'none' : 'grid';
+            }
+            function setRole(btn, role) {
+                _champRole = role;
+                document.querySelectorAll('.champ-role-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                filterChamps();
+            }
+            filterChamps();
+        </script>
 
     {% elif page == 'duo' %}
         <nav class="top-nav">

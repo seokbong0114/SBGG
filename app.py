@@ -3428,7 +3428,19 @@ def leaderboard():
 
 @app.route('/champions')
 def champions():
-    return render_template('index.html', page='champions', all_champs=CHAMP_KR_MAP, latest_version=LATEST_VERSION)
+    # 각 챔피언이 소화 가능한 라인(역할 필터용). 매핑 없으면 태그로 폴백.
+    champ_roles = {}
+    for c_en in CHAMP_KR_MAP:
+        roles = CHAMPION_ROLE_MAP.get(c_en, [])
+        if not roles:
+            tags = CHAMP_TAGS.get(c_en, [])
+            if "Marksman" in tags: roles = ["BOTTOM"]
+            elif "Support" in tags: roles = ["UTILITY"]
+            elif "Mage" in tags or "Assassin" in tags: roles = ["MIDDLE"]
+            else: roles = ["TOP"]
+        champ_roles[c_en] = roles
+    return render_template('index.html', page='champions', all_champs=CHAMP_KR_MAP,
+                           latest_version=LATEST_VERSION, champ_roles=champ_roles, role_kr=ROLE_KR)
 
 TIER_IMG_MAP = {
     "아이언": "iron", "브론즈": "bronze", "실버": "silver", "골드": "gold",
