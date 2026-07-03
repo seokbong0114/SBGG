@@ -7,6 +7,7 @@ import time
 import re
 import html
 import threading
+from urllib.parse import quote
 from concurrent.futures import ThreadPoolExecutor
 from flask import Flask, render_template, request, redirect, jsonify, session
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -2725,6 +2726,12 @@ def my_dashboard():
     riot_name = (session.get('riot_name') or '').strip()
     riot_tag = (session.get('riot_tag') or '').strip().lstrip('#')
 
+    # 연결 검증 실패로 돌아온 경우: 저장 안 된 상태 + 입력값 복원 + 에러 안내
+    if request.args.get('link_error'):
+        return render_template('index.html', page='dashboard', link_needed=True, link_error=True,
+                               prefill_name=(request.args.get('name') or '').strip(),
+                               prefill_tag=(request.args.get('tag') or 'KR1').strip())
+
     if not riot_name:
         return render_template('index.html', page='dashboard', link_needed=True)
 
@@ -2785,22 +2792,51 @@ def my_dashboard():
 
 @app.route('/me/link', methods=['POST'])
 def my_link():
-    """대시보드에서 대표 소환사 연결/변경."""
+    """대시보드에서 대표 소환사 연결/변경. 저장 전 실존 검증(오타 저장 방지)."""
     if not session.get('user_id'):
         return redirect('/login')
     riot_name = (request.form.get('riot_name') or '').strip()
     riot_tag = (request.form.get('riot_tag') or '').strip().lstrip('#')
-    if riot_name:
+    # '이름#태그' 통째로 붙여넣은 경우 분리 (태그 칸이 KR1 기본값이어도 이름 쪽 # 우선)
+    if '#' in riot_name:
+        riot_name, _, tag_part = riot_name.rpartition('#')
+        riot_name = riot_name.strip()
+        if tag_part.strip():
+            riot_tag = tag_part.strip()
+    if not riot_tag:
+        riot_tag = 'KR1'
+    if not riot_name:
+        return redirect('/me')
+    # ★ 실존 검증: 라이엇 계정이 실제로 있는지 확인 후에만 저장 (오타 무한 루프 방지)
+    #   단, 404(진짜 없음)만 차단. 429/5xx/네트워크 오류는 일시적이므로 낙관적 저장
+    #   (/me의 fetch_rank_snapshot이 표시 단계에서 재검증·재시도 안내를 처리).
+    try:
+        acc = get_summoner_info(riot_name, riot_tag)
+        status = acc.status_code
+    except Exception as e:
+        print(f"소환사 연결 검증 에러: {e}")
+        acc, status = None, None
+    if status == 404:
+        # 저장하지 않고 '없는 소환사' 에러 안내와 함께 입력값 유지
+        return redirect(f"/me?link_error=1&name={quote(riot_name)}&tag={quote(riot_tag)}")
+    # 검증 성공 시 라이엇 공식 표기(대소문자·공백)로 정규화. 일시 오류면 입력값 그대로 저장.
+    if status == 200:
         try:
-            conn = db_connect()
-            conn.execute("UPDATE users SET riot_name=?, riot_tag=? WHERE id=?",
-                         (riot_name, riot_tag, session['user_id']))
-            conn.commit()
-            conn.close()
-            session['riot_name'] = riot_name
-            session['riot_tag'] = riot_tag
-        except Exception as e:
-            print(f"소환사 연결 에러: {e}")
+            aj = acc.json()
+            riot_name = aj.get('gameName') or riot_name
+            riot_tag = aj.get('tagLine') or riot_tag
+        except Exception:
+            pass
+    try:
+        conn = db_connect()
+        conn.execute("UPDATE users SET riot_name=?, riot_tag=? WHERE id=?",
+                     (riot_name, riot_tag, session['user_id']))
+        conn.commit()
+        conn.close()
+        session['riot_name'] = riot_name
+        session['riot_tag'] = riot_tag
+    except Exception as e:
+        print(f"소환사 연결 에러: {e}")
     return redirect('/me')
 
 # ================= 라우팅 =================

@@ -2949,12 +2949,17 @@
         {% if link_needed %}
         <div class="dash-delta-card">
             <div class="dash-delta-label">📈 내 소환사 연결</div>
+            {% if link_error %}
+            <div class="dash-empty" style="color:#fca5a5;">⚠️ <b>{{ prefill_name }}#{{ prefill_tag }}</b> 소환사를 찾을 수 없어요.<br>소환사명과 태그(#뒤 숫자·문자)를 다시 확인해주세요.</div>
+            {% else %}
             <div class="dash-empty">아직 대표 소환사를 연결하지 않으셨어요.<br>연결하면 <b>방문할 때마다 내 LP·전적 변화</b>를 추적해 드립니다.</div>
+            {% endif %}
             <form action="/me/link" method="post" class="dash-link-form">
-                <input type="text" name="riot_name" class="auth-input" style="flex:1;" placeholder="소환사명" required>
-                <input type="text" name="riot_tag" class="auth-input" style="width:80px;" placeholder="KR1" value="KR1">
+                <input type="text" name="riot_name" class="auth-input" style="flex:1;" placeholder="소환사명 (예: Hide on bush)" value="{{ prefill_name or '' }}" required>
+                <input type="text" name="riot_tag" class="auth-input" style="width:80px;" placeholder="KR1" value="{{ prefill_tag or 'KR1' }}">
                 <button type="submit" class="auth-submit" style="width:auto; margin:0; padding:12px 18px;">연결</button>
             </form>
+            <div style="font-size:11px; color:var(--text-muted); margin-top:8px; opacity:0.8;">💡 <b>이름#태그</b>를 한 번에 붙여넣어도 자동 인식됩니다.</div>
         </div>
         {% elif fetch_error %}
         <div class="dash-delta-card">
