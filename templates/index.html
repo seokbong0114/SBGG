@@ -30,6 +30,8 @@
     <title>{{ ns.title }}</title>
     <meta name="description" content="{{ ns.desc }}">
     <link rel="canonical" href="{{ _base }}{{ request.path }}">
+    <link rel="icon" type="image/png" href="/favicon.png">
+    <link rel="apple-touch-icon" href="/favicon.png">
     <meta property="og:type" content="website">
     <meta property="og:site_name" content="SB.GG">
     <meta property="og:locale" content="ko_KR">
@@ -1368,11 +1370,19 @@
                 <a href="/spectate" style="font-size: 13px; margin-left: 12px; color: var(--point-color); font-weight: 700; text-decoration: none;">↺ 새로고침</a>
             </div>
             {% if not spectate_games %}
+            {% if spectate_available is defined and not spectate_available %}
+            <div class="glass-panel" style="padding: 50px; text-align: center;">
+                <div style="font-size: 40px; margin-bottom: 15px;">🛠️</div>
+                <div style="font-size: 18px; font-weight: 800; margin-bottom: 8px;">실시간 관전 기능은 준비 중입니다</div>
+                <div style="font-size: 14px; color: var(--text-muted);">Riot 정식 API 승인 후 천상계 라이브 게임을 바로 관전할 수 있어요. 조금만 기다려 주세요!</div>
+            </div>
+            {% else %}
             <div class="glass-panel" style="padding: 50px; text-align: center;">
                 <div style="font-size: 40px; margin-bottom: 15px;">🎮</div>
                 <div style="font-size: 18px; font-weight: 800; margin-bottom: 8px;">현재 진행 중인 천상계 게임이 없습니다</div>
-                <div style="font-size: 14px; color: var(--text-muted);">챌린저 상위권 플레이어들이 게임 중이 아닙니다. 잠시 후 새로고침 해보세요.</div>
+                <div style="font-size: 14px; color: var(--text-muted);">잠시 후 새로고침 해보세요.</div>
             </div>
+            {% endif %}
             {% else %}
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
                 {% for game in spectate_games %}

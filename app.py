@@ -1310,6 +1310,21 @@ def _og_logo_square():
     base.convert('RGB').save(buf, format='PNG', optimize=True)
     return buf.getvalue()
 
+def _og_favicon(S=64):
+    """브라우저 탭 파비콘(정사각 PNG) — 네이비 라운드 배경 + 사이트 동일 그라디언트 Z."""
+    from PIL import Image, ImageDraw
+    base = Image.new('RGBA', (S, S), (0, 0, 0, 0))
+    d = ImageDraw.Draw(base)
+    d.rounded_rectangle([0, 0, S - 1, S - 1], radius=int(S * 0.22), fill=(15, 22, 41, 255))
+    z = _og_build_z(int(S * 0.62))
+    if z.width > S:  # 안전: 폭이 넘치면 축소
+        z = z.resize((S, int(z.height * S / z.width)),
+                     getattr(getattr(Image, 'Resampling', Image), 'LANCZOS', 1))
+    base.alpha_composite(z, ((S - z.width) // 2, (S - z.height) // 2))
+    buf = BytesIO()
+    base.save(buf, format='PNG', optimize=True)
+    return buf.getvalue()
+
 def get_live_game(puuid):
     res = riot_get(f"https://kr.api.riotgames.com/lol/spectator/v5/active-games/by-puuid/{puuid}")
     if res.status_code == 200: return {'isPlaying': True, 'minutes': max(res.json().get('gameLength', 0) // 60, 0)}
@@ -2409,12 +2424,16 @@ def get_live_challenger_games():
     # ✅ MEDIUM 개선: db_read() 헬퍼 사용
     cached_json, updated_at = db_read(cache_key)
     if cached_json and current_time - updated_at < SPECTATE_CACHE_TIME:
-        return json.loads(cached_json), True
+        data = json.loads(cached_json)
+        if isinstance(data, dict):  # 신 포맷 {"g":게임, "a":관전가능}
+            return data.get("g", []), True, data.get("a", True)
+        return data, True, True  # 구 포맷(리스트) 호환
 
+    blocked = False  # Spectator API 403(개인 키) 여부 — 정직한 "준비 중" 안내용
     try:
         res = riot_get("https://kr.api.riotgames.com/lol/league/v4/challengerleagues/by-queue/RANKED_SOLO_5x5")
         if res.status_code != 200:
-            return [], False
+            return [], False, True  # 리그 조회 실패는 관전 가용성과 무관
         entries = res.json().get('entries', [])
         entries.sort(key=lambda x: x['leaguePoints'], reverse=True)
 
@@ -2428,7 +2447,8 @@ def get_live_challenger_games():
                 continue
             g_res = riot_get(f"https://kr.api.riotgames.com/lol/spectator/v5/active-games/by-puuid/{puuid}")
             if g_res.status_code == 403:
-                break  # 개인 키는 Spectator 미허용 → 호출 낭비 방지 (Production Key 승인 시 자동 작동)
+                blocked = True  # 개인 키는 Spectator 미허용 → 호출 낭비 방지 (Production Key 승인 시 자동 작동)
+                break
             if g_res.status_code != 200:
                 continue
             game = g_res.json()
@@ -2466,11 +2486,12 @@ def get_live_challenger_games():
             })
 
         # ✅ MEDIUM 개선: db_write() 헬퍼 사용
-        db_write(cache_key, live_games, current_time)
-        return live_games, False
+        available = not blocked
+        db_write(cache_key, {"g": live_games, "a": available}, current_time)
+        return live_games, False, available
     except Exception as e:
         print(f"관전 API 에러: {e}")
-        return [], False
+        return [], False, True
 
 # ================= 고티어 운영법 (에디터 직접 작성) =================
 GUIDE_PHASES = [
@@ -2704,7 +2725,7 @@ def my_link():
 @app.route('/live_games')
 def live_games_api():
     """홈 '실시간 천상계 라이브' 위젯용 — 비동기 로드(JSON). 기존 관전 백엔드 재사용."""
-    games, _ = get_live_challenger_games()
+    games, _, _ = get_live_challenger_games()
     return jsonify({"games": (games or [])[:3], "version": LATEST_VERSION})
 
 @app.route('/')
@@ -3247,8 +3268,10 @@ def duo_create():
 
 @app.route('/spectate')
 def spectate():
-    spectate_games, from_cache = get_live_challenger_games()
-    return render_template('index.html', page='spectate', spectate_games=spectate_games, latest_version=LATEST_VERSION, from_cache=from_cache)
+    spectate_games, from_cache, spectate_available = get_live_challenger_games()
+    return render_template('index.html', page='spectate', spectate_games=spectate_games,
+                           latest_version=LATEST_VERSION, from_cache=from_cache,
+                           spectate_available=spectate_available)
 
 @app.route('/privacy')
 def privacy():
@@ -3345,6 +3368,34 @@ def og_logo():
     except Exception as e:
         print(f"OG 로고 생성 실패: {e}")
         return redirect(_OG_SPLASH_FALLBACK, code=302)
+
+def _serve_favicon():
+    """파비콘 PNG 응답(생성 후 영구 캐시)."""
+    key = f"favicon#{OG_VER}"
+    raw, _ = db_read(key)
+    if raw:
+        try:
+            return app.response_class(base64.b64decode(json.loads(raw)), mimetype='image/png',
+                                      headers={'Cache-Control': 'public, max-age=604800'})
+        except Exception:
+            pass
+    try:
+        png = _og_favicon()
+        db_write(key, base64.b64encode(png).decode('ascii'), int(time.time()))
+        return app.response_class(png, mimetype='image/png',
+                                  headers={'Cache-Control': 'public, max-age=604800'})
+    except Exception as e:
+        print(f"파비콘 생성 실패: {e}")
+        return ('', 204)
+
+@app.route('/favicon.png')
+def favicon_png():
+    return _serve_favicon()
+
+@app.route('/favicon.ico')
+def favicon_ico():
+    # 브라우저 기본 요청(/favicon.ico) 대응 — PNG 바이트 그대로 서빙(대부분 브라우저 허용)
+    return _serve_favicon()
 
 @app.route('/more_matches')
 def more_matches():
