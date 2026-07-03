@@ -207,6 +207,14 @@ def init_db():
     # 타임라인 처리 완료 매치 (스킬/아이템순서 중복 방지)
     cursor.execute('''CREATE TABLE IF NOT EXISTS processed_timelines (
         match_id TEXT PRIMARY KEY, processed_at INTEGER)''')
+    # 자체 경량 애널리틱스 — 일별 경로별 페이지뷰
+    cursor.execute('''CREATE TABLE IF NOT EXISTS analytics_daily (
+        day TEXT, path TEXT, views INTEGER DEFAULT 0,
+        PRIMARY KEY (day, path))''')
+    # 자체 경량 애널리틱스 — 일별 순방문자(쿠키리스: 일일회전 해시, PII 미저장)
+    cursor.execute('''CREATE TABLE IF NOT EXISTS analytics_uniq (
+        day TEXT, vhash TEXT,
+        PRIMARY KEY (day, vhash))''')
     conn.commit()
     conn.close()
 
@@ -2551,6 +2559,80 @@ def is_admin():
     """관리자 여부 — 로그인 사용자명이 ADMIN_USERNAME(환경변수)과 일치."""
     return bool(ADMIN_USERNAME) and session.get('username') == ADMIN_USERNAME
 
+# ================= 자체 경량 애널리틱스 (쿠키리스 · PII 미저장) =================
+_ANALYTICS_SALT = os.getenv("SECRET_KEY", "sbgg-analytics-salt")
+_ANALYTICS_SKIP_PREFIX = ('/static', '/favicon', '/og/', '/api/', '/live_games', '/admin')
+_ANALYTICS_SKIP_EXACT = {'/sitemap.xml', '/robots.txt', '/riot.txt', '/collect', '/more_matches'}
+
+def _analytics_path(path):
+    """경로 정규화 — 상세 페이지는 그룹핑(카디널리티 폭발 방지)."""
+    if path.startswith('/champion/'):
+        return '/champion/*'
+    return path
+
+def _record_pageview(day, path, vhash):
+    """페이지뷰 1건 기록(백그라운드 스레드). 일별 경로 카운트 + 순방문 해시(중복무시)."""
+    try:
+        conn = db_connect()
+        conn.execute("""INSERT INTO analytics_daily (day, path, views) VALUES (?,?,1)
+                        ON CONFLICT(day, path) DO UPDATE SET views=analytics_daily.views+1""", (day, path))
+        conn.execute("""INSERT INTO analytics_uniq (day, vhash) VALUES (?,?)
+                        ON CONFLICT(day, vhash) DO NOTHING""", (day, vhash))
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"애널리틱스 기록 에러: {e}")
+
+@app.after_request
+def _track_pageview(resp):
+    """GET HTML 페이지뷰를 비동기 기록. 쿠키 없이 '일(day)+IP+UA+SECRET' 해시로
+    순방문을 일별 추정 — 매일 회전하고 원본은 저장 안 함(개인 식별정보 미보관)."""
+    try:
+        if request.method != 'GET' or resp.status_code != 200:
+            return resp
+        path = request.path
+        if path in _ANALYTICS_SKIP_EXACT or path.startswith(_ANALYTICS_SKIP_PREFIX):
+            return resp
+        if 'text/html' not in resp.headers.get('Content-Type', ''):
+            return resp
+        day = time.strftime('%Y-%m-%d')
+        ip = (request.headers.get('X-Forwarded-For', '') or request.remote_addr or '').split(',')[0].strip()
+        ua = request.headers.get('User-Agent', '')
+        vhash = hashlib.md5(f"{day}|{ip}|{ua}|{_ANALYTICS_SALT}".encode('utf-8')).hexdigest()[:16]
+        threading.Thread(target=_record_pageview,
+                         args=(day, _analytics_path(path), vhash), daemon=True).start()
+    except Exception:
+        pass
+    return resp
+
+def _analytics_summary():
+    """대시보드용 집계: 기간별 페이지뷰/순방문 + 인기 경로 + 최근 14일 추이."""
+    import datetime
+    today = datetime.date.today()
+    def cutoff(n):
+        return (today - datetime.timedelta(days=n - 1)).strftime('%Y-%m-%d')
+    out = {'periods': {}, 'top_paths': [], 'daily': []}
+    try:
+        conn = db_connect()
+        for label, n in (('오늘', 1), ('최근 7일', 7), ('최근 30일', 30)):
+            c = cutoff(n)
+            v = conn.execute("SELECT COALESCE(SUM(views),0) FROM analytics_daily WHERE day>=?", (c,)).fetchone()[0]
+            u = conn.execute("SELECT COUNT(*) FROM analytics_uniq WHERE day>=?", (c,)).fetchone()[0]
+            out['periods'][label] = {'views': int(v or 0), 'uniq': int(u or 0)}
+        c7 = cutoff(7)
+        for row in conn.execute("""SELECT path, SUM(views) AS v FROM analytics_daily
+                                   WHERE day>=? GROUP BY path ORDER BY v DESC LIMIT 15""", (c7,)):
+            out['top_paths'].append({'path': row[0], 'views': int(row[1] or 0)})
+        for i in range(13, -1, -1):
+            d = (today - datetime.timedelta(days=i)).strftime('%Y-%m-%d')
+            v = conn.execute("SELECT COALESCE(SUM(views),0) FROM analytics_daily WHERE day=?", (d,)).fetchone()[0]
+            u = conn.execute("SELECT COUNT(*) FROM analytics_uniq WHERE day=?", (d,)).fetchone()[0]
+            out['daily'].append({'day': d, 'views': int(v or 0), 'uniq': int(u or 0)})
+        conn.close()
+    except Exception as e:
+        print(f"애널리틱스 집계 에러: {e}")
+    return out
+
 # ================= 회원 인증 =================
 @app.context_processor
 def inject_user():
@@ -3049,6 +3131,70 @@ def admin_guide():
                            sel_kr=CHAMP_KR_MAP.get(canonical, ''), guide_phases=GUIDE_PHASES,
                            cur_guide=cur, saved=request.args.get('saved'),
                            latest_version=LATEST_VERSION)
+
+@app.route('/admin/analytics')
+def admin_analytics():
+    """자체 경량 애널리틱스 대시보드 (관리자 전용)."""
+    if not is_admin():
+        return redirect('/')
+    a = _analytics_summary()
+    P = a['periods']
+
+    def card(label, d):
+        return (f'<div class="c"><div class="cl">{label}</div>'
+                f'<div class="cv">{d["views"]:,}<span> PV</span></div>'
+                f'<div class="cu">순방문 {d["uniq"]:,}</div></div>')
+    cards = ''.join(card(l, P.get(l, {"views": 0, "uniq": 0})) for l in ('오늘', '최근 7일', '최근 30일'))
+
+    maxv = max((p['views'] for p in a['top_paths']), default=1) or 1
+    rows = ''.join(
+        f'<tr><td>{html.escape(p["path"])}</td><td class="n">{p["views"]:,}</td>'
+        f'<td class="bar"><span style="width:{round(p["views"] / maxv * 100)}%"></span></td></tr>'
+        for p in a['top_paths']) or '<tr><td colspan="3" class="empty">아직 방문 데이터가 없습니다</td></tr>'
+
+    maxd = max((d['views'] for d in a['daily']), default=1) or 1
+    trend = ''.join(
+        f'<div class="col"><div class="bwrap"><div class="b" style="height:{max(3, round(d["views"] / maxd * 96))}px" '
+        f'title="{d["day"]}: {d["views"]}PV · 순방문 {d["uniq"]}"></div></div>'
+        f'<div class="bl">{d["day"][5:]}</div></div>'
+        for d in a['daily'])
+
+    page = f"""<!doctype html><html lang="ko"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow"><title>SB.GG 애널리틱스</title>
+<style>
+*{{box-sizing:border-box;margin:0;padding:0}}
+body{{background:#0b1020;color:#e5e9f2;font-family:'Pretendard',system-ui,sans-serif;padding:28px;max-width:960px;margin:0 auto}}
+h1{{font-size:22px;font-weight:900;margin-bottom:4px}} h1 span{{background:linear-gradient(90deg,#fb7185,#f43f5e,#8b5cf6);-webkit-background-clip:text;background-clip:text;color:transparent;font-style:italic}}
+.sub{{color:#8b95a9;font-size:13px;margin-bottom:22px}} a{{color:#93c5fd;text-decoration:none}}
+.cards{{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:26px}}
+.c{{background:#151b2e;border:1px solid rgba(255,255,255,.06);border-radius:14px;padding:18px}}
+.cl{{color:#8b95a9;font-size:13px;font-weight:700;margin-bottom:8px}}
+.cv{{font-size:30px;font-weight:900}} .cv span{{font-size:13px;color:#8b95a9;font-weight:700}}
+.cu{{color:#4ade80;font-size:13px;font-weight:700;margin-top:4px}}
+h2{{font-size:15px;font-weight:800;margin:24px 0 12px}}
+table{{width:100%;border-collapse:collapse;background:#151b2e;border-radius:12px;overflow:hidden}}
+td{{padding:11px 14px;border-bottom:1px solid rgba(255,255,255,.04);font-size:14px}}
+td.n{{text-align:right;font-weight:800;white-space:nowrap;width:80px}}
+td.bar{{width:45%}} td.bar span{{display:block;height:9px;background:linear-gradient(90deg,#f43f5e,#8b5cf6);border-radius:5px}}
+td.empty{{text-align:center;color:#8b95a9;padding:26px}}
+.trend{{display:flex;align-items:flex-end;gap:6px;background:#151b2e;border:1px solid rgba(255,255,255,.06);border-radius:12px;padding:18px 14px 10px;height:150px}}
+.col{{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%}}
+.bwrap{{flex:1;display:flex;align-items:flex-end}} .b{{width:70%;min-width:8px;background:linear-gradient(180deg,#8b5cf6,#f43f5e);border-radius:4px 4px 0 0}}
+.bl{{color:#6b7488;font-size:10px;margin-top:6px}}
+.note{{color:#6b7488;font-size:12px;margin-top:18px;line-height:1.6}}
+</style></head><body>
+<h1><span>Z</span> SB.GG 애널리틱스</h1>
+<div class="sub">자체 집계 · 쿠키 없음 · 개인정보 미저장 · <a href="/">← 사이트로</a></div>
+<div class="cards">{cards}</div>
+<h2>📈 최근 14일 방문 추이 (PV)</h2>
+<div class="trend">{trend}</div>
+<h2>🔥 인기 페이지 (최근 7일)</h2>
+<table>{rows}</table>
+<div class="note">· 순방문은 쿠키 없이 '날짜+IP+브라우저' 해시로 추정하며 매일 회전합니다(원본 IP·개인정보는 저장하지 않음).<br>
+· 챔피언 상세는 <b>/champion/*</b> 로 합산됩니다. 봇·정적파일·API·이미지 요청은 제외됩니다.</div>
+</body></html>"""
+    return app.response_class(page, mimetype='text/html')
 
 @app.route('/search')
 def search():
