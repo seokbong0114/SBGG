@@ -3132,6 +3132,61 @@ def admin_guide():
                            cur_guide=cur, saved=request.args.get('saved'),
                            latest_version=LATEST_VERSION)
 
+@app.route('/admin/feedback')
+def admin_feedback():
+    """고객의 소리 관리자 뷰어 (관리자 전용)."""
+    if not is_admin():
+        return redirect('/')
+    items = []
+    try:
+        conn = db_connect()
+        rows = conn.execute(
+            "SELECT id, category, content, contact, user_ref, created_at FROM feedback ORDER BY created_at DESC LIMIT 200"
+        ).fetchall()
+        conn.close()
+        for r in rows:
+            items.append({
+                'id': r[0], 'category': r[1] or '기타', 'content': r[2],
+                'contact': r[3] or '', 'user_ref': r[4] or '', 'ts': r[5],
+            })
+    except Exception as e:
+        print(f"피드백 조회 에러: {e}")
+
+    def _row(it):
+        ts = time.strftime('%y-%m-%d %H:%M', time.localtime(it['ts'])) if it['ts'] else '-'
+        cat_col = {'버그': '#f87171', '기능 제안': '#60a5fa', '칭찬': '#4ade80'}.get(it['category'], '#8b95a9')
+        return (f'<tr>'
+                f'<td style="color:{cat_col};font-weight:800;white-space:nowrap">{html.escape(it["category"])}</td>'
+                f'<td style="word-break:break-all">{html.escape(it["content"])}</td>'
+                f'<td style="color:#8b95a9;white-space:nowrap">{html.escape(it["contact"] or it["user_ref"] or "-")}</td>'
+                f'<td style="color:#6b7488;white-space:nowrap;font-size:12px">{ts}</td>'
+                f'</tr>')
+
+    rows_html = ''.join(_row(it) for it in items) or \
+        '<tr><td colspan="4" style="text-align:center;color:#8b95a9;padding:26px">아직 접수된 피드백이 없습니다</td></tr>'
+
+    page = f"""<!doctype html><html lang="ko"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow"><title>SB.GG 피드백</title>
+<style>
+*{{box-sizing:border-box;margin:0;padding:0}}
+body{{background:#0b1020;color:#e5e9f2;font-family:'Pretendard',system-ui,sans-serif;padding:28px;max-width:960px;margin:0 auto}}
+h1{{font-size:22px;font-weight:900;margin-bottom:4px}} h1 span{{background:linear-gradient(90deg,#fb7185,#f43f5e,#8b5cf6);-webkit-background-clip:text;background-clip:text;color:transparent;font-style:italic}}
+.sub{{color:#8b95a9;font-size:13px;margin-bottom:22px}} a{{color:#93c5fd;text-decoration:none}}
+.badge{{display:inline-block;font-size:12px;font-weight:800;padding:3px 10px;border-radius:20px;background:rgba(255,255,255,0.07);margin-left:10px;vertical-align:middle}}
+table{{width:100%;border-collapse:collapse;background:#151b2e;border-radius:12px;overflow:hidden}}
+th{{text-align:left;padding:11px 14px;font-size:12px;font-weight:800;color:#8b95a9;border-bottom:1px solid rgba(255,255,255,.08)}}
+td{{padding:11px 14px;border-bottom:1px solid rgba(255,255,255,.04);font-size:14px;vertical-align:top}}
+tr:last-child td{{border-bottom:none}}
+</style></head><body>
+<h1><span>Z</span> SB.GG 피드백 <span class="badge">{len(items)}건</span></h1>
+<div class="sub">최근 200건 · <a href="/admin/analytics">← 애널리틱스</a> · <a href="/">← 사이트로</a></div>
+<table><thead><tr><th>분류</th><th>내용</th><th>연락처/유저</th><th>접수 시각</th></tr></thead>
+<tbody>{rows_html}</tbody></table>
+</body></html>"""
+    return app.response_class(page, mimetype='text/html')
+
+
 @app.route('/admin/analytics')
 def admin_analytics():
     """자체 경량 애널리틱스 대시보드 (관리자 전용)."""
@@ -3185,7 +3240,7 @@ td.empty{{text-align:center;color:#8b95a9;padding:26px}}
 .note{{color:#6b7488;font-size:12px;margin-top:18px;line-height:1.6}}
 </style></head><body>
 <h1><span>Z</span> SB.GG 애널리틱스</h1>
-<div class="sub">자체 집계 · 쿠키 없음 · 개인정보 미저장 · <a href="/">← 사이트로</a></div>
+<div class="sub">자체 집계 · 쿠키 없음 · 개인정보 미저장 · <a href="/admin/feedback">고객 피드백</a> · <a href="/">← 사이트로</a></div>
 <div class="cards">{cards}</div>
 <h2>📈 최근 14일 방문 추이 (PV)</h2>
 <div class="trend">{trend}</div>
@@ -3370,7 +3425,9 @@ def duo():
     try:
         conn = db_connect()
         rows = conn.execute("""SELECT name, tag, tier, my_role, find_role, queue_type, mic, message, created_at
-                               FROM duo_posts ORDER BY created_at DESC LIMIT 50""").fetchall()
+                               FROM duo_posts WHERE created_at > ?
+                               ORDER BY created_at DESC LIMIT 50""",
+                              (int(time.time()) - 7 * 86400,)).fetchall()
         conn.close()
         for r in rows:
             posts.append({
