@@ -1181,12 +1181,12 @@
                     </tr></thead>
                     <tbody>
                         {% for p in leaderboard %}
-                        <tr style="cursor: pointer; transition: 0.2s;" onclick="window.location='/search?name={{ p.name|urlencode }}&tag={{ p.tag }}'" onmouseover="this.style.background='rgba(255,255,255,0.04)'" onmouseout="this.style.background='transparent'">
+                        <tr style="{% if p.name %}cursor: pointer; {% endif %}transition: 0.2s;"{% if p.name %} onclick="window.location='/search?name={{ p.name|urlencode }}&tag={{ p.tag }}'"{% endif %} onmouseover="this.style.background='rgba(255,255,255,0.04)'" onmouseout="this.style.background='transparent'">
                             <td style="padding: 15px; border-bottom: 1px solid rgba(255,255,255,0.02); text-align: center;">
                                 <span style="font-size: 20px; font-weight: 900; font-style: italic; color: {% if p.rank == 1 %}#fbbf24{% elif p.rank == 2 %}#94a3b8{% elif p.rank == 3 %}#b45309{% else %}var(--text-muted){% endif %};">{{ p.rank }}</span>
                             </td>
                             <td style="padding: 15px; border-bottom: 1px solid rgba(255,255,255,0.02);">
-                                <b style="font-size: 16px;">{{ p.name }}</b> <span style="font-size: 12px; color: var(--text-muted);">#{{ p.tag }}</span>
+                                {% if p.name %}<b style="font-size: 16px;">{{ p.name }}</b> <span style="font-size: 12px; color: var(--text-muted);">#{{ p.tag }}</span>{% else %}<b style="font-size: 16px; color: var(--text-muted);">비공개 소환사</b>{% endif %}
                                 {% if p.hotstreak %}<span style="margin-left: 8px; font-size: 11px; background: rgba(239,68,68,0.2); color: #fca5a5; padding: 2px 7px; border-radius: 10px; border: 1px solid rgba(239,68,68,0.4);">🔥 연승</span>{% endif %}
                                 {% if p.veteran %}<span style="margin-left: 4px; font-size: 11px; background: rgba(139,92,246,0.2); color: #c4b5fd; padding: 2px 7px; border-radius: 10px; border: 1px solid rgba(139,92,246,0.4);">🏆 베테랑</span>{% endif %}
                             </td>

@@ -38,6 +38,7 @@ AUTO_PK = "SERIAL PRIMARY KEY" if IS_PG else "INTEGER PRIMARY KEY AUTOINCREMENT"
 CACHE_EXPIRE_TIME = 300      # 캐시 만료 시간: 5분
 LEADERBOARD_CACHE_TIME = 600 # 래더 캐시: 10분
 SPECTATE_CACHE_TIME = 60     # 관전 캐시: 1분 (라이브 데이터)
+RIOT_ID_CACHE_TTL = 60 * 60 * 24  # puuid→라이엇ID(게임명#태그) 캐시: 24시간 (닉네임 거의 불변)
 
 # 🧠 AI 인게임 코치 (킬러 기능) — 안전 게이팅
 #   AI_COACH_ENABLED : 기능 노출 여부 (기본 on)
@@ -2285,6 +2286,36 @@ def recommend_champions(radar_array, primary_role=None):
             break
     return recs[:4]
 
+def resolve_riot_id(puuid):
+    """puuid → (gameName, tagLine). Riot이 league-v4 엔트리에서 summonerName을 제거했으므로
+    account-v1로 실제 라이엇 ID를 해석(개인 키 허용). 24h 캐시(닉네임 거의 불변) → 갱신 시 API 절약.
+    실패 시 (None, None) — 신뢰 원칙상 가짜 이름을 만들지 않는다."""
+    if not puuid:
+        return None, None
+    ck = f"riotid#{puuid}"
+    cached, ts = db_read(ck)
+    if cached and (int(time.time()) - ts) < RIOT_ID_CACHE_TTL:
+        try:
+            d = json.loads(cached)
+            return d.get('n'), d.get('t')
+        except Exception:
+            pass
+    try:
+        acc = riot_get(f"https://asia.api.riotgames.com/riot/account/v1/accounts/by-puuid/{puuid}")
+        if acc.status_code == 200:
+            aj = acc.json()
+            name, tag = aj.get('gameName'), (aj.get('tagLine') or 'KR1')
+            if name:
+                db_write(ck, {'n': name, 't': tag}, int(time.time()))
+                time.sleep(0.05)  # 라이브 호출 후에만 소폭 스로틀(20 req/s 준수) — 캐시 히트는 지연 0
+                return name, tag
+        elif acc.status_code == 429:
+            time.sleep(1)  # 레이트리밋 시 짧은 백오프
+    except Exception as e:
+        print(f"라이엇 ID 해석 에러 [{str(puuid)[:8]}]: {e}")
+    return None, None
+
+
 def get_challenger_leaderboard():
     cache_key = "leaderboard_kr_solo"
     current_time = int(time.time())
@@ -2306,10 +2337,12 @@ def get_challenger_leaderboard():
             losses = e.get('losses', 0)
             total = wins + losses
             winrate = round((wins / total) * 100) if total > 0 else 0
+            # ✅ 실제 라이엇 ID 해석 (summonerName 필드 제거 대응) — 실패 시 name=None
+            name, tag = resolve_riot_id(e.get('puuid', ''))
             leaderboard.append({
                 "rank": i + 1,
-                "name": e.get('summonerName', f'소환사{i+1}'),
-                "tag": "KR1",
+                "name": name,
+                "tag": tag or "KR1",
                 "lp": f"{e['leaguePoints']:,} LP",
                 "win": wins,
                 "lose": losses,
