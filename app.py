@@ -6,6 +6,7 @@ import json
 import time
 import re
 import html
+from concurrent.futures import ThreadPoolExecutor
 from flask import Flask, render_template, request, redirect, jsonify, session
 from werkzeug.security import generate_password_hash, check_password_hash
 import requests
@@ -1655,14 +1656,37 @@ def fetch_official_patch_notes():
         print(f"공식 패치노트 파싱 에러: {e}")
         return None
 
+def _fetch_match_json(m_id):
+    """단일 매치 상세 JSON을 조회(스레드풀에서 병렬 실행용). 실패 시 None.
+    ⚠️ requests.get 순수 I/O만 수행 — DB 쓰기 등 상태 변경은 하지 않는다(스레드 안전)."""
+    try:
+        raw = riot_get(f"https://asia.api.riotgames.com/lol/match/v5/matches/{m_id}")
+        if raw.status_code != 200:
+            print(f"매치 {m_id} 조회 실패: {raw.status_code}")
+            return None
+        return raw.json()
+    except Exception as e:
+        print(f"매치 {m_id} 조회 중 에러: {e}")
+        return None
+
+
 def get_match_details(puuid, start=0, count=20, queue=None, collect_stats=True, player_tier=None):
     url = f"https://asia.api.riotgames.com/lol/match/v5/matches/by-puuid/{puuid}/ids?start={start}&count={count}"
     url += f"&queue={queue}" if queue and queue != 'all' else "&type=ranked"
-        
+
     response = riot_get(url)
     if response.status_code != 200: return [], None, None, None, 0, [], {}, [], puuid, 0, [], 0, 0, "Teemo", []
 
     match_ids = response.json()
+    # ★ 성능: 20경기 상세를 병렬로 미리 가져온다(독립 I/O) — 순차 조회 대비 대폭 단축.
+    #   가져오기만 병렬화하고 아래 처리 루프의 순서·누적 로직은 100% 그대로 보존.
+    #   max_workers=10 → Riot 20 req/s 한도 안에서 안전(10개씩 웨이브).
+    if match_ids:
+        with ThreadPoolExecutor(max_workers=min(10, len(match_ids))) as _ex:
+            prefetched = list(_ex.map(_fetch_match_json, match_ids))
+    else:
+        prefetched = []
+
     matches, role_stats = [], {}
     overall_stats = {"combat": 0, "growth": 0, "vision": 0, "survival": 0, "objectives": 0, "join": 0}
     total_k, total_d, total_a, total_vision, total_kp, win_count, lose_count = 0, 0, 0, 0, 0, 0, 0
@@ -1670,13 +1694,10 @@ def get_match_details(puuid, start=0, count=20, queue=None, collect_stats=True, 
     coplayer_tracker = {}  # ★ 과거 매칭 추적: 최근 N판 동반 플레이어 누적
     team_luck_scores = []  # ★ 팀운: 게임별 (내 팀원 평균 - 적팀 평균) op_score 차이
 
-    for m_id in match_ids:
+    for m_id, m_res in zip(match_ids, prefetched):
         try:  # ✅ 버그 수정 3: 매치 1개 실패해도 나머지 계속 처리
-            raw = riot_get(f"https://asia.api.riotgames.com/lol/match/v5/matches/{m_id}")
-            if raw.status_code != 200:
-                print(f"매치 {m_id} 조회 실패: {raw.status_code}")
+            if m_res is None:  # 병렬 프리페치 실패(≈ 기존 status!=200 continue)
                 continue
-            m_res = raw.json()
             # ✅ 버그 수정 2: gameDuration은 항상 초 단위 → 단순하게 /60
             duration_m = max(1, m_res['info']['gameDuration'] / 60.0)
             queue_id = m_res['info'].get('queueId', 0)
@@ -2174,11 +2195,15 @@ def generate_improvement_tips(matches, overall_kda, radar_array, primary_role=No
     벤치마크 표본이 부족하면(가짜 숫자 금지) 라이다/폼 기반 폴백으로 안전 동작."""
     tips = []
     tier_key = (tier_name or "").strip().split(" ")[0].lower()
-    bench = get_tier_benchmarks(tier_key, primary_role) if (tier_key and primary_role) else {}
+    # ✅ 버그 수정: primary_role은 dict({'name','radar',...})로 넘어옴 → 벤치마크/필터엔 역할 '문자열'(teamPosition)이 필요.
+    #    matches에서 가장 많이 플레이한 role_en을 도출해 사용(dict를 role 문자열로 오용하던 문제 해결).
+    _rc = Counter(m.get('role_en') for m in matches if m.get('role_en'))
+    role_en = _rc.most_common(1)[0][0] if _rc else None
+    bench = get_tier_benchmarks(tier_key, role_en) if (tier_key and role_en) else {}
 
     # ── 1) 데이터 기반: 내 지표 vs 티어 평균 ──
     if bench and matches:
-        role_games = [m for m in matches if m.get('role_en') == primary_role and m.get('metrics')]
+        role_games = [m for m in matches if m.get('role_en') == role_en and m.get('metrics')]
         if len(role_games) >= 3:
             uavg = {}
             for metric in BENCHMARK_METRICS:
@@ -3035,20 +3060,30 @@ def search():
     
     acc = acc_res.json()
     searched_puuid = acc['puuid']
-    v4 = get_summoner_v4(searched_puuid)
-    tier_text, tier_name = get_league_info_by_puuid(searched_puuid)
-    
-    live_game = get_live_game(searched_puuid)
-    masteries = get_mastery(searched_puuid)
-    
+    # ★ 성능: 소환사·리그·마스터리·라이브게임은 서로 독립(puuid만 필요) → 병렬 조회로 직렬 대기 제거
+    with ThreadPoolExecutor(max_workers=4) as _ex:
+        _f_v4 = _ex.submit(get_summoner_v4, searched_puuid)
+        _f_lg = _ex.submit(get_league_info_by_puuid, searched_puuid)
+        _f_live = _ex.submit(get_live_game, searched_puuid)
+        _f_mas = _ex.submit(get_mastery, searched_puuid)
+        v4 = _f_v4.result()
+        tier_text, tier_name = _f_lg.result()
+        live_game = _f_live.result()
+        masteries = _f_mas.result()
+
     matches, overall_radar, primary_role, secondary_role, win, most, overall_kda, deep_tags, _, game_count, top_recent_champs, win_count, lose_count, banner_champ, repeat_encounters, recent_team_luck = get_match_details(searched_puuid, 0, 20, queue, player_tier=tier_name)
     improvement_tips = generate_improvement_tips(matches, overall_kda, overall_radar, primary_role, tier_name)
     champion_recs = recommend_champions(overall_radar, primary_role)
 
-    # ★ 모스트 챔피언 맞춤 패치 변화 (DDragon 버전 비교)
+    # ★ 모스트 챔피언 맞춤 패치 변화 (DDragon 버전 비교) — 챔피언별 독립·캐시됨 → 병렬 조회
+    _tcs = top_recent_champs[:5]
+    if _tcs:
+        with ThreadPoolExecutor(max_workers=min(5, len(_tcs))) as _ex3:
+            _pc_list = list(_ex3.map(lambda tc: get_champion_patch_changes(tc['img']), _tcs))
+    else:
+        _pc_list = []
     patch_changes = []
-    for tc in top_recent_champs[:5]:
-        pc = get_champion_patch_changes(tc['img'])
+    for tc, pc in zip(_tcs, _pc_list):
         patch_changes.append({
             "img": tc['img'], "name": tc['name'],
             "changes": (pc.get('changes', []) if pc else []),
