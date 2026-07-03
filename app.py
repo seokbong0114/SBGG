@@ -1285,6 +1285,28 @@ def get_og_card(kind, champ_id=None):
         print(f"OG 카드 생성 실패 [{cache_key}]: {e}")
         return None
 
+def _og_logo_square():
+    """정사각 브랜드 로고(600×600 PNG) — Organization 스키마용. 네이비 배경 + 중앙 Z + SB.GG."""
+    from PIL import Image, ImageDraw, ImageFilter
+    S = 600
+    base = Image.new('RGB', (S, S))
+    d = ImageDraw.Draw(base)
+    for y in range(S):
+        t = y / (S - 1)
+        col = tuple(int((13, 20, 38)[i] + ((30, 41, 64)[i] - (13, 20, 38)[i]) * t) for i in range(3))
+        d.line([(0, y), (S, y)], fill=col)
+    base = base.convert('RGBA')
+    glow = Image.new('RGBA', (S, S), (0, 0, 0, 0))
+    ImageDraw.Draw(glow).ellipse([S * 0.18, S * 0.04, S * 0.82, S * 0.62], fill=(139, 92, 246, 60))
+    base = Image.alpha_composite(base, glow.filter(ImageFilter.GaussianBlur(72)))
+    z = _og_build_z(300)
+    _og_paste_z(base, z, (S - z.width) // 2, int(S * 0.15))
+    draw = ImageDraw.Draw(base)
+    _og_shadow_text(draw, (S // 2, int(S * 0.78)), 'SB.GG', _og_font('xb', 92), (241, 245, 249), anchor='mm')
+    buf = BytesIO()
+    base.convert('RGB').save(buf, format='PNG', optimize=True)
+    return buf.getvalue()
+
 def get_live_game(puuid):
     res = riot_get(f"https://kr.api.riotgames.com/lol/spectator/v5/active-games/by-puuid/{puuid}")
     if res.status_code == 200: return {'isPlaying': True, 'minutes': max(res.json().get('gameLength', 0) // 60, 0)}
@@ -3205,6 +3227,26 @@ def og_champion(champ_id):
 def og_brand(kind):
     """브랜드 공유 카드(home/meta/patch/search)."""
     return _og_response(get_og_card(kind), _OG_SPLASH_FALLBACK)
+
+@app.route('/og/logo.png')
+def og_logo():
+    """정사각 브랜드 로고 — Organization 구조화 데이터용(캐시)."""
+    key = f"og#{OG_VER}#logo"
+    raw, _ = db_read(key)
+    if raw:
+        try:
+            return app.response_class(base64.b64decode(json.loads(raw)), mimetype='image/png',
+                                      headers={'Cache-Control': 'public, max-age=604800'})
+        except Exception:
+            pass
+    try:
+        png = _og_logo_square()
+        db_write(key, base64.b64encode(png).decode('ascii'), int(time.time()))
+        return app.response_class(png, mimetype='image/png',
+                                  headers={'Cache-Control': 'public, max-age=604800'})
+    except Exception as e:
+        print(f"OG 로고 생성 실패: {e}")
+        return redirect(_OG_SPLASH_FALLBACK, code=302)
 
 @app.route('/more_matches')
 def more_matches():

@@ -45,6 +45,39 @@
     <meta name="twitter:title" content="{{ ns.title }}">
     <meta name="twitter:description" content="{{ ns.desc }}">
     <meta name="twitter:image" content="{{ ns.image }}">
+    {# ── 구조화 데이터(JSON-LD) — 구글 리치 결과: 사이트 검색창 + 브레드크럼 ── #}
+    {% set jld = namespace(data=none) %}
+    {% if page == 'home' %}
+        {% set jld.data = [
+            {"@context": "https://schema.org", "@type": "WebSite",
+             "name": "SB.GG", "alternateName": "SB.GG 롤 전적·메타 분석", "url": _base ~ "/",
+             "potentialAction": {"@type": "SearchAction",
+                "target": {"@type": "EntryPoint", "urlTemplate": _base ~ "/search?name={search_term_string}"},
+                "query-input": "required name=search_term_string"}},
+            {"@context": "https://schema.org", "@type": "Organization",
+             "name": "SB.GG", "url": _base ~ "/", "logo": _base ~ "/og/logo.png"}
+        ] %}
+    {% elif page == 'champion' and champ %}
+        {% set jld.data = {"@context": "https://schema.org", "@type": "BreadcrumbList",
+            "itemListElement": [
+                {"@type": "ListItem", "position": 1, "name": "홈", "item": _base ~ "/"},
+                {"@type": "ListItem", "position": 2, "name": "챔피언", "item": _base ~ "/champions"},
+                {"@type": "ListItem", "position": 3, "name": champ.kr, "item": _base ~ "/champion/" ~ champ.id}
+            ]} %}
+    {% elif page == 'meta' %}
+        {% set jld.data = {"@context": "https://schema.org", "@type": "BreadcrumbList",
+            "itemListElement": [
+                {"@type": "ListItem", "position": 1, "name": "홈", "item": _base ~ "/"},
+                {"@type": "ListItem", "position": 2, "name": "챔피언 메타 티어리스트", "item": _base ~ "/meta"}
+            ]} %}
+    {% elif page == 'patch' %}
+        {% set jld.data = {"@context": "https://schema.org", "@type": "BreadcrumbList",
+            "itemListElement": [
+                {"@type": "ListItem", "position": 1, "name": "홈", "item": _base ~ "/"},
+                {"@type": "ListItem", "position": 2, "name": "패치노트", "item": _base ~ "/patch"}
+            ]} %}
+    {% endif %}
+    {% if jld.data %}<script type="application/ld+json">{{ jld.data | tojson }}</script>{% endif %}
     <link href="https://fonts.googleapis.com/css2?family=Pretendard:wght@400;600;800;900&family=Montserrat:wght@800;900&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
