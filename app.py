@@ -2955,22 +2955,19 @@ def _fetch_tier_pool(tier):
     r = riot_get(f"https://kr.api.riotgames.com/lol/league/v4/entries/RANKED_SOLO_5x5/{tier.upper()}/{div}?page={page}")
     return r.json() if r.status_code == 200 else []
 
-@app.route('/collect')
-def collect():
-    """플래티넘+ 다중 티어 순회 수집. ?n=플레이어수(기본5, 최대12), ?tier=auto|티어명.
-    크론으로 주기 호출 시 매번 다른 티어를 표본화해 전 티어 커버."""
+def _do_collect_once(n=5, tier="auto"):
+    """통계 수집 핵심 로직. /collect 라우트와 자동 수집 훅이 공유."""
     global _LAST_DB_ERROR
-    _LAST_DB_ERROR = None  # 이번 호출의 에러만 진단
-    n = max(1, min(int(request.args.get("n", 5)), 12))
-    tier = request.args.get("tier", "auto").lower()
+    _LAST_DB_ERROR = None
     if tier not in SAMPLE_TIERS:
-        tier = random.choice(SAMPLE_TIERS)  # auto: 티어 랜덤 순회
+        tier = random.choice(SAMPLE_TIERS)
     collected, scanned = 0, 0
     try:
         pool = _fetch_tier_pool(tier)
         if not pool:
-            return jsonify({"error": f"{tier} 풀 조회 실패", "tier": tier}), 502
-        random.shuffle(pool)  # 상위 편중 방지, 다양한 플레이어 표본
+            print(f"[자동수집] {tier} 풀 조회 실패")
+            return {"error": f"{tier} 풀 조회 실패", "tier": tier}
+        random.shuffle(pool)
         for entry in pool[:n]:
             puuid = entry.get('puuid', '')
             if not puuid:
@@ -2988,7 +2985,6 @@ def collect():
                     collected += 1
                 info = m_json.get('info', {})
                 if info.get('queueId', 0) in (420, 440):
-                    # ★ 티어 벤치마크 적립: 표본 플레이어 본인 지표를 sampled 티어로
                     dm = info.get('gameDuration', 0) / 60.0
                     me = next((pp for pp in info.get('participants', []) if pp.get('puuid') == puuid), None)
                     if me and me.get('teamPosition') in VALID_ROLES and dm >= 5:
@@ -2997,9 +2993,39 @@ def collect():
                     if tl.status_code == 200:
                         record_timeline_stats(tl.json(), m_json, m_id)
     except Exception as e:
-        return jsonify({"error": str(e), "collected": collected, "tier": tier}), 500
-    return jsonify({"tier": tier, "collected_new_matches": collected,
-                    "scanned_players": scanned, "total_games": get_stats_total_games()})
+        print(f"[자동수집] 에러: {e}")
+        return {"error": str(e), "collected": collected, "tier": tier}
+    total = get_stats_total_games()
+    print(f"[자동수집] {tier} · {scanned}명 스캔 · {collected}경기 신규 · 누적 {total}경기")
+    return {"tier": tier, "collected_new_matches": collected, "scanned_players": scanned, "total_games": total}
+
+
+# 4시간마다 첫 요청 시 백그라운드 자동 수집 (서버가 깨어 있을 때만 동작)
+_LAST_AUTO_COLLECT = 0
+_AUTO_COLLECT_INTERVAL = 4 * 3600
+
+@app.before_request
+def _maybe_auto_collect():
+    global _LAST_AUTO_COLLECT
+    p = request.path
+    if p.startswith('/static') or p.startswith('/og/') or p in ('/favicon.png', '/favicon.ico', '/collect'):
+        return
+    now = int(time.time())
+    if now - _LAST_AUTO_COLLECT < _AUTO_COLLECT_INTERVAL:
+        return
+    _LAST_AUTO_COLLECT = now
+    threading.Thread(target=_do_collect_once, daemon=True).start()
+
+
+@app.route('/collect')
+def collect():
+    """플래티넘+ 다중 티어 순회 수집. ?n=플레이어수(기본5, 최대12), ?tier=auto|티어명."""
+    n = max(1, min(int(request.args.get("n", 5)), 12))
+    tier = request.args.get("tier", "auto").lower()
+    result = _do_collect_once(n, tier)
+    if "error" in result:
+        return jsonify(result), 500
+    return jsonify(result)
 
 @app.route('/champion/<champ_id>')
 def champion_page(champ_id):
