@@ -6,6 +6,7 @@ import json
 import time
 import re
 import html
+import threading
 from concurrent.futures import ThreadPoolExecutor
 from flask import Flask, render_template, request, redirect, jsonify, session
 from werkzeug.security import generate_password_hash, check_password_hash
@@ -1670,6 +1671,20 @@ def _fetch_match_json(m_id):
         return None
 
 
+def _flush_deferred_stats(items):
+    """피기백 통계 쓰기를 응답 이후 백그라운드에서 처리(요청 지연 제거).
+    items: 루프에서 수집한 ('match', m_res, m_id) / ('bench', metrics, tier, role) 순서 그대로.
+    각 함수는 자체 DB 연결·dedup·try/except를 가짐 → 순서 replay만으로 동작 동일."""
+    for it in items:
+        try:
+            if it[0] == 'match':
+                record_match_stats(it[1], it[2])
+            elif it[0] == 'bench':
+                record_tier_benchmark(it[1], it[2], it[3])
+        except Exception as e:
+            print(f"백그라운드 통계 적립 에러: {e}")
+
+
 def get_match_details(puuid, start=0, count=20, queue=None, collect_stats=True, player_tier=None):
     url = f"https://asia.api.riotgames.com/lol/match/v5/matches/by-puuid/{puuid}/ids?start={start}&count={count}"
     url += f"&queue={queue}" if queue and queue != 'all' else "&type=ranked"
@@ -1693,6 +1708,7 @@ def get_match_details(puuid, start=0, count=20, queue=None, collect_stats=True, 
     recent_champ_stats = {}
     coplayer_tracker = {}  # ★ 과거 매칭 추적: 최근 N판 동반 플레이어 누적
     team_luck_scores = []  # ★ 팀운: 게임별 (내 팀원 평균 - 적팀 평균) op_score 차이
+    deferred_stats = []    # ★ 성능: 피기백 통계 쓰기를 응답 후 백그라운드로(요청 지연 제거)
 
     for m_id, m_res in zip(match_ids, prefetched):
         try:  # ✅ 버그 수정 3: 매치 1개 실패해도 나머지 계속 처리
@@ -1708,8 +1724,9 @@ def get_match_details(puuid, start=0, count=20, queue=None, collect_stats=True, 
 
             # ★ 피기백 통계 수집: 이미 가져온 매치를 통계 DB에 누적 (추가 API 호출 없음)
             # 페이지네이션(더보기)에서는 생략 → 느린 무료 서버에서 타임아웃(502) 방지
+            # 쓰기는 응답 후 백그라운드로 지연(요청 지연 제거) — 아래 루프 종료 시 flush
             if collect_stats:
-                record_match_stats(m_res, m_id)
+                deferred_stats.append(('match', m_res, m_id))
 
             main_player_data, participants_details, max_damage, max_cs, max_cspm = None, [], 0, 0, 0
 
@@ -1764,7 +1781,7 @@ def get_match_details(puuid, start=0, count=20, queue=None, collect_stats=True, 
                     _pm = _extract_metrics(p, duration_m)
                     main_player_data['metrics'] = _pm
                     if collect_stats and player_tier and p.get('teamPosition') in VALID_ROLES and duration_m >= 5:
-                        record_tier_benchmark(_pm, player_tier, p['teamPosition'])
+                        deferred_stats.append(('bench', _pm, player_tier, p['teamPosition']))
                     grade = calc_game_grade(main_player_data['kda_ratio'], round(kp), main_player_data['cs_per_min'], p['win'])
                     main_player_data['grade'] = grade
                     main_player_data['grade_style'] = GRADE_STYLE.get(grade, GRADE_STYLE['C'])
@@ -1885,7 +1902,10 @@ def get_match_details(puuid, start=0, count=20, queue=None, collect_stats=True, 
             print(f"매치 {m_id} 처리 중 에러 (건너뜀): {e}")
             continue
 
-            
+    # ★ 피기백 통계 쓰기를 응답 이후 백그라운드로 flush(요청 지연 제거). 통계는 그대로 수집됨.
+    if deferred_stats:
+        threading.Thread(target=_flush_deferred_stats, args=(deferred_stats,), daemon=True).start()
+
     game_count = len(matches) if matches else 1
     overall_kda = {"k": round(total_k/game_count, 1), "d": round(total_d/game_count, 1), "a": round(total_a/game_count, 1), "ratio": round((total_k + total_a) / max(1, total_d), 2)}
     
