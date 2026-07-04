@@ -2195,43 +2195,77 @@
             {% endfor %}
         </div>
 
-        <!-- 챔피언 목록 (라인별) -->
+        <!-- 챔피언 목록 (라인별) — op.gg 스타일 세로 랭킹 리스트 -->
+        <style>
+            .meta-list-head { display: flex; align-items: center; gap: 12px; padding: 6px 18px 10px; font-size: 11px; font-weight: 800; color: var(--text-muted); border-bottom: 1px solid rgba(255,255,255,0.07); margin-bottom: 8px; }
+            .meta-list { display: flex; flex-direction: column; gap: 7px; }
+            .meta-card { text-decoration: none; display: block; }
+            .meta-row { display: flex; align-items: center; gap: 12px; padding: 11px 18px; border-radius: 14px; background: rgba(255,255,255,0.035); border: 1px solid rgba(255,255,255,0.06); transition: 0.15s; }
+            .meta-card:hover .meta-row { background: rgba(255,255,255,0.07); border-color: rgba(255,255,255,0.18); transform: translateX(3px); }
+            .ml-rank  { width: 30px; flex-shrink: 0; text-align: center; font-size: 15px; font-weight: 900; color: var(--text-muted); }
+            .ml-champ { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; }
+            .ml-tier  { width: 50px; flex-shrink: 0; text-align: center; }
+            .ml-wr    { width: 96px; flex-shrink: 0; }
+            .ml-pr    { width: 62px; flex-shrink: 0; }
+            .ml-br    { width: 62px; flex-shrink: 0; }
+            .ml-extra { width: 168px; flex-shrink: 0; display: flex; gap: 6px; justify-content: flex-end; }
+            .ml-stat-val { font-size: 14px; font-weight: 800; }
+            .wr-bar-track { height: 5px; border-radius: 3px; background: rgba(255,255,255,0.09); margin-top: 4px; overflow: hidden; }
+            .wr-bar-fill { height: 100%; border-radius: 3px; }
+            @media (max-width: 680px) {
+                .meta-list-head .ml-pr, .meta-list-head .ml-br, .meta-list-head .ml-extra,
+                .meta-row .ml-pr, .meta-row .ml-br, .meta-row .ml-extra { display: none; }
+                .meta-row { padding: 10px 12px; gap: 8px; }
+                .meta-list-head { padding: 6px 12px 10px; gap: 8px; }
+                .ml-wr { width: 66px; }
+            }
+        </style>
         {% for role_en, champs in champion_tiers.items() %}
         <div id="role-{{ role_en }}" class="role-section" style="display: none;">
-            <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px;" id="grid-{{ role_en }}">
+            <!-- 컬럼 헤더 -->
+            <div class="meta-list-head">
+                <div class="ml-rank">#</div>
+                <div class="ml-champ">챔피언</div>
+                <div class="ml-tier">티어</div>
+                <div class="ml-wr">승률</div>
+                <div class="ml-pr">픽률</div>
+                <div class="ml-br">밴률</div>
+                <div class="ml-extra">난이도 · 데이터</div>
+            </div>
+            <div class="meta-list" id="grid-{{ role_en }}">
                 {% for c in champs %}
-                <a href="/champion/{{ c.id }}" class="meta-card" data-tier="{{ c.tier }}"
-                   style="text-decoration: none; display: block; border-radius: 16px; border: 1px solid transparent; transition: 0.2s;"
-                   onmouseover="this.style.borderColor='{{ c.tier_style.border }}'; this.style.transform='translateY(-3px)';"
-                   onmouseout="this.style.borderColor='transparent'; this.style.transform='translateY(0)';">
-                    <div class="glass-panel" style="padding: 16px 18px; display: flex; gap: 14px; align-items: center; border-radius: 16px; border: none;">
-                        <div style="position: relative; flex-shrink: 0;">
-                            <img src="https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/champion/{{ c.id }}.png"
-                                 style="width: 56px; height: 56px; border-radius: 14px; border: 2px solid {{ c.tier_style.color }};"
-                                 onerror="this.src='https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/champion/Teemo.png'">
-                            {% if c.has_detail %}
-                            <div style="position:absolute; bottom:-4px; right:-4px; background:#3b82f6; color:white; font-size:9px; font-weight:900; padding:1px 5px; border-radius:5px; border:1px solid #60a5fa;">상세</div>
-                            {% endif %}
-                        </div>
-                        <div style="flex: 1; min-width: 0;">
-                            <div style="display: flex; align-items: center; gap: 7px; margin-bottom: 5px;">
-                                <span style="background: {{ c.tier_style.bg }}; color: {{ c.tier_style.color }}; border: 1px solid {{ c.tier_style.border }}; padding: 2px 9px; border-radius: 7px; font-size: 12px; font-weight: 900; flex-shrink:0;">{% if c.tier == 'OP' %}OP{% else %}T{{ c.tier }}{% endif %}</span>
-                                <b style="font-size: 15px; color: white; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{{ c.kr }}</b>
-                                <span style="font-size: 13px; font-weight: 900; color: {{ c.trend_color }}; flex-shrink:0;">{{ c.trend_icon }}</span>
-                            </div>
-                            <div style="display: flex; gap: 14px; font-size: 11px; color: var(--text-muted); margin-bottom: 6px;">
-                                <span>승률 <b style="color: {% if c.wr >= 52 %}#4ade80{% elif c.wr < 49 %}#f87171{% else %}#e2e8f0{% endif %};">{{ c.wr }}%</b></span>
-                                <span>픽률 <b style="color: #e2e8f0;">{{ c.pr }}%</b></span>
-                                <span>밴률 <b style="color: {% if c.br >= 15 %}#f87171{% else %}#e2e8f0{% endif %};">{{ c.br }}%</b></span>
-                            </div>
-                            <div style="display:flex; align-items:center; gap:6px;">
-                                <span style="font-size: 10px; padding: 2px 7px; border-radius: 5px; font-weight: 800; background: rgba(255,255,255,0.04); color: {{ c.diff_color }}; border: 1px solid rgba(255,255,255,0.07);">난이도 {{ c.diff_label }}</span>
-                                {% if c.source == '실측' %}
-                                <span title="수집된 {{ c.sample }}게임 기반 실측 데이터" style="font-size: 10px; padding: 2px 7px; border-radius: 5px; font-weight: 800; background: rgba(74,222,128,0.12); color: #4ade80; border: 1px solid rgba(74,222,128,0.3);">실측 {{ c.sample }}</span>
-                                {% else %}
-                                <span title="표본 부족 — 메타 예측치" style="font-size: 10px; padding: 2px 7px; border-radius: 5px; font-weight: 800; background: rgba(251,191,36,0.1); color: #fbbf24; border: 1px solid rgba(251,191,36,0.25);">예측</span>
+                <a href="/champion/{{ c.id }}" class="meta-card" data-tier="{{ c.tier }}">
+                    <div class="meta-row">
+                        <div class="ml-rank"><span class="meta-rank">{{ loop.index }}</span></div>
+                        <div class="ml-champ">
+                            <div style="position: relative; flex-shrink: 0;">
+                                <img src="https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/champion/{{ c.id }}.png"
+                                     style="width: 46px; height: 46px; border-radius: 12px; border: 2px solid {{ c.tier_style.color }}; display: block;"
+                                     onerror="this.src='https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/champion/Teemo.png'">
+                                {% if c.has_detail %}
+                                <div style="position:absolute; bottom:-4px; right:-4px; background:#3b82f6; color:white; font-size:8px; font-weight:900; padding:1px 4px; border-radius:4px; border:1px solid #60a5fa;">상세</div>
                                 {% endif %}
                             </div>
+                            <div style="min-width: 0; overflow: hidden;">
+                                <b style="font-size: 15px; color: white; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block;">{{ c.kr }} <span style="font-size: 13px; font-weight: 900; color: {{ c.trend_color }};">{{ c.trend_icon }}</span></b>
+                            </div>
+                        </div>
+                        <div class="ml-tier">
+                            <span style="background: {{ c.tier_style.bg }}; color: {{ c.tier_style.color }}; border: 1px solid {{ c.tier_style.border }}; width: 44px; padding: 3px 0; display: inline-block; border-radius: 8px; font-size: 12px; font-weight: 900;">{% if c.tier == 'OP' %}OP{% else %}T{{ c.tier }}{% endif %}</span>
+                        </div>
+                        <div class="ml-wr">
+                            <span class="ml-stat-val" style="color: {% if c.wr >= 52 %}#4ade80{% elif c.wr < 49 %}#f87171{% else %}#e2e8f0{% endif %};">{{ c.wr }}%</span>
+                            <div class="wr-bar-track"><div class="wr-bar-fill" style="width: {{ c.wr }}%; background: {% if c.wr >= 52 %}#4ade80{% elif c.wr < 49 %}#f87171{% else %}#94a3b8{% endif %};"></div></div>
+                        </div>
+                        <div class="ml-pr"><span class="ml-stat-val" style="color: #e2e8f0;">{{ c.pr }}%</span></div>
+                        <div class="ml-br"><span class="ml-stat-val" style="color: {% if c.br >= 15 %}#f87171{% else %}#e2e8f0{% endif %};">{{ c.br }}%</span></div>
+                        <div class="ml-extra">
+                            <span style="font-size: 10px; padding: 3px 8px; border-radius: 6px; font-weight: 800; background: rgba(255,255,255,0.04); color: {{ c.diff_color }}; border: 1px solid rgba(255,255,255,0.07); white-space: nowrap;">난이도 {{ c.diff_label }}</span>
+                            {% if c.source == '실측' %}
+                            <span title="수집된 {{ c.sample }}게임 기반 실측 데이터" style="font-size: 10px; padding: 3px 8px; border-radius: 6px; font-weight: 800; background: rgba(74,222,128,0.12); color: #4ade80; border: 1px solid rgba(74,222,128,0.3); white-space: nowrap;">실측 {{ c.sample }}</span>
+                            {% else %}
+                            <span title="표본 부족 — 메타 예측치" style="font-size: 10px; padding: 3px 8px; border-radius: 6px; font-weight: 800; background: rgba(251,191,36,0.1); color: #fbbf24; border: 1px solid rgba(251,191,36,0.25); white-space: nowrap;">예측</span>
+                            {% endif %}
                         </div>
                     </div>
                 </a>
@@ -2286,7 +2320,16 @@
             cards.forEach(card => {
                 const show = currentTier === 'ALL' || card.dataset.tier === currentTier;
                 card.style.display = show ? 'block' : 'none';
-                if (show) visible++;
+                if (show) {
+                    visible++;
+                    // 필터 적용 시 보이는 순서대로 순위 재부여 + 상위 3위 강조
+                    const rankEl = card.querySelector('.meta-rank');
+                    if (rankEl) {
+                        rankEl.textContent = visible;
+                        rankEl.parentElement.style.color =
+                            visible === 1 ? '#fbbf24' : (visible <= 3 ? '#cbd5e1' : 'var(--text-muted)');
+                    }
+                }
             });
             const emptyMsg = document.getElementById('empty-' + currentRole);
             if (emptyMsg) emptyMsg.style.display = visible === 0 ? 'block' : 'none';
