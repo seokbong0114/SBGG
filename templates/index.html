@@ -4,6 +4,21 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="google-site-verification" content="3KC5LbSbUzZSWrx2yrkK1IuPYROT6i2gtSYxgyC-baI" />
+    <script>
+    /* 테마 조기 적용 (FOUC 방지) — 페인트 전에 <html data-theme> 설정.
+       저장값 없으면 OS 설정(prefers-color-scheme)으로 다크/라이트 자동 판별. */
+    (function () {
+        try {
+            var t = localStorage.getItem('sbgg-theme');
+            if (t !== 'dark' && t !== 'light' && t !== 'comfort') {
+                t = (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) ? 'light' : 'dark';
+            }
+            document.documentElement.setAttribute('data-theme', t);
+        } catch (e) {
+            document.documentElement.setAttribute('data-theme', 'dark');
+        }
+    })();
+    </script>
     {# ── 페이지별 동적 SEO / 공유 미리보기(OG) ── #}
     {% set _base = 'https://sbgg.onrender.com' %}
     {% set ns = namespace(
@@ -111,7 +126,129 @@
             --shadow-card: 0 8px 24px rgba(0, 0, 0, 0.30);
             --shadow-elev: 0 18px 46px rgba(0, 0, 0, 0.5);
         }
-        
+
+        /* ═══════════ 3단 테마 시스템 (Dark / Light / Eye Comfort) ═══════════ */
+        /* :root = 다크(기본). html[data-theme]로 팔레트 전환. */
+
+        /* ── B. 라이트 모드 (깔끔한 화이트/라이트 그레이) ── */
+        html[data-theme="light"] {
+            --bg-base: #eef1f6;
+            --bg-panel: rgba(255, 255, 255, 0.88);
+            --bg-panel-hover: #ffffff;
+            --bg-elev: #ffffff;
+            --border-glass: 1px solid rgba(15, 23, 42, 0.10);
+            --divider: 1px solid rgba(15, 23, 42, 0.08);
+            --text-strong: #0f172a;
+            --text-main: #1e293b;
+            --text-muted: #5b6b82;
+            --text-dim: #94a3b8;
+            --point-color: #0284c7;
+            --accent: #0284c7;
+            --accent-soft: rgba(2, 132, 199, 0.12);
+            --win-color: #16a34a;
+            --lose-color: #dc2626;
+            --cs-color: #d97706;
+            --blue-team: #2563eb;
+            --shadow-card: 0 6px 20px rgba(15, 23, 42, 0.08);
+            --shadow-elev: 0 18px 46px rgba(15, 23, 42, 0.16);
+        }
+
+        /* ── C. 편안함 모드 (웜 세피아 · 블루라이트 최소화) ── */
+        html[data-theme="comfort"] {
+            --bg-base: #201b16;
+            --bg-panel: rgba(52, 44, 35, 0.72);
+            --bg-panel-hover: rgba(68, 57, 45, 0.92);
+            --bg-elev: rgba(60, 50, 39, 0.9);
+            --border-glass: 1px solid rgba(214, 184, 138, 0.14);
+            --divider: 1px solid rgba(214, 184, 138, 0.10);
+            --text-strong: #fbf3e4;
+            --text-main: #ece0cd;
+            --text-muted: #b7a488;
+            --text-dim: #8a7862;
+            --point-color: #e8a54e;
+            --accent: #e8a54e;
+            --accent-soft: rgba(232, 165, 78, 0.15);
+            --win-color: #8bbf6a;
+            --lose-color: #e58b62;
+            --cs-color: #e0b64c;
+            --blue-team: #6ea8d8;
+            --shadow-card: 0 8px 24px rgba(0, 0, 0, 0.32);
+            --shadow-elev: 0 18px 46px rgba(0, 0, 0, 0.5);
+        }
+
+        /* ── 부드러운 전환: 테마 변경 순간에만 적용 (hover 트랜지션 간섭 방지) ── */
+        html.theme-anim, html.theme-anim * {
+            transition: background-color .38s ease, border-color .38s ease, color .38s ease, box-shadow .38s ease, fill .38s ease !important;
+        }
+
+        /* ═══ 라이트 모드 구조 보정 (하드코딩 다크 색상 → 라이트) ═══ */
+        html[data-theme="light"] .top-nav { background-color: rgba(255, 255, 255, 0.82) !important; }
+        html[data-theme="light"] .summary-dashboard,
+        html[data-theme="light"] .queue-btn.active { background: #ffffff !important; }
+        html[data-theme="light"] .queue-btn.active { color: var(--text-strong) !important; }
+        html[data-theme="light"] .home-search-box { background-color: #ffffff !important; box-shadow: 0 8px 26px rgba(15,23,42,0.10) !important; }
+        html[data-theme="light"] .home-search-box input,
+        html[data-theme="light"] .home-search-box textarea { color: #0f172a !important; }
+        html[data-theme="light"] .home-search-box input::placeholder { color: #94a3b8 !important; }
+        /* 반투명 흰색 틴트 배경 → 옅은 다크 틴트(카드 정의 유지) */
+        html[data-theme="light"] .hq-item,
+        html[data-theme="light"] .recent-chip,
+        html[data-theme="light"] .quick-menu-item { background: rgba(15,23,42,0.035) !important; }
+
+        /* 인라인 흰색 텍스트 → 라이트에서 다크 */
+        html[data-theme="light"] [style*="color: white"],
+        html[data-theme="light"] [style*="color:white"],
+        html[data-theme="light"] [style*="color: #fff"],
+        html[data-theme="light"] [style*="color:#fff"],
+        html[data-theme="light"] [style*="color: #ffffff"] { color: #0f172a !important; }
+        /* 솔리드 컬러 버튼·라이브 배지의 흰 글씨는 유지 (다크 텍스트 방지) */
+        html[data-theme="light"] .search-btn,
+        html[data-theme="light"] .search-btn *,
+        html[data-theme="light"] .nav-signup-btn,
+        html[data-theme="light"] .fb-submit,
+        html[data-theme="light"] .auth-submit,
+        html[data-theme="light"] .live-badge,
+        html[data-theme="light"] .live-badge * { color: #ffffff !important; }
+        /* 이미지 스플래시 배너 위 텍스트는 항상 흰색 (배너는 다크 오버레이 유지) */
+        html[data-theme="light"] .profile-banner [style*="color: white"],
+        html[data-theme="light"] .profile-banner [style*="color:white"],
+        html[data-theme="light"] .profile-name-h1,
+        html[data-theme="light"] .profile-name-h1 * { color: #ffffff !important; }
+        /* 클래스에 하드코딩된 흰색 텍스트(제목·유저명·카드·더보기 등) → 라이트에서 다크 */
+        html[data-theme="light"] .section-title,
+        html[data-theme="light"] .quick-menu-item b,
+        html[data-theme="light"] .nav-user,
+        html[data-theme="light"] .auth-title,
+        html[data-theme="light"] .privacy-h,
+        html[data-theme="light"] .multi-card,
+        html[data-theme="light"] .btn-load-more { color: var(--text-strong) !important; }
+        /* 입력창 텍스트 → 다크 (라이트 배경 입력창) */
+        html[data-theme="light"] .auth-input,
+        html[data-theme="light"] .duo-input { color: #0f172a !important; }
+        /* 호버 시 흰색 → 다크 (라이트 배경 가독성) */
+        html[data-theme="light"] .role-tab:hover,
+        html[data-theme="light"] .queue-btn:hover,
+        html[data-theme="light"] .recent-chip:hover,
+        html[data-theme="light"] .champ-filter-btn:hover,
+        html[data-theme="light"] .champ-role-btn:hover,
+        html[data-theme="light"] .nav-login-btn:hover,
+        html[data-theme="light"] .feedback-btn:hover,
+        html[data-theme="light"] .feedback-close:hover { color: var(--text-strong) !important; }
+
+        /* ═══ 테마 전환 스위처 (고정 · 우상단) ═══ */
+        .theme-switch { position: fixed; top: 11px; right: 14px; z-index: 2000; display: inline-flex; gap: 2px; padding: 3px; border-radius: 999px; background: var(--bg-panel); border: var(--border-glass); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); box-shadow: var(--shadow-card); }
+        .theme-switch button { border: none; background: transparent; color: var(--text-muted); font-family: 'Pretendard', sans-serif; font-size: 12px; font-weight: 800; padding: 6px 12px; border-radius: 999px; cursor: pointer; transition: 0.18s; white-space: nowrap; line-height: 1; }
+        .theme-switch button:hover { color: var(--text-main); }
+        .theme-switch button.on { background: var(--point-color); color: #ffffff; }
+        html[data-theme="comfort"] .theme-switch button.on { color: #201b16; }
+        /* 모바일(≤768px, 기존 nav 브레이크포인트와 정렬): 스위처를 하단 중앙으로 → nav 충돌 방지 */
+        @media (max-width: 768px) {
+            .theme-switch { top: auto; bottom: 14px; right: 50%; transform: translateX(50%); }
+            .theme-switch button { padding: 7px 15px; }
+        }
+        /* 데스크톱(≥769px): 홈 상단 계정 영역이 고정 스위처와 겹치지 않도록 우측 공간 확보 */
+        @media (min-width: 769px) { #homeNav { padding-right: 210px; } }
+
         body { background-color: var(--bg-base); color: var(--text-main); font-family: 'Pretendard', sans-serif; margin: 0; padding: 0; min-height: 100vh; display: flex; flex-direction: column; overflow-x: hidden; }
 
         .glass-panel { background: var(--bg-panel); border: var(--border-glass); backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px); border-radius: 16px; box-shadow: var(--shadow-card); }
@@ -595,6 +732,37 @@
     </footer>
     {% endmacro %}
 
+    {% if not ajax %}
+    <!-- ═══ 테마 전환 스위처 (Dark / Light / Eye Comfort) ═══ -->
+    <div class="theme-switch" id="themeSwitch" role="group" aria-label="화면 테마 선택">
+        <button type="button" data-theme-val="dark" title="다크 모드">다크</button>
+        <button type="button" data-theme-val="light" title="라이트 모드">라이트</button>
+        <button type="button" data-theme-val="comfort" title="편안함 모드 (블루라이트 최소화)">편안함</button>
+    </div>
+    <script>
+    (function () {
+        var root = document.documentElement;
+        var sw = document.getElementById('themeSwitch');
+        if (!sw) return;
+        var btns = sw.querySelectorAll('button');
+        function sync(theme) {
+            btns.forEach(function (b) { b.classList.toggle('on', b.dataset.themeVal === theme); });
+        }
+        function apply(theme) {
+            root.classList.add('theme-anim');
+            root.setAttribute('data-theme', theme);
+            try { localStorage.setItem('sbgg-theme', theme); } catch (e) {}
+            sync(theme);
+            window.setTimeout(function () { root.classList.remove('theme-anim'); }, 440);
+        }
+        btns.forEach(function (b) {
+            b.addEventListener('click', function () { apply(b.dataset.themeVal); });
+        });
+        sync(root.getAttribute('data-theme') || 'dark');
+    })();
+    </script>
+    {% endif %}
+
     {% if ajax %}
         <!-- AJAX 전적 더보기 렌더링 블록 -->
         {% for match in matches %}
@@ -852,7 +1020,7 @@
 
     {% elif page == 'home' %}
         <!-- ================= 1. 메인 홈 화면 ================= -->
-        <nav class="top-nav" style="background: transparent; border: none; justify-content: space-between;">
+        <nav id="homeNav" class="top-nav" style="background: transparent; border: none; justify-content: space-between;">
             <a href="/" class="logo-wrapper"><span class="logo-sb">Z</span></a>
             <div style="display:flex; align-items:flex-start; gap:10px;">
                 <button type="button" class="feedback-btn" onclick="openFeedback()">
