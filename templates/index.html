@@ -209,11 +209,13 @@
         html[data-theme="light"] .auth-submit,
         html[data-theme="light"] .live-badge,
         html[data-theme="light"] .live-badge * { color: #ffffff !important; }
-        /* 이미지 스플래시 배너 위 텍스트는 항상 흰색 (배너는 다크 오버레이 유지) */
+        /* 이미지 스플래시 배너(프로필/챔피언 상세): 배너는 어떤 테마든 다크 이미지.
+           컨테이너 기본 글자색을 밝게 → 색 미지정 텍스트(이름·티어·LP)는 밝아지고,
+           색 지정 요소(색깔 태그·금색 별 등)는 각자 색 유지. */
+        html[data-theme="light"] .profile-content { color: #f1f5f9 !important; }
         html[data-theme="light"] .profile-banner [style*="color: white"],
         html[data-theme="light"] .profile-banner [style*="color:white"],
-        html[data-theme="light"] .profile-name-h1,
-        html[data-theme="light"] .profile-name-h1 * { color: #ffffff !important; }
+        html[data-theme="light"] .profile-banner [style*="color: #fff"] { color: #ffffff !important; }
         /* 클래스에 하드코딩된 흰색 텍스트(제목·유저명·카드·더보기 등) → 라이트에서 다크 */
         html[data-theme="light"] .section-title,
         html[data-theme="light"] .quick-menu-item b,
