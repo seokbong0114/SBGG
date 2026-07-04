@@ -237,6 +237,69 @@
         html[data-theme="light"] .feedback-btn:hover,
         html[data-theme="light"] .feedback-close:hover { color: var(--text-strong) !important; }
 
+        /* ═══ 라이트 모드: 인라인 하드코딩 밝은/근백색 텍스트 대비 확보 ═══ */
+        /* 근백색(라이트 배경서 사실상 안 보임) → 어둡게 */
+        html[data-theme="light"] [style*="color: #e2e8f0"], html[data-theme="light"] [style*="color:#e2e8f0"] { color: #1e293b !important; }
+        html[data-theme="light"] [style*="color: #ccc"], html[data-theme="light"] [style*="color:#ccc"] { color: #64748b !important; }
+        html[data-theme="light"] [style*="color: #cbd5e1"], html[data-theme="light"] [style*="color:#cbd5e1"] { color: #475569 !important; }
+        html[data-theme="light"] [style*="color: #dbeafe"], html[data-theme="light"] [style*="color:#dbeafe"] { color: #1d4ed8 !important; }
+        /* 밝은 시맨틱 색(초록·앰버·하늘·빨강·보라) → 라이트 대응(어둡게) */
+        html[data-theme="light"] [style*="color: #4ade80"], html[data-theme="light"] [style*="color:#4ade80"],
+        html[data-theme="light"] [style*="color: #86efac"], html[data-theme="light"] [style*="color: #6ee7b7"] { color: #15803d !important; }
+        html[data-theme="light"] [style*="color: #34d399"], html[data-theme="light"] [style*="color:#34d399"] { color: #047857 !important; }
+        html[data-theme="light"] [style*="color: #fbbf24"], html[data-theme="light"] [style*="color:#fbbf24"],
+        html[data-theme="light"] [style*="color: #e0b64c"] { color: #b45309 !important; }
+        html[data-theme="light"] [style*="color: #93c5fd"], html[data-theme="light"] [style*="color:#93c5fd"],
+        html[data-theme="light"] [style*="color: #60a5fa"] { color: #1d4ed8 !important; }
+        html[data-theme="light"] [style*="color: #f87171"], html[data-theme="light"] [style*="color:#f87171"],
+        html[data-theme="light"] [style*="color: #fca5a5"], html[data-theme="light"] [style*="color: #fda4af"] { color: #dc2626 !important; }
+        html[data-theme="light"] [style*="color: #c4b5fd"], html[data-theme="light"] [style*="color: #d8b4fe"] { color: #7c3aed !important; }
+        /* 배너 내부(다크 스플래시)에서는 위 밝은 색을 원색 그대로 유지 (대비 확보) */
+        html[data-theme="light"] .profile-banner [style*="color: #fbbf24"] { color: #fbbf24 !important; }
+        html[data-theme="light"] .profile-banner [style*="color: #4ade80"] { color: #4ade80 !important; }
+        html[data-theme="light"] .profile-banner [style*="color: #34d399"] { color: #34d399 !important; }
+        html[data-theme="light"] .profile-banner [style*="color: #93c5fd"] { color: #93c5fd !important; }
+        html[data-theme="light"] .profile-banner [style*="color: #f87171"] { color: #f87171 !important; }
+        html[data-theme="light"] .profile-banner [style*="color: #fca5a5"] { color: #fca5a5 !important; }
+        html[data-theme="light"] .profile-banner [style*="color: #c4b5fd"] { color: #c4b5fd !important; }
+        /* JS가 style 조작 시 hex→rgb() 정규화됨(티어 버튼·순위 등) → rgb 포맷도 동일 매핑 */
+        html[data-theme="light"] [style*="color: rgb(226, 232, 240)"] { color: #1e293b !important; }
+        html[data-theme="light"] [style*="color: rgb(203, 213, 225)"] { color: #475569 !important; }
+        html[data-theme="light"] [style*="color: rgb(74, 222, 128)"] { color: #15803d !important; }
+        html[data-theme="light"] [style*="color: rgb(52, 211, 153)"] { color: #047857 !important; }
+        html[data-theme="light"] [style*="color: rgb(251, 191, 36)"] { color: #b45309 !important; }
+        html[data-theme="light"] [style*="color: rgb(147, 197, 253)"] { color: #1d4ed8 !important; }
+        html[data-theme="light"] [style*="color: rgb(248, 113, 113)"] { color: #dc2626 !important; }
+        html[data-theme="light"] .profile-banner [style*="color: rgb(251, 191, 36)"] { color: #fbbf24 !important; }
+        /* 클래스에 하드코딩된 근백색/시맨틱 색(챔피언 상세·개인정보 등) → 라이트 대응 */
+        html[data-theme="light"] .skill-name,
+        html[data-theme="light"] .ai-rec-item span,
+        html[data-theme="light"] .rune-tree-head span,
+        html[data-theme="light"] .privacy-ul li b,
+        html[data-theme="light"] .privacy-p b { color: #1e293b !important; }
+        html[data-theme="light"] .build-wr { color: #15803d !important; }
+        html[data-theme="light"] .build-tab.active,
+        html[data-theme="light"] .build-tab.active span { color: var(--text-strong) !important; }
+        /* 반투명 흰색 텍스트(구분자 '#' 등) → 라이트에서 가시 회색 */
+        html[data-theme="light"] [style*="color: rgba(255,255,255,0.3)"],
+        html[data-theme="light"] [style*="color: rgba(255, 255, 255, 0.3)"],
+        html[data-theme="light"] [style*="color: rgba(255,255,255,0.25)"],
+        html[data-theme="light"] [style*="color: rgba(255, 255, 255, 0.25)"] { color: #94a3b8 !important; }
+        /* hex 무공백 인라인 변형(color:#xxx) 보강 */
+        html[data-theme="light"] [style*="color:#86efac"], html[data-theme="light"] [style*="color:#6ee7b7"] { color: #15803d !important; }
+        html[data-theme="light"] [style*="color:#e0b64c"] { color: #b45309 !important; }
+        html[data-theme="light"] [style*="color:#60a5fa"] { color: #1d4ed8 !important; }
+        html[data-theme="light"] [style*="color:#fca5a5"], html[data-theme="light"] [style*="color:#fda4af"] { color: #dc2626 !important; }
+        html[data-theme="light"] [style*="color:#c4b5fd"], html[data-theme="light"] [style*="color:#d8b4fe"] { color: #7c3aed !important; }
+        /* 접이식(details) 다크 배경 → 라이트 (내부 다크 텍스트 가독성 확보) */
+        html[data-theme="light"] details { background: #ffffff !important; }
+        html[data-theme="light"] .ai-build-details { background: linear-gradient(135deg, rgba(251,191,36,0.08), rgba(255,255,255,0.96) 60%) !important; }
+        html[data-theme="light"] .fb-input { background: rgba(15,23,42,0.04) !important; color: #0f172a !important; border-color: rgba(15,23,42,0.15) !important; }
+        html[data-theme="light"] .cache-notice { color: #047857 !important; }
+        html[data-theme="light"] .nav-track-hint { color: #1d4ed8 !important; }
+        html[data-theme="light"] .nav-track-hint b { color: #1e3a8a !important; }
+        html[data-theme="light"] .home-tagline b { color: #1e293b !important; }
+
         /* ═══ 테마 전환 스위처 (고정 · 우상단) ═══ */
         .theme-switch { position: fixed; top: 11px; right: 14px; z-index: 2000; display: inline-flex; gap: 2px; padding: 3px; border-radius: 999px; background: var(--bg-panel); border: var(--border-glass); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); box-shadow: var(--shadow-card); }
         .theme-switch button { border: none; background: transparent; color: var(--text-muted); font-family: 'Pretendard', sans-serif; font-size: 12px; font-weight: 800; padding: 6px 12px; border-radius: 999px; cursor: pointer; transition: 0.18s; white-space: nowrap; line-height: 1; }
