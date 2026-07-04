@@ -39,6 +39,7 @@ if IS_PG:
     import psycopg2
 AUTO_PK = "SERIAL PRIMARY KEY" if IS_PG else "INTEGER PRIMARY KEY AUTOINCREMENT"
 CACHE_EXPIRE_TIME = 300      # 캐시 만료 시간: 5분
+REFRESH_COOLDOWN = 30        # 전적 갱신 최소 간격: 30초 (연타·API 남용 방지)
 LEADERBOARD_CACHE_TIME = 600 # 래더 캐시: 10분
 SPECTATE_CACHE_TIME = 60     # 관전 캐시: 1분 (라이브 데이터)
 RIOT_ID_CACHE_TTL = 60 * 60 * 24  # puuid→라이엇ID(게임명#태그) 캐시: 24시간 (닉네임 거의 불변)
@@ -758,6 +759,15 @@ init_db()
 LATEST_VERSION = "14.12.1"; PREV_VERSION = None
 CHAMP_KR_MAP, CHAMP_KEYS, CHAMP_TAGS = {}, {}, {}
 SPELL_MAP, SPELL_NAME = {}, {}
+# DDragon 영문 챔피언 클래스 → 한글 (기존 CHAMPION_TIERS style 표기 관례와 통일)
+CLASS_KR = {"Assassin": "암살자", "Mage": "마법사", "Marksman": "원거리 딜러",
+            "Fighter": "파이터", "Tank": "탱커", "Support": "서포터"}
+
+def tags_to_kr(tags, n=2):
+    """DDragon 영문 태그 리스트를 '암살자/마법사' 식 한글 문자열로. 없으면 '—'."""
+    if not tags:
+        return "—"
+    return "/".join(CLASS_KR.get(t, t) for t in tags[:n])
 RUNE_MAP, RUNE_NAME, RUNE_DESC, RUNE_TREES = {}, {}, {}, {}
 ITEM_NAME, ITEM_DESC = {}, {}
 CORE_ITEMS, BOOTS_ITEMS, START_ITEMS = set(), set(), set()
@@ -3109,7 +3119,7 @@ def champion_page(champ_id):
         trend, difficulty = stats.get("trend", "stable"), stats.get("difficulty", 2)
         num_tier = calc_meta_tier(wr, pr, br)
         tags = CHAMP_TAGS.get(canonical_id, [])
-        style_kr = "/".join(tags[:2]) if tags else "—"
+        style_kr = tags_to_kr(tags)
         champ_role = primary_role
         styled = {
             'id': canonical_id, 'kr': CHAMP_KR_MAP.get(canonical_id, canonical_id),
@@ -3344,22 +3354,34 @@ def search():
     # 💡 데이터베이스 캐싱 키 생성
     cache_key = f"{raw_name.lower().replace(' ', '')}#{tag.lower()}#{queue}"
     current_time = int(time.time())
-    
+    # 🔄 전적 갱신: refresh=1이면 5분 캐시를 건너뛰고 최신 전적을 새로 조회.
+    #   단, 30초(REFRESH_COOLDOWN) 이내 재갱신은 캐시 유지 → 연타·API 429 방지.
+    force_refresh = bool(request.args.get('refresh'))
+
     # 1. DB에서 캐시 데이터 조회
-    # ✅ MEDIUM 개선: db_read() 헬퍼 사용
     cached_json, updated_at = db_read(cache_key)
-    if cached_json and current_time - updated_at < CACHE_EXPIRE_TIME:
+    age = current_time - updated_at if cached_json else None
+    use_cache = cached_json and (
+        (not force_refresh and age < CACHE_EXPIRE_TIME) or
+        (force_refresh and age < REFRESH_COOLDOWN)
+    )
+    if use_cache:
         cache_data = json.loads(cached_json)
         cache_data['from_cache'] = True  # 프론트엔드에 캐시 데이터 유무 인지용 플래그
         return render_template('index.html', **cache_data)
 
-    # 2. 캐시가 없거나 5분이 지났다면 라이엇 API 호출 실행 (캐시 미스!)
+    # 2. 캐시가 없거나 만료됐거나 갱신 요청 → 라이엇 API 호출 (캐시 미스!)
     try:
         acc_res = get_summoner_info(raw_name, tag)
     except Exception:
         # ✅ 버그 수정 1: alert() 대신 에러 파라미터와 함께 홈으로 리다이렉트
         return redirect(f'/?error=network')
     if acc_res.status_code != 200:
+        # 갱신·조회 실패(429·일시 오류) 시 기존 캐시가 있으면 캐시로 폴백 (유저 이탈 방지)
+        if cached_json:
+            cache_data = json.loads(cached_json)
+            cache_data['from_cache'] = True
+            return render_template('index.html', **cache_data)
         return redirect(f'/?error=not_found&name={raw_name}')
     
     acc = acc_res.json()
