@@ -831,18 +831,26 @@
         <!-- ================= 1. 메인 홈 화면 ================= -->
         <nav class="top-nav" style="background: transparent; border: none; justify-content: space-between;">
             <a href="/" class="logo-wrapper"><span class="logo-sb">Z</span></a>
-            {% if current_user %}
-            <div class="nav-account">
-                <a href="/me" class="nav-track-btn">📈 내 전적 추적</a>
-                <span class="nav-user">👤 {{ current_user.username }}</span>
-                <a href="/logout" class="nav-logout-btn">로그아웃</a>
+            <div style="display:flex; align-items:flex-start; gap:10px;">
+                <button type="button" class="feedback-btn" onclick="openFeedback()">
+                    <span style="font-size:14px;">💬</span> 고객의 소리
+                </button>
+                {% if current_user %}
+                <div class="nav-account">
+                    <a href="/me" class="nav-track-btn">📈 내 전적 추적</a>
+                    <span class="nav-user">👤 {{ current_user.username }}</span>
+                    <a href="/logout" class="nav-logout-btn">로그아웃</a>
+                </div>
+                {% else %}
+                <div style="display:flex; flex-direction:column; align-items:flex-end; gap:7px;">
+                    <div class="nav-account">
+                        <a href="/login" class="nav-login-btn">로그인</a>
+                        <a href="/signup" class="nav-signup-btn">회원가입</a>
+                    </div>
+                    <a href="/signup" class="nav-track-hint"><span class="spark">📈</span> 회원이시라면 <b>내 전적 추적</b> 기능을 사용할 수 있어요</a>
+                </div>
+                {% endif %}
             </div>
-            {% else %}
-            <div class="nav-account">
-                <a href="/login" class="nav-login-btn">로그인</a>
-                <a href="/signup" class="nav-signup-btn">회원가입</a>
-            </div>
-            {% endif %}
         </nav>
         <div class="home-hero">
             <div class="home-title"><span class="logo-sb">Z</span></div>
@@ -1628,11 +1636,10 @@
             <!-- ★ 모스트 챔피언 맞춤 패치 변화 -->
             {% if patch_changes %}
             <div class="glass-panel" style="padding: 24px 26px; margin-top: 8px;">
-                <div style="display:flex; align-items:center; gap:10px; margin-bottom:6px;">
+                <div style="display:flex; align-items:center; gap:10px; margin-bottom:16px;">
                     <div class="section-title" style="margin:0;">🔔 내 챔피언 패치 변화</div>
                     <span style="font-size:11px; background:rgba(244,63,94,0.15); color:#fda4af; border:1px solid rgba(244,63,94,0.3); border-radius:6px; padding:2px 8px; font-weight:800;">패치 {{ current_patch }}</span>
                 </div>
-                <div style="font-size:12px; color:var(--text-muted); margin-bottom:16px;">모스트 챔피언에게 이번 패치에서 일어난 변화만 요약했습니다.</div>
                 <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(260px, 1fr)); gap:12px;">
                     {% for pc in patch_changes %}
                     <div style="background:rgba(255,255,255,0.025); border:1px solid rgba(255,255,255,0.07); border-radius:12px; padding:14px;">
@@ -1659,7 +1666,6 @@
                     </div>
                     {% endfor %}
                 </div>
-                <div style="font-size:10px; color:var(--text-muted); text-align:right; margin-top:10px; opacity:0.6;">※ DDragon 패치 데이터 자동 비교 (수치 변경 기준 · 리워크/문구 변경은 별도)</div>
             </div>
             {% endif %}
 
@@ -1799,7 +1805,7 @@
                 {% if champion_recs %}
                 <div class="glass-panel" style="padding: 22px 25px;">
                     <div class="section-title" style="margin-bottom: 3px;">🎯 플레이 스타일 맞춤 챔피언</div>
-                    <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 14px;">육각형 지표 × 패치 {{ current_patch }} 메타(티어·승률) 교차검증</div>
+                    <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 14px;">내 플레이 성향과 현재 메타를 함께 반영한 추천</div>
                     <div style="display: flex; flex-direction: column; gap: 12px;">
                         {% for rec in champion_recs %}
                         <a href="/champion/{{ rec.id }}" style="text-decoration: none; display: flex; gap: 14px; align-items: center; padding: 14px; border-radius: 12px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); transition: 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.07)'" onmouseout="this.style.background='rgba(255,255,255,0.03)'">
@@ -1828,7 +1834,7 @@
                     <div class="section-title" style="margin:0;">🔁 자주 만난 소환사</div>
                     <span style="font-size:11px; background:rgba(96,165,250,0.15); color:#93c5fd; border:1px solid rgba(96,165,250,0.35); border-radius:6px; padding:2px 8px; font-weight:800;">{{ repeat_encounters|length }}명</span>
                 </div>
-                <div style="font-size:12px; color:var(--text-muted); margin-bottom:18px;">최근 20게임 중 <b style="color:#93c5fd;">2번 이상</b> 같은 판에서 마주친 소환사입니다. (듀오 파트너·단골 상대 추적)</div>
+                <div style="font-size:12px; color:var(--text-muted); margin-bottom:18px;">최근 20게임서 <b style="color:#93c5fd;">2번 이상</b> 마주친 소환사 (듀오·단골 상대)</div>
                 <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(220px, 1fr)); gap:10px;">
                     {% for u in repeat_encounters %}
                     <a href="/search?name={{ u.name|urlencode }}&tag={{ u.tag or 'KR1' }}" style="text-decoration:none; display:flex; align-items:center; gap:12px; padding:12px 14px; background:rgba(255,255,255,0.025); border:1px solid rgba(255,255,255,0.07); border-radius:12px; transition:0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.06)'; this.style.borderColor='rgba(96,165,250,0.3)'; this.style.transform='translateY(-2px)'" onmouseout="this.style.background='rgba(255,255,255,0.025)'; this.style.borderColor='rgba(255,255,255,0.07)'; this.style.transform='translateY(0)'">
