@@ -151,7 +151,10 @@
 
         .home-hero { position: relative; padding: 48px 20px 30px; text-align: center; display: flex; flex-direction: column; align-items: center; overflow: hidden; }
         .home-hero::before { content: ''; position: absolute; top: -50%; left: 50%; transform: translateX(-50%); width: 800px; height: 800px; background: radial-gradient(circle, rgba(139, 92, 246, 0.15) 0%, rgba(0,0,0,0) 70%); z-index: -1; pointer-events: none; }
-        .home-title { font-family: 'Montserrat'; font-size: 64px; font-weight: 900; margin-bottom: 22px; letter-spacing: -2px; }
+        .home-title { font-family: 'Montserrat'; font-size: 64px; font-weight: 900; margin-bottom: 12px; letter-spacing: -2px; }
+        .home-tagline { font-size: 16px; font-weight: 700; color: var(--text-muted); margin: 0 0 26px; letter-spacing: -0.2px; max-width: 600px; line-height: 1.55; }
+        .home-tagline b { color: #cbd5e1; font-weight: 800; }
+        @media (max-width: 480px) { .home-tagline { font-size: 13.5px; margin-bottom: 20px; } }
         .home-quicknav { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px; margin-top: 22px; max-width: 720px; width: 100%; }
         .hq-item { background: rgba(255,255,255,0.05); border: var(--border-glass); border-radius: 14px; padding: 11px 18px; color: var(--text-main); font-weight: 800; font-size: 14px; text-decoration: none; transition: 0.2s; white-space: nowrap; }
         .hq-item:hover { background: rgba(244,63,94,0.15); border-color: rgba(244,63,94,0.4); transform: translateY(-2px); }
@@ -828,29 +831,22 @@
         <!-- ================= 1. 메인 홈 화면 ================= -->
         <nav class="top-nav" style="background: transparent; border: none; justify-content: space-between;">
             <a href="/" class="logo-wrapper"><span class="logo-sb">Z</span></a>
-            <div style="display:flex; align-items:flex-start; gap:10px;">
-                <button type="button" class="feedback-btn" onclick="openFeedback()">
-                    <span style="font-size:14px;">💬</span> 고객의 소리
-                </button>
-                {% if current_user %}
-                <div class="nav-account">
-                    <a href="/me" class="nav-track-btn">📈 내 전적 추적</a>
-                    <span class="nav-user">👤 {{ current_user.username }}</span>
-                    <a href="/logout" class="nav-logout-btn">로그아웃</a>
-                </div>
-                {% else %}
-                <div style="display:flex; flex-direction:column; align-items:flex-end; gap:7px;">
-                    <div class="nav-account">
-                        <a href="/login" class="nav-login-btn">로그인</a>
-                        <a href="/signup" class="nav-signup-btn">회원가입</a>
-                    </div>
-                    <a href="/signup" class="nav-track-hint"><span class="spark">📈</span> 회원이시라면 <b>내 전적 추적</b> 기능을 사용할 수 있어요</a>
-                </div>
-                {% endif %}
+            {% if current_user %}
+            <div class="nav-account">
+                <a href="/me" class="nav-track-btn">📈 내 전적 추적</a>
+                <span class="nav-user">👤 {{ current_user.username }}</span>
+                <a href="/logout" class="nav-logout-btn">로그아웃</a>
             </div>
+            {% else %}
+            <div class="nav-account">
+                <a href="/login" class="nav-login-btn">로그인</a>
+                <a href="/signup" class="nav-signup-btn">회원가입</a>
+            </div>
+            {% endif %}
         </nav>
         <div class="home-hero">
             <div class="home-title"><span class="logo-sb">Z</span></div>
+            <div class="home-tagline">소환사 전적부터 챔피언 메타까지 — <b>롤 정보를 한 곳에서 빠르게</b></div>
             <div class="home-search-wrapper">
                 <form action="/search" method="get" class="home-search-box" id="homeSearchForm">
                     <input type="text" name="name" placeholder="소환사명 또는 챔피언명 검색  (여러명: 쉼표로 구분)" required id="homeSearchName"
@@ -884,15 +880,11 @@
         <!-- ★ 패치 메타 위젯 -->
         <div class="main-container" style="margin-bottom: 60px;">
             <div style="margin-bottom: 16px;">
-                <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 6px;">
-                    <div style="font-size: 18px; font-weight: 900;">⚡ 패치 {{ current_patch }} — 라인별 최강 챔피언
-                        <span style="font-size: 11px; font-weight: 800; color: #4ade80; background: rgba(74,222,128,0.12); border: 1px solid rgba(74,222,128,0.3); border-radius: 6px; padding: 2px 7px; vertical-align: middle;" title="Riot 공식 데이터(DDragon)에서 실시간 자동 동기화">공식 최신</span>
+                <div style="display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 6px;">
+                    <div style="font-size: 18px; font-weight: 900;">라인별 최강 챔피언
+                        <span style="font-size: 12px; color: var(--text-muted); font-weight: 700; margin-left: 4px;">패치 {{ current_patch }}</span>
                     </div>
                     <a href="/meta" style="font-size: 13px; color: var(--point-color); font-weight: 800; text-decoration: none;">전체 메타 보기 ➔</a>
-                </div>
-                <div style="font-size: 12px; color: var(--text-muted); font-weight: 700; margin-top: 7px;">
-                    📊 표본 기준: <b style="color: #93c5fd;">{{ stats_basis }}</b> · 실측 {{ total_games }}게임
-                    <span style="opacity: 0.75;">(챌린저~플래티넘 수집 + 검색 유저 합산)</span>
                 </div>
             </div>
             <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 14px;">
@@ -918,16 +910,12 @@
         <!-- ★ 이번 패치 버프/너프 챔피언 위젯 -->
         {% if patch_highlights and (patch_highlights.buffed or patch_highlights.nerfed or patch_highlights.items_buffed or patch_highlights.items_nerfed) %}
         <div class="main-container" style="margin-bottom: 60px;">
-            <div style="display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 6px; flex-wrap: wrap; gap: 6px;">
-                <div style="font-size: 18px; font-weight: 900;">📰 패치 {{ patch_highlights.cur_patch }} 변화 — 주요 버프 / 너프
-                    <span style="font-size: 11px; font-weight: 800; color: #93c5fd; background: rgba(96,165,250,0.12); border: 1px solid rgba(96,165,250,0.3); border-radius: 6px; padding: 2px 7px; vertical-align: middle;" title="Riot 공식 데이터(DDragon)에서 스탯·쿨타임·소모값·아이템 변경을 자동 감지">자동 감지</span>
+            <div style="display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 16px; flex-wrap: wrap; gap: 6px;">
+                <div style="font-size: 18px; font-weight: 900;">이번 패치 버프 / 너프
+                    <span style="font-size: 12px; color: var(--text-muted); font-weight: 700; margin-left: 4px;">패치 {{ patch_highlights.cur_patch }}</span>
                 </div>
-                <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 3px;">
-                    <span style="font-size: 12px; color: var(--text-muted); font-weight: 700;">직전 {{ patch_highlights.prev_patch }} 대비 · 챔피언 {{ patch_highlights.total_changed }}종{% if patch_highlights.item_changed %} · 아이템 {{ patch_highlights.item_changed }}종{% endif %}</span>
-                    <a href="/patch" style="font-size: 12px; color: var(--point-color); font-weight: 800; text-decoration: none;">패치노트 전체 보기 ➔</a>
-                </div>
+                <a href="/patch" style="font-size: 13px; color: var(--point-color); font-weight: 800; text-decoration: none;">패치노트 전체 보기 ➔</a>
             </div>
-            <div style="font-size: 11px; color: rgba(148,163,184,0.7); font-weight: 600; margin-bottom: 16px;">※ 아래는 주요 변경 요약입니다. <a href="/patch" style="color: var(--point-color); font-weight: 800;">패치노트 전체 보기</a>에서 스킬 계수까지 포함한 공식 원문 기준 전체 변경을 확인하세요.</div>
             <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px;">
                 <!-- 상향(버프) -->
                 <div class="glass-panel" style="padding: 20px;">
@@ -973,46 +961,6 @@
                 </div>
             </div>
 
-            <!-- 아이템 변경 -->
-            {% if patch_highlights.items_buffed or patch_highlights.items_nerfed %}
-            <div style="margin-top: 18px;">
-                <div style="font-size: 15px; font-weight: 900; margin-bottom: 12px;">🛡️ 아이템 변경 <span style="font-size: 11px; color: var(--text-muted); font-weight: 700;">주요 스탯·가격</span></div>
-                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px;">
-                    <div class="glass-panel" style="padding: 16px;">
-                        <div style="font-size: 13px; font-weight: 900; color:#4ade80; margin-bottom: 10px;">🟢 상향</div>
-                        {% if patch_highlights.items_buffed %}
-                        <div style="display:flex; flex-direction:column; gap:9px;">
-                            {% for it in patch_highlights.items_buffed %}
-                            <div style="display:flex; align-items:center; gap:10px;">
-                                <img src="{{ it.icon }}" style="width:32px; height:32px; border-radius:7px; border:1px solid rgba(74,222,128,0.3); flex-shrink:0;" onerror="this.style.opacity=0">
-                                <div style="min-width:0;">
-                                    <div style="font-size:13px; font-weight:800; color:white;">{{ it.name }} <span style="color:#4ade80; font-size:10px;">↑</span></div>
-                                    <div style="font-size:11px; color:var(--text-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{% for d in it.details %}{{ d.text }}{% if not loop.last %} · {% endif %}{% endfor %}</div>
-                                </div>
-                            </div>
-                            {% endfor %}
-                        </div>
-                        {% else %}<div style="color:var(--text-muted); font-size:12px; padding:8px 0;">해당 없음</div>{% endif %}
-                    </div>
-                    <div class="glass-panel" style="padding: 16px;">
-                        <div style="font-size: 13px; font-weight: 900; color:#f87171; margin-bottom: 10px;">🔴 하향</div>
-                        {% if patch_highlights.items_nerfed %}
-                        <div style="display:flex; flex-direction:column; gap:9px;">
-                            {% for it in patch_highlights.items_nerfed %}
-                            <div style="display:flex; align-items:center; gap:10px;">
-                                <img src="{{ it.icon }}" style="width:32px; height:32px; border-radius:7px; border:1px solid rgba(248,113,113,0.3); flex-shrink:0;" onerror="this.style.opacity=0">
-                                <div style="min-width:0;">
-                                    <div style="font-size:13px; font-weight:800; color:white;">{{ it.name }} <span style="color:#f87171; font-size:10px;">↓</span></div>
-                                    <div style="font-size:11px; color:var(--text-muted); white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{% for d in it.details %}{{ d.text }}{% if not loop.last %} · {% endif %}{% endfor %}</div>
-                                </div>
-                            </div>
-                            {% endfor %}
-                        </div>
-                        {% else %}<div style="color:var(--text-muted); font-size:12px; padding:8px 0;">해당 없음</div>{% endif %}
-                    </div>
-                </div>
-            </div>
-            {% endif %}
         </div>
         {% endif %}
 
