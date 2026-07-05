@@ -3097,10 +3097,13 @@ def index():
         if lst:
             meta_top.append(lst[0])  # 이미 티어·승률순 정렬 + role_kr/tier_style 포함
     patch_highlights = get_patch_highlights()  # 이번 패치 버프/너프 (캐시)
+    # ★ 메인 검색창 챔피언 자동완성용 인덱스 (한글명+영문id, 실제 전체 챔피언)
+    champ_index = [{"en": en, "kr": kr} for en, kr in CHAMP_KR_MAP.items()]
+    champ_index.sort(key=lambda x: x["kr"])
     return render_template('index.html', page='home', roster_data=GLOBAL_ROSTER_DATA,
                            pro_gamers=PRO_GAMERS, latest_version=LATEST_VERSION,
                            meta_top=meta_top, current_patch=CURRENT_PATCH_DISPLAY,
-                           patch_highlights=patch_highlights,
+                           patch_highlights=patch_highlights, champ_index=champ_index,
                            total_games=get_stats_total_games(), stats_basis=STATS_BASIS_LABEL)
 
 def build_champion_meta(rank_tier="emeraldplus"):
@@ -3736,8 +3739,25 @@ def champions():
             elif "Mage" in tags or "Assassin" in tags: roles = ["MIDDLE"]
             else: roles = ["TOP"]
         champ_roles[c_en] = roles
+
+    # ★ 챔피언별 최고 티어 맵 (도감 썸네일 오버레이 뱃지용) — /meta와 동일 산출 재사용
+    # 챔프가 여러 라인에 있으면 가장 높은 티어(OP>1>2..) 채택. tier_style는 사이트 공통 색.
+    _tier_rank = {"OP": -1, "1": 1, "2": 2, "3": 3, "4": 4, "5": 5}
+    champ_tier = {}
+    try:
+        meta_tiers = build_champion_meta("emeraldplus")
+        for _role, _lst in meta_tiers.items():
+            for _c in _lst:
+                _prev = champ_tier.get(_c['id'])
+                if _prev is None or _tier_rank.get(_c['tier'], 9) < _tier_rank.get(_prev['tier'], 9):
+                    champ_tier[_c['id']] = {"tier": _c['tier'], "tier_style": _c['tier_style']}
+    except Exception as e:
+        print(f"도감 티어맵 산출 에러: {e}")
+        champ_tier = {}
+
     return render_template('index.html', page='champions', all_champs=CHAMP_KR_MAP,
-                           latest_version=LATEST_VERSION, champ_roles=champ_roles, role_kr=ROLE_KR)
+                           latest_version=LATEST_VERSION, champ_roles=champ_roles, role_kr=ROLE_KR,
+                           champ_tier=champ_tier)
 
 TIER_IMG_MAP = {
     "아이언": "iron", "브론즈": "bronze", "실버": "silver", "골드": "gold",
