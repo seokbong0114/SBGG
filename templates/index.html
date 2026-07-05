@@ -5,14 +5,11 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="google-site-verification" content="3KC5LbSbUzZSWrx2yrkK1IuPYROT6i2gtSYxgyC-baI" />
     <script>
-    /* 테마 조기 적용 (FOUC 방지) — 페인트 전에 <html data-theme> 설정.
-       저장값 없으면 OS 설정(prefers-color-scheme)으로 다크/라이트 자동 판별. */
+    /* 테마 조기 적용 (FOUC 방지) — 페인트 전에 <html data-theme> 설정. */
     (function () {
         try {
             var t = localStorage.getItem('sbgg-theme');
-            if (t !== 'dark' && t !== 'light' && t !== 'comfort') {
-                t = (window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches) ? 'light' : 'dark';
-            }
+            if (t !== 'dark' && t !== 'comfort') { t = 'dark'; }
             document.documentElement.setAttribute('data-theme', t);
         } catch (e) {
             document.documentElement.setAttribute('data-theme', 'dark');
@@ -127,33 +124,10 @@
             --shadow-elev: 0 18px 46px rgba(0, 0, 0, 0.5);
         }
 
-        /* ═══════════ 3단 테마 시스템 (Dark / Light / Eye Comfort) ═══════════ */
-        /* :root = 다크(기본). html[data-theme]로 팔레트 전환. */
+        /* ═══════════ 2단 테마 시스템 (Dark / 블루라이트) ═══════════ */
+        /* :root = 다크(기본). html[data-theme="comfort"]로 블루라이트 절감 팔레트 전환. */
 
-        /* ── B. 라이트 모드 (깔끔한 화이트/라이트 그레이) ── */
-        html[data-theme="light"] {
-            --bg-base: #eef1f6;
-            --bg-panel: rgba(255, 255, 255, 0.88);
-            --bg-panel-hover: #ffffff;
-            --bg-elev: #ffffff;
-            --border-glass: 1px solid rgba(15, 23, 42, 0.10);
-            --divider: 1px solid rgba(15, 23, 42, 0.08);
-            --text-strong: #0f172a;
-            --text-main: #1e293b;
-            --text-muted: #5b6b82;
-            --text-dim: #94a3b8;
-            --point-color: #0284c7;
-            --accent: #0284c7;
-            --accent-soft: rgba(2, 132, 199, 0.12);
-            --win-color: #16a34a;
-            --lose-color: #dc2626;
-            --cs-color: #d97706;
-            --blue-team: #2563eb;
-            --shadow-card: 0 6px 20px rgba(15, 23, 42, 0.08);
-            --shadow-elev: 0 18px 46px rgba(15, 23, 42, 0.16);
-        }
-
-        /* ── C. 편안함 모드 (웜 세피아 · 블루라이트 최소화) ── */
+        /* ── B. 블루라이트 모드 (웜 세피아 · 블루라이트 최소화) ── */
         html[data-theme="comfort"] {
             --bg-base: #201b16;
             --bg-panel: rgba(52, 44, 35, 0.72);
@@ -181,138 +155,12 @@
             transition: background-color .38s ease, border-color .38s ease, color .38s ease, box-shadow .38s ease, fill .38s ease !important;
         }
 
-        /* ═══ 라이트 모드 구조 보정 (하드코딩 다크 색상 → 라이트) ═══ */
-        html[data-theme="light"] .top-nav { background-color: rgba(255, 255, 255, 0.82) !important; }
-        html[data-theme="light"] .summary-dashboard,
-        html[data-theme="light"] .queue-btn.active { background: #ffffff !important; }
-        html[data-theme="light"] .queue-btn.active { color: var(--text-strong) !important; }
-        html[data-theme="light"] .home-search-box { background-color: #ffffff !important; box-shadow: 0 8px 26px rgba(15,23,42,0.10) !important; }
-        html[data-theme="light"] .home-search-box input,
-        html[data-theme="light"] .home-search-box textarea { color: #0f172a !important; }
-        html[data-theme="light"] .home-search-box input::placeholder { color: #94a3b8 !important; }
-        /* 반투명 흰색 틴트 배경 → 옅은 다크 틴트(카드 정의 유지) */
-        html[data-theme="light"] .hq-item,
-        html[data-theme="light"] .recent-chip,
-        html[data-theme="light"] .quick-menu-item { background: rgba(15,23,42,0.035) !important; }
-
-        /* 인라인 흰색 텍스트 → 라이트에서 다크 */
-        html[data-theme="light"] [style*="color: white"],
-        html[data-theme="light"] [style*="color:white"],
-        html[data-theme="light"] [style*="color: #fff"],
-        html[data-theme="light"] [style*="color:#fff"],
-        html[data-theme="light"] [style*="color: #ffffff"] { color: #0f172a !important; }
-        /* 솔리드 컬러 버튼·라이브 배지의 흰 글씨는 유지 (다크 텍스트 방지) */
-        html[data-theme="light"] .search-btn,
-        html[data-theme="light"] .search-btn *,
-        html[data-theme="light"] .nav-signup-btn,
-        html[data-theme="light"] .fb-submit,
-        html[data-theme="light"] .auth-submit,
-        html[data-theme="light"] .live-badge,
-        html[data-theme="light"] .live-badge * { color: #ffffff !important; }
-        /* 이미지 스플래시 배너(프로필/챔피언 상세): 배너는 어떤 테마든 다크 이미지.
-           컨테이너 기본 글자색을 밝게 → 색 미지정 텍스트(이름·티어·LP)는 밝아지고,
-           색 지정 요소(색깔 태그·금색 별 등)는 각자 색 유지. */
-        html[data-theme="light"] .profile-content { color: #f1f5f9 !important; }
-        html[data-theme="light"] .profile-banner [style*="color: white"],
-        html[data-theme="light"] .profile-banner [style*="color:white"],
-        html[data-theme="light"] .profile-banner [style*="color: #fff"] { color: #ffffff !important; }
-        /* 클래스에 하드코딩된 흰색 텍스트(제목·유저명·카드·더보기 등) → 라이트에서 다크 */
-        html[data-theme="light"] .section-title,
-        html[data-theme="light"] .quick-menu-item b,
-        html[data-theme="light"] .nav-user,
-        html[data-theme="light"] .auth-title,
-        html[data-theme="light"] .privacy-h,
-        html[data-theme="light"] .multi-card,
-        html[data-theme="light"] .btn-load-more { color: var(--text-strong) !important; }
-        /* 입력창 텍스트 → 다크 (라이트 배경 입력창) */
-        html[data-theme="light"] .auth-input,
-        html[data-theme="light"] .duo-input { color: #0f172a !important; }
-        /* 호버 시 흰색 → 다크 (라이트 배경 가독성) */
-        html[data-theme="light"] .role-tab:hover,
-        html[data-theme="light"] .queue-btn:hover,
-        html[data-theme="light"] .recent-chip:hover,
-        html[data-theme="light"] .champ-filter-btn:hover,
-        html[data-theme="light"] .champ-role-btn:hover,
-        html[data-theme="light"] .nav-login-btn:hover,
-        html[data-theme="light"] .feedback-btn:hover,
-        html[data-theme="light"] .feedback-close:hover { color: var(--text-strong) !important; }
-
-        /* ═══ 라이트 모드: 인라인 하드코딩 밝은/근백색 텍스트 대비 확보 ═══ */
-        /* 근백색(라이트 배경서 사실상 안 보임) → 어둡게 */
-        html[data-theme="light"] [style*="color: #e2e8f0"], html[data-theme="light"] [style*="color:#e2e8f0"] { color: #1e293b !important; }
-        html[data-theme="light"] [style*="color: #ccc"], html[data-theme="light"] [style*="color:#ccc"] { color: #64748b !important; }
-        html[data-theme="light"] [style*="color: #cbd5e1"], html[data-theme="light"] [style*="color:#cbd5e1"] { color: #475569 !important; }
-        html[data-theme="light"] [style*="color: #dbeafe"], html[data-theme="light"] [style*="color:#dbeafe"] { color: #1d4ed8 !important; }
-        /* 밝은 시맨틱 색(초록·앰버·하늘·빨강·보라) → 라이트 대응(어둡게) */
-        html[data-theme="light"] [style*="color: #4ade80"], html[data-theme="light"] [style*="color:#4ade80"],
-        html[data-theme="light"] [style*="color: #86efac"], html[data-theme="light"] [style*="color: #6ee7b7"] { color: #15803d !important; }
-        html[data-theme="light"] [style*="color: #34d399"], html[data-theme="light"] [style*="color:#34d399"] { color: #047857 !important; }
-        html[data-theme="light"] [style*="color: #fbbf24"], html[data-theme="light"] [style*="color:#fbbf24"],
-        html[data-theme="light"] [style*="color: #e0b64c"] { color: #b45309 !important; }
-        html[data-theme="light"] [style*="color: #93c5fd"], html[data-theme="light"] [style*="color:#93c5fd"],
-        html[data-theme="light"] [style*="color: #60a5fa"] { color: #1d4ed8 !important; }
-        html[data-theme="light"] [style*="color: #f87171"], html[data-theme="light"] [style*="color:#f87171"],
-        html[data-theme="light"] [style*="color: #fca5a5"], html[data-theme="light"] [style*="color: #fda4af"] { color: #dc2626 !important; }
-        html[data-theme="light"] [style*="color: #c4b5fd"], html[data-theme="light"] [style*="color: #d8b4fe"] { color: #7c3aed !important; }
-        /* 배너 내부(다크 스플래시)에서는 위 밝은 색을 원색 그대로 유지 (대비 확보) */
-        html[data-theme="light"] .profile-banner [style*="color: #fbbf24"] { color: #fbbf24 !important; }
-        html[data-theme="light"] .profile-banner [style*="color: #4ade80"] { color: #4ade80 !important; }
-        html[data-theme="light"] .profile-banner [style*="color: #34d399"] { color: #34d399 !important; }
-        html[data-theme="light"] .profile-banner [style*="color: #93c5fd"] { color: #93c5fd !important; }
-        html[data-theme="light"] .profile-banner [style*="color: #f87171"] { color: #f87171 !important; }
-        html[data-theme="light"] .profile-banner [style*="color: #fca5a5"] { color: #fca5a5 !important; }
-        html[data-theme="light"] .profile-banner [style*="color: #c4b5fd"] { color: #c4b5fd !important; }
-        /* JS가 style 조작 시 hex→rgb() 정규화됨(티어 버튼·순위 등) → rgb 포맷도 동일 매핑 */
-        html[data-theme="light"] [style*="color: rgb(226, 232, 240)"] { color: #1e293b !important; }
-        html[data-theme="light"] [style*="color: rgb(203, 213, 225)"] { color: #475569 !important; }
-        html[data-theme="light"] [style*="color: rgb(74, 222, 128)"] { color: #15803d !important; }
-        html[data-theme="light"] [style*="color: rgb(52, 211, 153)"] { color: #047857 !important; }
-        html[data-theme="light"] [style*="color: rgb(251, 191, 36)"] { color: #b45309 !important; }
-        html[data-theme="light"] [style*="color: rgb(147, 197, 253)"] { color: #1d4ed8 !important; }
-        html[data-theme="light"] [style*="color: rgb(248, 113, 113)"] { color: #dc2626 !important; }
-        html[data-theme="light"] .profile-banner [style*="color: rgb(251, 191, 36)"] { color: #fbbf24 !important; }
-        /* 클래스에 하드코딩된 근백색/시맨틱 색(챔피언 상세·개인정보 등) → 라이트 대응 */
-        html[data-theme="light"] .skill-name,
-        html[data-theme="light"] .ai-rec-item span,
-        html[data-theme="light"] .rune-tree-head span,
-        html[data-theme="light"] .privacy-ul li b,
-        html[data-theme="light"] .privacy-p b { color: #1e293b !important; }
-        html[data-theme="light"] .build-wr { color: #15803d !important; }
-        html[data-theme="light"] .build-tab.active,
-        html[data-theme="light"] .build-tab.active span { color: var(--text-strong) !important; }
-        /* 반투명 흰색 텍스트(구분자 '#' 등) → 라이트에서 가시 회색 */
-        html[data-theme="light"] [style*="color: rgba(255,255,255,0.3)"],
-        html[data-theme="light"] [style*="color: rgba(255, 255, 255, 0.3)"],
-        html[data-theme="light"] [style*="color: rgba(255,255,255,0.25)"],
-        html[data-theme="light"] [style*="color: rgba(255, 255, 255, 0.25)"] { color: #94a3b8 !important; }
-        /* hex 무공백 인라인 변형(color:#xxx) 보강 */
-        html[data-theme="light"] [style*="color:#86efac"], html[data-theme="light"] [style*="color:#6ee7b7"] { color: #15803d !important; }
-        html[data-theme="light"] [style*="color:#e0b64c"] { color: #b45309 !important; }
-        html[data-theme="light"] [style*="color:#60a5fa"] { color: #1d4ed8 !important; }
-        html[data-theme="light"] [style*="color:#fca5a5"], html[data-theme="light"] [style*="color:#fda4af"] { color: #dc2626 !important; }
-        html[data-theme="light"] [style*="color:#c4b5fd"], html[data-theme="light"] [style*="color:#d8b4fe"] { color: #7c3aed !important; }
-        /* 접이식(details) 다크 배경 → 라이트 (내부 다크 텍스트 가독성 확보) */
-        html[data-theme="light"] details { background: #ffffff !important; }
-        html[data-theme="light"] .ai-build-details { background: linear-gradient(135deg, rgba(251,191,36,0.08), rgba(255,255,255,0.96) 60%) !important; }
-        html[data-theme="light"] .fb-input { background: rgba(15,23,42,0.04) !important; color: #0f172a !important; border-color: rgba(15,23,42,0.15) !important; }
-        html[data-theme="light"] .cache-notice { color: #047857 !important; }
-        html[data-theme="light"] .nav-track-hint { color: #1d4ed8 !important; }
-        html[data-theme="light"] .nav-track-hint b { color: #1e3a8a !important; }
-        html[data-theme="light"] .home-tagline b { color: #1e293b !important; }
-
-        /* ═══ 테마 전환 스위처 (고정 · 우상단) ═══ */
-        .theme-switch { position: fixed; top: 11px; right: 14px; z-index: 2000; display: inline-flex; gap: 2px; padding: 3px; border-radius: 999px; background: var(--bg-panel); border: var(--border-glass); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); box-shadow: var(--shadow-card); }
+        /* ═══ 테마 전환 스위처 (nav 인라인) ═══ */
+        .theme-switch { display: inline-flex; gap: 2px; padding: 3px; border-radius: 999px; background: var(--bg-panel); border: var(--border-glass); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); box-shadow: var(--shadow-card); }
         .theme-switch button { border: none; background: transparent; color: var(--text-muted); font-family: 'Pretendard', sans-serif; font-size: 12px; font-weight: 800; padding: 6px 12px; border-radius: 999px; cursor: pointer; transition: 0.18s; white-space: nowrap; line-height: 1; }
         .theme-switch button:hover { color: var(--text-main); }
         .theme-switch button.on { background: var(--point-color); color: #ffffff; }
         html[data-theme="comfort"] .theme-switch button.on { color: #201b16; }
-        /* 모바일(≤768px, 기존 nav 브레이크포인트와 정렬): 스위처를 하단 중앙으로 → nav 충돌 방지 */
-        @media (max-width: 768px) {
-            .theme-switch { top: auto; bottom: 14px; right: 50%; transform: translateX(50%); }
-            .theme-switch button { padding: 7px 15px; }
-        }
-        /* 데스크톱(≥769px): 홈 상단 계정 영역이 고정 스위처와 겹치지 않도록 우측 공간 확보 */
-        @media (min-width: 769px) { #homeNav { padding-right: 210px; } }
 
         body { background-color: var(--bg-base); color: var(--text-main); font-family: 'Pretendard', sans-serif; margin: 0; padding: 0; min-height: 100vh; display: flex; flex-direction: column; overflow-x: hidden; }
 
@@ -470,7 +318,7 @@
         .ai-rec-reason { font-size: 13px; line-height: 1.7; color: var(--text-muted); background: rgba(0,0,0,0.25); border-left: 3px solid #fbbf24; border-radius: 8px; padding: 10px 14px; }
 
         /* 고객의 소리(피드백) 버튼 & 모달 */
-        .feedback-btn { display: inline-flex; align-items: center; gap: 6px; background: rgba(255,255,255,0.06); color: var(--text-main); border: 1px solid rgba(255,255,255,0.14); border-radius: 20px; padding: 8px 16px; font-size: 13px; font-weight: 800; font-family: 'Pretendard'; cursor: pointer; backdrop-filter: blur(10px); transition: 0.2s; }
+        .feedback-btn { display: inline-flex; align-items: center; gap: 6px; background: rgba(255,255,255,0.06); color: var(--text-main); border: 1px solid rgba(255,255,255,0.14); border-radius: 20px; padding: 8px 16px; font-size: 13px; font-weight: 800; font-family: 'Pretendard'; cursor: pointer; backdrop-filter: blur(10px); transition: 0.2s; white-space: nowrap; }
         .feedback-btn:hover { background: rgba(244,63,94,0.15); border-color: rgba(244,63,94,0.4); color: white; transform: translateY(-2px); }
         .feedback-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); backdrop-filter: blur(6px); z-index: 1000; display: none; align-items: center; justify-content: center; opacity: 0; transition: opacity 0.25s; padding: 20px; }
         .feedback-overlay.open { display: flex; opacity: 1; }
@@ -706,10 +554,10 @@
             .profile-name-h1 span { font-size: 14px !important; }
             /* 래더 랭킹 표 — 좁은 화면에서 패널 안에서만 가로 스크롤(페이지 전체 오버플로우 방지) + 셀 여백 축소 */
             .lb-panel { padding: 14px 10px !important; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+            .lb-table { min-width: 480px; }
             .lb-table th, .lb-table td { padding: 11px 8px !important; }
             .lb-table th { font-size: 12px !important; }
-            .nav-track-hint { white-space: normal; max-width: 200px; align-items: flex-end; }
-            .nav-track-hint .spark { align-self: flex-start; margin-top: 2px; }
+            .nav-track-hint { display: none !important; }
         }
         @media (max-width: 820px) {
             .profile-content { gap: 18px !important; }
@@ -798,14 +646,9 @@
     {% endmacro %}
 
     {% if not ajax %}
-    <!-- ═══ 테마 전환 스위처 (Dark / Light / Eye Comfort) ═══ -->
-    <div class="theme-switch" id="themeSwitch" role="group" aria-label="화면 테마 선택">
-        <button type="button" data-theme-val="dark" title="다크 모드">다크</button>
-        <button type="button" data-theme-val="light" title="라이트 모드">라이트</button>
-        <button type="button" data-theme-val="comfort" title="편안함 모드 (블루라이트 최소화)">편안함</button>
-    </div>
+    <!-- ═══ 테마 전환 스위처 JS ═══ -->
     <script>
-    (function () {
+    document.addEventListener('DOMContentLoaded', function () {
         var root = document.documentElement;
         var sw = document.getElementById('themeSwitch');
         if (!sw) return;
@@ -824,7 +667,7 @@
             b.addEventListener('click', function () { apply(b.dataset.themeVal); });
         });
         sync(root.getAttribute('data-theme') || 'dark');
-    })();
+    });
     </script>
     {% endif %}
 
@@ -1040,7 +883,10 @@
                     <button type="submit" class="search-btn" style="padding: 6px 16px; font-size: 13px;">검색</button>
                 </form>
             </div>
-            <div style="width: 80px;"></div>
+            <div class="theme-switch" id="themeSwitch" role="group" aria-label="화면 테마 선택">
+                <button type="button" data-theme-val="dark" title="다크 모드">다크</button>
+                <button type="button" data-theme-val="comfort" title="블루라이트 절감 모드">블루라이트</button>
+            </div>
         </nav>
         <div class="main-container">
             <div class="page-title" style="margin-top: 40px; margin-bottom: 30px;">
@@ -1085,17 +931,23 @@
 
     {% elif page == 'home' %}
         <!-- ================= 1. 메인 홈 화면 ================= -->
-        <nav id="homeNav" class="top-nav" style="background: transparent; border: none; justify-content: space-between;">
+        <nav class="top-nav" style="background: transparent; border: none; justify-content: space-between;">
             <a href="/" class="logo-wrapper"><span class="logo-sb">Z</span></a>
             <div style="display:flex; align-items:flex-start; gap:10px;">
                 <button type="button" class="feedback-btn" onclick="openFeedback()">
                     <span style="font-size:14px;">💬</span> 고객의 소리
                 </button>
                 {% if current_user %}
-                <div class="nav-account">
-                    <a href="/me" class="nav-track-btn">📈 내 전적 추적</a>
-                    <span class="nav-user">👤 {{ current_user.username }}</span>
-                    <a href="/logout" class="nav-logout-btn">로그아웃</a>
+                <div style="display:flex; flex-direction:column; align-items:flex-end; gap:7px;">
+                    <div class="nav-account">
+                        <a href="/me" class="nav-track-btn">📈 내 전적 추적</a>
+                        <span class="nav-user">👤 {{ current_user.username }}</span>
+                        <a href="/logout" class="nav-logout-btn">로그아웃</a>
+                    </div>
+                    <div class="theme-switch" id="themeSwitch" role="group" aria-label="화면 테마 선택">
+                        <button type="button" data-theme-val="dark" title="다크 모드">다크</button>
+                        <button type="button" data-theme-val="comfort" title="블루라이트 절감 모드">블루라이트</button>
+                    </div>
                 </div>
                 {% else %}
                 <div style="display:flex; flex-direction:column; align-items:flex-end; gap:7px;">
@@ -1104,6 +956,10 @@
                         <a href="/signup" class="nav-signup-btn">회원가입</a>
                     </div>
                     <a href="/signup" class="nav-track-hint"><span class="spark">📈</span> 회원이시라면 <b>내 전적 추적</b> 기능을 사용할 수 있어요</a>
+                    <div class="theme-switch" id="themeSwitch" role="group" aria-label="화면 테마 선택">
+                        <button type="button" data-theme-val="dark" title="다크 모드">다크</button>
+                        <button type="button" data-theme-val="comfort" title="블루라이트 절감 모드">블루라이트</button>
+                    </div>
                 </div>
                 {% endif %}
             </div>
@@ -1363,7 +1219,10 @@
                     <button type="submit" class="search-btn" style="padding: 6px 16px; font-size: 13px;">검색</button>
                 </form>
             </div>
-            <div style="width: 80px;"></div>
+            <div class="theme-switch" id="themeSwitch" role="group" aria-label="화면 테마 선택">
+                <button type="button" data-theme-val="dark" title="다크 모드">다크</button>
+                <button type="button" data-theme-val="comfort" title="블루라이트 절감 모드">블루라이트</button>
+            </div>
         </nav>
         <div class="main-container">
             <div class="page-title">👑 챌린저스 래더 랭킹 <span style="font-size: 14px; color: var(--text-muted); font-weight: 600;">(Top 50 · 솔로랭크)</span>{% if from_cache %}<span style="font-size: 12px; color: var(--text-muted); font-weight: 400; margin-left: 10px;">🗃️ 캐시</span>{% endif %}</div>
@@ -1417,7 +1276,10 @@
                     <button type="submit" class="search-btn" style="padding: 6px 16px; font-size: 13px;">검색</button>
                 </form>
             </div>
-            <div style="width: 80px;"></div>
+            <div class="theme-switch" id="themeSwitch" role="group" aria-label="화면 테마 선택">
+                <button type="button" data-theme-val="dark" title="다크 모드">다크</button>
+                <button type="button" data-theme-val="comfort" title="블루라이트 절감 모드">블루라이트</button>
+            </div>
         </nav>
         <div class="main-container">
             <div class="page-title">🏆 리그 오브 레전드 챔피언 도감 <span style="font-size: 14px; color: var(--text-muted); font-weight: 600;">(v{{ latest_version }})</span></div>
@@ -1505,7 +1367,10 @@
                     <button type="submit" class="search-btn" style="padding: 6px 16px; font-size: 13px;">검색</button>
                 </form>
             </div>
-            <div style="width: 80px;"></div>
+            <div class="theme-switch" id="themeSwitch" role="group" aria-label="화면 테마 선택">
+                <button type="button" data-theme-val="dark" title="다크 모드">다크</button>
+                <button type="button" data-theme-val="comfort" title="블루라이트 절감 모드">블루라이트</button>
+            </div>
         </nav>
         <div class="main-container">
             <div class="page-title" style="justify-content: space-between;">
@@ -1625,7 +1490,10 @@
                     <button type="submit" class="search-btn" style="padding: 6px 16px; font-size: 13px;">검색</button>
                 </form>
             </div>
-            <div style="width: 80px;"></div>
+            <div class="theme-switch" id="themeSwitch" role="group" aria-label="화면 테마 선택">
+                <button type="button" data-theme-val="dark" title="다크 모드">다크</button>
+                <button type="button" data-theme-val="comfort" title="블루라이트 절감 모드">블루라이트</button>
+            </div>
         </nav>
         <div class="main-container">
             <div class="page-title">🔴 천상계 라이브 관전
@@ -1713,8 +1581,10 @@
                     <button type="submit" class="search-btn" style="padding: 6px 16px; font-size: 13px;">검색</button>
                 </form>
             </div>
-            
-            <div style="width: 80px;"></div>
+            <div class="theme-switch" id="themeSwitch" role="group" aria-label="화면 테마 선택">
+                <button type="button" data-theme-val="dark" title="다크 모드">다크</button>
+                <button type="button" data-theme-val="comfort" title="블루라이트 절감 모드">블루라이트</button>
+            </div>
         </nav>
 
         <div class="profile-banner" style="background-image: url('https://ddragon.leagueoflegends.com/cdn/img/champion/splash/{{ banner_champ }}_0.jpg');">
@@ -1773,6 +1643,15 @@
             <div class="cache-notice">
                 <span>⚡</span> 데이터베이스에 저장된 안전 캐시 데이터를 불러왔습니다. (초고속 로딩 완료)
             </div>
+            {% endif %}
+
+            {% if current_user %}
+            <form action="/me/link" method="post" style="display:flex; align-items:center; gap:10px; margin-bottom:12px; flex-wrap:wrap;">
+                <input type="hidden" name="riot_name" value="{{ name }}">
+                <input type="hidden" name="riot_tag" value="{{ tag }}">
+                <button type="submit" class="nav-track-btn" style="font-size:13px; font-weight:800; padding:8px 16px; border-radius:10px; cursor:pointer; font-family:'Pretendard'; border:1px solid rgba(59,130,246,0.35); background:rgba(59,130,246,0.1); color:#93c5fd; white-space:nowrap;">📈 이 소환사를 내 전적 추적으로 등록</button>
+                <span style="font-size:12px; color:var(--text-muted);">방문할 때마다 LP·전적 변화를 자동으로 기록해드려요</span>
+            </form>
             {% endif %}
 
             <div class="dashboard-wrapper">
@@ -2349,7 +2228,10 @@
                 <button type="submit" class="search-btn" style="padding: 6px 16px; font-size: 13px;">검색</button>
             </form>
         </div>
-        <div style="width: 80px;"></div>
+        <div class="theme-switch" id="themeSwitch" role="group" aria-label="화면 테마 선택">
+            <button type="button" data-theme-val="dark" title="다크 모드">다크</button>
+            <button type="button" data-theme-val="comfort" title="블루라이트 절감 모드">블루라이트</button>
+        </div>
     </nav>
     <div class="main-container">
         <div class="page-title">📊 챔피언 메타 분석
@@ -2572,7 +2454,10 @@
                 <button type="submit" class="search-btn" style="padding: 6px 16px; font-size: 13px;">검색</button>
             </form>
         </div>
-        <div style="width: 80px;"></div>
+        <div class="theme-switch" id="themeSwitch" role="group" aria-label="화면 테마 선택">
+            <button type="button" data-theme-val="dark" title="다크 모드">다크</button>
+            <button type="button" data-theme-val="comfort" title="블루라이트 절감 모드">블루라이트</button>
+        </div>
     </nav>
 
     <!-- 챔피언 스플래시 배너 -->
@@ -2955,7 +2840,10 @@
                 <button type="submit" class="search-btn" style="padding: 6px 16px; font-size: 13px;">검색</button>
             </form>
         </div>
-        <div style="width: 80px;"></div>
+        <div class="theme-switch" id="themeSwitch" role="group" aria-label="화면 테마 선택">
+            <button type="button" data-theme-val="dark" title="다크 모드">다크</button>
+            <button type="button" data-theme-val="comfort" title="블루라이트 절감 모드">블루라이트</button>
+        </div>
     </nav>
 
     <div class="main-container" style="margin-top: 30px;">
@@ -3038,7 +2926,10 @@
     <nav class="top-nav">
         <a href="/" class="logo-wrapper"><span class="logo-sb">Z</span></a>
         <div style="font-size: 13px; color: var(--text-muted); font-weight: 700;">🔐 관리자 · 운영법 편집</div>
-        <div style="width: 80px;"></div>
+        <div class="theme-switch" id="themeSwitch" role="group" aria-label="화면 테마 선택">
+            <button type="button" data-theme-val="dark" title="다크 모드">다크</button>
+            <button type="button" data-theme-val="comfort" title="블루라이트 절감 모드">블루라이트</button>
+        </div>
     </nav>
     <div class="main-container" style="margin-top: 30px; max-width: 820px;">
         <h1 style="font-size: 26px; font-weight: 900; margin: 0 0 6px;">🧭 에메랄드+ 운영법 작성</h1>
@@ -3081,7 +2972,10 @@
     <!-- ================= 개인정보처리방침 ================= -->
     <nav class="top-nav">
         <a href="/" class="logo-wrapper"><span class="logo-sb">Z</span></a>
-        <div style="width: 80px;"></div>
+        <div class="theme-switch" id="themeSwitch" role="group" aria-label="화면 테마 선택">
+            <button type="button" data-theme-val="dark" title="다크 모드">다크</button>
+            <button type="button" data-theme-val="comfort" title="블루라이트 절감 모드">블루라이트</button>
+        </div>
     </nav>
     <div class="main-container" style="max-width: 820px;">
         <div class="page-title">🔒 개인정보처리방침 <span style="font-size: 13px; color: var(--text-muted); font-weight: 600;">Privacy Policy</span></div>
@@ -3149,7 +3043,10 @@
     <!-- ================= 로그인 ================= -->
     <nav class="top-nav">
         <a href="/" class="logo-wrapper"><span class="logo-sb">Z</span></a>
-        <div style="width: 80px;"></div>
+        <div class="theme-switch" id="themeSwitch" role="group" aria-label="화면 테마 선택">
+            <button type="button" data-theme-val="dark" title="다크 모드">다크</button>
+            <button type="button" data-theme-val="comfort" title="블루라이트 절감 모드">블루라이트</button>
+        </div>
     </nav>
     <div class="auth-back-row">
         <a href="javascript:history.back()" class="nav-back-btn">← 뒤로가기</a>
@@ -3174,7 +3071,10 @@
     <!-- ================= 회원가입 ================= -->
     <nav class="top-nav">
         <a href="/" class="logo-wrapper"><span class="logo-sb">Z</span></a>
-        <div style="width: 80px;"></div>
+        <div class="theme-switch" id="themeSwitch" role="group" aria-label="화면 테마 선택">
+            <button type="button" data-theme-val="dark" title="다크 모드">다크</button>
+            <button type="button" data-theme-val="comfort" title="블루라이트 절감 모드">블루라이트</button>
+        </div>
     </nav>
     <div class="auth-back-row">
         <a href="javascript:history.back()" class="nav-back-btn">← 뒤로가기</a>
@@ -3206,9 +3106,15 @@
     <!-- ================= 내 전적 추적 대시보드 (재방문 훅) ================= -->
     <nav class="top-nav">
         <a href="/" class="logo-wrapper"><span class="logo-sb">Z</span></a>
-        <div class="nav-account">
-            <span class="nav-user">👤 {{ current_user.username if current_user else '' }}</span>
-            <a href="/logout" class="nav-logout-btn">로그아웃</a>
+        <div style="display:flex; flex-direction:column; align-items:flex-end; gap:7px;">
+            <div class="nav-account">
+                <span class="nav-user">👤 {{ current_user.username if current_user else '' }}</span>
+                <a href="/logout" class="nav-logout-btn">로그아웃</a>
+            </div>
+            <div class="theme-switch" id="themeSwitch" role="group" aria-label="화면 테마 선택">
+                <button type="button" data-theme-val="dark" title="다크 모드">다크</button>
+                <button type="button" data-theme-val="comfort" title="블루라이트 절감 모드">블루라이트</button>
+            </div>
         </div>
     </nav>
     <div class="dash-wrap">
@@ -3295,7 +3201,10 @@
     <!-- ================= 브랜드 에러 페이지 ================= -->
     <nav class="top-nav">
         <a href="/" class="logo-wrapper"><span class="logo-sb">Z</span></a>
-        <div style="width: 80px;"></div>
+        <div class="theme-switch" id="themeSwitch" role="group" aria-label="화면 테마 선택">
+            <button type="button" data-theme-val="dark" title="다크 모드">다크</button>
+            <button type="button" data-theme-val="comfort" title="블루라이트 절감 모드">블루라이트</button>
+        </div>
     </nav>
     <div class="main-container error-wrap">
         <div class="error-code">{{ error_code or 404 }}</div>
