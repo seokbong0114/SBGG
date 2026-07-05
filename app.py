@@ -150,6 +150,18 @@ def init_db():
             created_at INTEGER
         )
     ''')
+    # 소환사 즐겨찾기 — 회원이 여러 소환사를 북마크(재검색 없이 빠른 재접근)
+    cursor.execute(f'''
+        CREATE TABLE IF NOT EXISTS favorites (
+            id {AUTO_PK},
+            user_id INTEGER NOT NULL,
+            riot_name TEXT NOT NULL,
+            riot_tag TEXT NOT NULL,
+            icon TEXT,
+            created_at INTEGER,
+            UNIQUE (user_id, riot_name, riot_tag)
+        )
+    ''')
     # ★ 빌드 수집 (룬/스펠/아이템/스킬/아이템순서) — 실측 빌드 산출용
     cursor.execute('''CREATE TABLE IF NOT EXISTS build_runes (
         champ_en TEXT, role TEXT, keystone INTEGER, primary_style INTEGER, sub_style INTEGER,
@@ -2726,12 +2738,14 @@ def _analytics_summary():
 @app.context_processor
 def inject_user():
     """모든 템플릿에서 current_user / AI 코치 노출 여부 사용 가능하도록 주입."""
-    base = {'ai_coach_enabled': AI_COACH_ENABLED}
+    base = {'ai_coach_enabled': AI_COACH_ENABLED, 'latest_version': LATEST_VERSION}
     if session.get('user_id'):
         base['current_user'] = {'id': session['user_id'], 'username': session.get('username'),
                                 'riot_name': session.get('riot_name'), 'riot_tag': session.get('riot_tag')}
+        base['account_favs'] = get_favorites(session['user_id'])  # 계정 동기화 즐겨찾기(전역)
     else:
         base['current_user'] = None
+        base['account_favs'] = []
     return base
 
 @app.route('/signup', methods=['GET', 'POST'])
@@ -2926,6 +2940,103 @@ def my_link():
     except Exception as e:
         print(f"소환사 연결 에러: {e}")
     return redirect('/me')
+
+def get_favorites(uid):
+    """회원의 즐겨찾기 소환사 목록 (최신 추가순). 실패 시 빈 리스트."""
+    try:
+        conn = db_connect()
+        rows = conn.execute(
+            "SELECT riot_name, riot_tag, icon FROM favorites WHERE user_id=? ORDER BY created_at DESC, id DESC",
+            (uid,)
+        ).fetchall()
+        conn.close()
+        return [{'riot_name': r[0], 'riot_tag': r[1], 'icon': (r[2] or '')} for r in rows]
+    except Exception as e:
+        print(f"즐겨찾기 조회 에러: {e}")
+        return []
+
+def _parse_name_tag(riot_name, riot_tag):
+    """'이름#태그' 통째 입력 분리 + 기본 태그 보정. (name, tag) 반환."""
+    riot_name = (riot_name or '').strip()
+    riot_tag = (riot_tag or '').strip().lstrip('#')
+    if '#' in riot_name:
+        riot_name, _, tag_part = riot_name.rpartition('#')
+        riot_name = riot_name.strip()
+        if tag_part.strip():
+            riot_tag = tag_part.strip()
+    if not riot_tag:
+        riot_tag = 'KR1'
+    return riot_name, riot_tag
+
+def _fav_reply(nxt, ajax):
+    """즐겨찾기 라우트 응답 — JS fetch(ajax)면 204, 폼 제출이면 리다이렉트."""
+    if ajax:
+        return ('', 204)
+    return redirect(nxt or '/me')
+
+@app.route('/favorites/add', methods=['POST'])
+def favorites_add():
+    """즐겨찾기 소환사 추가 — 404(실존X)만 차단, 일시 오류는 낙관적 저장.
+    verified=1(이미 조회된 프로필의 ☆ 토글·마이그레이션)이면 실존 재검증 생략(지연·레이트리밋 회피)."""
+    ajax = bool(request.form.get('ajax'))
+    if not session.get('user_id'):
+        return ('', 401) if ajax else redirect('/login')
+    riot_name, riot_tag = _parse_name_tag(request.form.get('riot_name'), request.form.get('riot_tag'))
+    nxt = request.form.get('next') or '/me'
+    icon = (request.form.get('icon') or '').strip()[:16]  # 프로필 아이콘 id(홈 렌더용)
+    if not riot_name:
+        return _fav_reply(nxt, ajax)
+    # 이미 실존 확인된 소환사(프로필 토글/마이그레이션)는 재검증 생략
+    if not request.form.get('verified'):
+        try:
+            acc = get_summoner_info(riot_name, riot_tag)
+            status = acc.status_code
+        except Exception as e:
+            print(f"즐겨찾기 검증 에러: {e}")
+            acc, status = None, None
+        if status == 404:
+            return _fav_reply(nxt, ajax)
+        if status == 200:  # 라이엇 공식 표기로 정규화
+            try:
+                aj = acc.json()
+                riot_name = aj.get('gameName') or riot_name
+                riot_tag = aj.get('tagLine') or riot_tag
+            except Exception:
+                pass
+    try:
+        conn = db_connect()
+        conn.execute(
+            """INSERT INTO favorites (user_id, riot_name, riot_tag, icon, created_at) VALUES (?,?,?,?,?)
+               ON CONFLICT(user_id, riot_name, riot_tag) DO NOTHING""",
+            (session['user_id'], riot_name, riot_tag, icon, int(time.time()))
+        )
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        print(f"즐겨찾기 추가 에러: {e}")
+    return _fav_reply(nxt, ajax)
+
+@app.route('/favorites/remove', methods=['POST'])
+def favorites_remove():
+    """즐겨찾기 소환사 삭제 (본인 것만)."""
+    ajax = bool(request.form.get('ajax'))
+    if not session.get('user_id'):
+        return ('', 401) if ajax else redirect('/login')
+    riot_name = (request.form.get('riot_name') or '').strip()
+    riot_tag = (request.form.get('riot_tag') or '').strip().lstrip('#')
+    nxt = request.form.get('next') or '/me'
+    if riot_name:
+        try:
+            conn = db_connect()
+            conn.execute(
+                "DELETE FROM favorites WHERE user_id=? AND riot_name=? AND riot_tag=?",
+                (session['user_id'], riot_name, riot_tag)
+            )
+            conn.commit()
+            conn.close()
+        except Exception as e:
+            print(f"즐겨찾기 삭제 에러: {e}")
+    return _fav_reply(nxt, ajax)
 
 # ================= 라우팅 =================
 @app.route('/live_games')
