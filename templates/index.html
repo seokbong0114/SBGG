@@ -450,6 +450,22 @@
         .dash-empty b { color: var(--text-main); }
         .dash-spark-card { background: var(--bg-elev); border: var(--border-glass); border-radius: 16px; padding: 16px 18px 12px; }
         .dash-spark-title { font-size: 12px; font-weight: 800; color: var(--text-muted); margin-bottom: 10px; }
+        /* ── /me LP 변화 그래프 (인터랙티브) ── */
+        .lp-chart { position: relative; width: 100%; height: 190px; margin-top: 2px; touch-action: pan-y; }
+        .lp-svg { width: 100%; height: 190px; display: block; overflow: visible; }
+        .lp-grid-t { stroke: var(--text-muted); stroke-opacity: 0.16; stroke-dasharray: 4 5; }
+        .lp-ylab { position: absolute; left: 3px; transform: translateY(-50%); font-size: 10px; font-weight: 800; color: var(--text-muted); opacity: 0.7; pointer-events: none; background: var(--bg-elev); padding: 0 3px; border-radius: 3px; }
+        .lp-xlab { position: absolute; bottom: 1px; font-size: 10px; font-weight: 700; color: var(--text-muted); opacity: 0.85; pointer-events: none; }
+        .lp-xstart { left: 2px; }
+        .lp-xend { right: 4px; }
+        .lp-mark { position: absolute; width: 9px; height: 9px; border-radius: 50%; border: 2px solid var(--bg-elev); transform: translate(-50%, -50%); pointer-events: none; }
+        .lp-peak { position: absolute; transform: translate(-50%, -150%); font-size: 10px; font-weight: 800; color: var(--point-color); white-space: nowrap; pointer-events: none; text-shadow: 0 1px 3px rgba(0, 0, 0, 0.65); }
+        .lp-cross { position: absolute; top: 0; width: 1px; height: 100%; background: var(--text-muted); opacity: 0; pointer-events: none; transition: opacity 0.12s; }
+        .lp-cursor { position: absolute; width: 11px; height: 11px; border-radius: 50%; background: var(--point-color); border: 2px solid var(--bg-elev); transform: translate(-50%, -50%); opacity: 0; pointer-events: none; box-shadow: 0 0 0 3px rgba(0, 0, 0, 0.25); }
+        .lp-tip { position: absolute; z-index: 6; pointer-events: none; background: rgba(12, 16, 26, 0.96); border: 1px solid rgba(255, 255, 255, 0.13); border-radius: 10px; padding: 7px 10px; font-size: 11px; line-height: 1.5; color: #fff; white-space: nowrap; opacity: 0; transform: translate(-50%, calc(-100% - 14px)); transition: opacity 0.12s; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45); }
+        .lp-tip b { color: var(--point-color); }
+        .lp-chart.on .lp-cross, .lp-chart.on .lp-cursor, .lp-chart.on .lp-tip { opacity: 1; }
+        .lp-cap { font-size: 11px; font-weight: 700; color: var(--text-muted); opacity: 0.8; margin-top: 12px; text-align: right; }
         .dash-back { display: inline-block; margin-top: 24px; color: var(--text-muted); font-size: 13px; font-weight: 700; text-decoration: none; }
         .dash-back:hover { color: var(--text-main); }
         .dash-link-form { display: flex; gap: 8px; margin-top: 16px; }
@@ -3239,6 +3255,50 @@
         });
         // 뒤로가기 복원(bfcache) 시 오버레이 잔상 제거
         window.addEventListener('pageshow', function () { var el = document.getElementById('searchLoading'); if (el) el.classList.remove('on'); });
+
+        // ═══ /me LP 변화 그래프 호버 인터랙션 (없는 페이지에선 no-op) ═══
+        (function () {
+            function initLpChart() {
+                var chart = document.querySelector('.lp-chart');
+                if (!chart) return;
+                var pts;
+                try { pts = JSON.parse(chart.getAttribute('data-points') || '[]'); } catch (e) { return; }
+                if (!pts.length) return;
+                var W = 560, H = 200;
+                var cross = chart.querySelector('.lp-cross');
+                var cursor = chart.querySelector('.lp-cursor');
+                var tip = chart.querySelector('.lp-tip');
+                if (!cross || !cursor || !tip) return;
+                function show(p) {
+                    var lx = p.x / W * 100, ly = p.y / H * 100;
+                    cross.style.left = lx + '%';
+                    cursor.style.left = lx + '%'; cursor.style.top = ly + '%';
+                    tip.style.left = Math.min(Math.max(lx, 18), 82) + '%';
+                    tip.style.top = ly + '%';
+                    tip.innerHTML = '<div style="opacity:.65;font-weight:700;margin-bottom:2px;">' + p.d + '</div>'
+                        + '<div><b>' + p.r + '</b> · ' + p.lp + ' LP</div>'
+                        + '<div style="opacity:.85;">' + p.rec + '</div>';
+                    chart.classList.add('on');
+                }
+                function nearest(clientX) {
+                    var rect = chart.getBoundingClientRect();
+                    if (!rect.width) return pts[0];
+                    var sx = (clientX - rect.left) / rect.width * W;
+                    var best = pts[0], bd = Infinity;
+                    for (var i = 0; i < pts.length; i++) {
+                        var d = Math.abs(pts[i].x - sx);
+                        if (d < bd) { bd = d; best = pts[i]; }
+                    }
+                    return best;
+                }
+                chart.addEventListener('mousemove', function (e) { show(nearest(e.clientX)); });
+                chart.addEventListener('mouseleave', function () { chart.classList.remove('on'); });
+                chart.addEventListener('touchstart', function (e) { if (e.touches[0]) show(nearest(e.touches[0].clientX)); }, { passive: true });
+                chart.addEventListener('touchmove', function (e) { if (e.touches[0]) show(nearest(e.touches[0].clientX)); }, { passive: true });
+            }
+            if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initLpChart);
+            else initLpChart();
+        })();
 
         // ═══ AI 인게임 코치 ═══
         function _esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }

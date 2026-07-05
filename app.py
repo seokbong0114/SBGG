@@ -1029,6 +1029,7 @@ def get_league_info_by_puuid(puuid):
 SOLO_TIER_ORDER = {'IRON': 0, 'BRONZE': 1, 'SILVER': 2, 'GOLD': 3, 'PLATINUM': 4,
                    'EMERALD': 5, 'DIAMOND': 6, 'MASTER': 7, 'GRANDMASTER': 8, 'CHALLENGER': 9}
 SOLO_DIV_ORDER = {'IV': 0, 'III': 1, 'II': 2, 'I': 3}
+_TIER_BY_IDX = {v: k for k, v in SOLO_TIER_ORDER.items()}  # abs 그리드 라벨용 역매핑
 TIER_KR = {'IRON': '아이언', 'BRONZE': '브론즈', 'SILVER': '실버', 'GOLD': '골드',
            'PLATINUM': '플래티넘', 'EMERALD': '에메랄드', 'DIAMOND': '다이아',
            'MASTER': '마스터', 'GRANDMASTER': '그랜드마스터', 'CHALLENGER': '챌린저',
@@ -1069,32 +1070,109 @@ def fetch_rank_snapshot(name, tag):
         return None
 
 def render_lp_sparkline(history):
-    """랭크 히스토리(abs 사다리점수)를 컴팩트 SVG 스파크라인으로 렌더. 2점 미만이면 빈 문자열."""
-    pts = [(h['t'], h['abs']) for h in history if h.get('abs') is not None]
+    """랭크 히스토리(abs 사다리점수)를 인터랙티브 LP 변화 그래프(SVG+HTML)로 렌더.
+    · SVG: 영역/추세선/티어 경계 그리드(비균일 스케일 왜곡 없이 stretch OK한 요소만).
+    · HTML 오버레이: 티어 라벨·날짜축·시작/끝/최고점 마커(텍스트 왜곡 회피).
+    · data-points(JSON): 프런트 JS(#lpTip)가 호버 시 날짜·티어·LP·전적 툴팁 표시.
+    데이터포인트 2개 미만이면 빈 문자열."""
+    pts = [h for h in history if h.get('abs') is not None]
     if len(pts) < 2:
         return ''
-    W, H, pad = 320, 64, 6
-    xs = [p[0] for p in pts]
-    ys = [p[1] for p in pts]
+    W, H = 560, 200
+    padL, padR, padT, padB = 6, 10, 20, 26
+    xs = [p['t'] for p in pts]
+    ys = [p['abs'] for p in pts]
     x0, x1 = min(xs), max(xs)
     y0, y1 = min(ys), max(ys)
     xr = (x1 - x0) or 1
-    yr = (y1 - y0) or 1
-    fx = lambda t: pad + (t - x0) / xr * (W - 2 * pad)
-    fy = lambda v: H - pad - (v - y0) / yr * (H - 2 * pad)
-    line = 'M' + ' L'.join(f"{fx(t):.1f},{fy(v):.1f}" for t, v in pts)
-    up = pts[-1][1] >= pts[0][1]
-    col = '#34d399' if up else '#f87171'
-    area = (f"M{fx(pts[0][0]):.1f},{H - pad} L"
-            + ' L'.join(f"{fx(t):.1f},{fy(v):.1f}" for t, v in pts)
-            + f" L{fx(pts[-1][0]):.1f},{H - pad} Z")
-    return (f'<svg viewBox="0 0 {W} {H}" preserveAspectRatio="none" style="width:100%;height:64px;display:block;">'
-            f'<defs><linearGradient id="lpspark" x1="0" y1="0" x2="0" y2="1">'
-            f'<stop offset="0" stop-color="{col}" stop-opacity="0.35"/>'
-            f'<stop offset="1" stop-color="{col}" stop-opacity="0.02"/></linearGradient></defs>'
-            f'<path d="{area}" fill="url(#lpspark)"/>'
-            f'<path d="{line}" fill="none" stroke="{col}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>'
-            f'</svg>')
+    ypad = max((y1 - y0) * 0.18, 30)         # 위아래 여백 — 라벨/마커 겹침 방지
+    ylo, yhi = y0 - ypad, y1 + ypad
+    yrr = (yhi - ylo) or 1
+    fx = lambda t: padL + (t - x0) / xr * (W - padL - padR)
+    fy = lambda v: H - padB - (v - ylo) / yrr * (H - padT - padB)
+
+    def esc(s):
+        return (str(s).replace('&', '&amp;').replace('<', '&lt;')
+                .replace('>', '&gt;').replace('"', '&quot;'))
+
+    def rank_label(p):
+        t = (p.get('tier') or '').upper()
+        tk = TIER_KR.get(t, p.get('tier') or '')
+        if SOLO_TIER_ORDER.get(t, 0) >= 7 or not p.get('rank'):
+            return tk
+        return f"{tk} {p.get('rank')}"
+
+    def kst(t, full=False):
+        lt = time.gmtime((t or 0) + 9 * 3600)  # 서버 UTC → KST 표기
+        if full:
+            return f"{lt.tm_mon}월 {lt.tm_mday}일 {lt.tm_hour:02d}:{lt.tm_min:02d}"
+        return f"{lt.tm_mon}/{lt.tm_mday}"
+
+    coords = [(fx(p['t']), fy(p['abs'])) for p in pts]
+    col = '#34d399' if ys[-1] > ys[0] else ('#f87171' if ys[-1] < ys[0] else '#9ca3af')
+    line = 'M' + ' L'.join(f"{x:.1f},{y:.1f}" for x, y in coords)
+    area = (f"M{coords[0][0]:.1f},{H - padB} L"
+            + ' L'.join(f"{x:.1f},{y:.1f}" for x, y in coords)
+            + f" L{coords[-1][0]:.1f},{H - padB} Z")
+
+    # 티어 경계(abs 400 배수) 그리드 + 좌측 티어 라벨(HTML)
+    grid, ylabs = [], []
+    b = int(math.ceil(ylo / 400.0)) * 400
+    while b <= yhi:
+        ti = b // 400
+        yy = fy(b)
+        if padT - 2 <= yy <= H - padB + 2 and ti in _TIER_BY_IDX:
+            grid.append(f'<line class="lp-grid-t" x1="0" y1="{yy:.1f}" x2="{W}" y2="{yy:.1f}" '
+                        f'vector-effect="non-scaling-stroke"/>')
+            ylabs.append(f'<span class="lp-ylab" style="top:{yy / H * 100:.2f}%">'
+                         f'{esc(TIER_KR[_TIER_BY_IDX[ti]])}</span>')
+        b += 400
+
+    # 시작/끝/최고점 마커(HTML 오버레이 — 원형 왜곡 없음)
+    def pct(i):
+        return coords[i][0] / W * 100, coords[i][1] / H * 100
+    sx, sy = pct(0)
+    ex, ey = pct(len(pts) - 1)
+    marks = (f'<span class="lp-mark" style="left:{sx:.2f}%;top:{sy:.2f}%;'
+             f'background:var(--bg-elev);border-color:{col};"></span>'
+             f'<span class="lp-mark" style="left:{ex:.2f}%;top:{ey:.2f}%;'
+             f'background:{col};border-color:var(--bg-elev);"></span>')
+    peak_i = max(range(len(pts)), key=lambda i: ys[i])
+    peak_html = ''
+    if peak_i not in (0, len(pts) - 1) and ys[peak_i] > ys[0] and ys[peak_i] > ys[-1]:
+        pxp, pyp = pct(peak_i)
+        peak_html = (f'<span class="lp-peak" style="left:{pxp:.2f}%;top:{pyp:.2f}%">'
+                     f'▲ 최고 {esc(rank_label(pts[peak_i]))}</span>')
+
+    # 호버 툴팁용 데이터(JSON) — data-points 속성
+    jpoints = [{'x': round(coords[i][0], 1), 'y': round(coords[i][1], 1),
+                'd': kst(pts[i]['t'], full=True), 'r': rank_label(pts[i]),
+                'lp': pts[i].get('lp', 0),
+                'rec': f"{pts[i].get('wins', 0)}승 {pts[i].get('losses', 0)}패"}
+               for i in range(len(pts))]
+    data = esc(json.dumps(jpoints, ensure_ascii=False)).replace("'", "&#39;")
+
+    net = ys[-1] - ys[0]
+    net_txt = (f"▲ +{net}" if net > 0 else (f"▼ {net}" if net < 0 else "─ 0"))
+    cap = f"최근 {len(pts)}개 기록 · 기간 변동 {net_txt} pt"
+
+    svg = (f'<svg class="lp-svg" viewBox="0 0 {W} {H}" preserveAspectRatio="none">'
+           f'<defs><linearGradient id="lpg" x1="0" y1="0" x2="0" y2="1">'
+           f'<stop offset="0" stop-color="{col}" stop-opacity="0.30"/>'
+           f'<stop offset="1" stop-color="{col}" stop-opacity="0.01"/></linearGradient></defs>'
+           + ''.join(grid)
+           + f'<path class="lp-area" d="{area}" fill="url(#lpg)"/>'
+           + f'<path d="{line}" fill="none" stroke="{col}" stroke-width="2.4" '
+           f'stroke-linejoin="round" stroke-linecap="round" vector-effect="non-scaling-stroke"/>'
+           + '</svg>')
+
+    return (f'<div class="lp-chart" data-points="{data}">'
+            + svg + ''.join(ylabs)
+            + f'<span class="lp-xlab lp-xstart">{esc(kst(pts[0]["t"]))}</span>'
+            + f'<span class="lp-xlab lp-xend">{esc(kst(pts[-1]["t"]))}</span>'
+            + marks + peak_html
+            + '<div class="lp-cross"></div><div class="lp-cursor"></div><div class="lp-tip"></div>'
+            + f'</div><div class="lp-cap">{cap}</div>')
 
 # ═══════════════════════════════════════════════════════════════════════
 #  ★ 동적 OG 공유 카드 (카카오톡·디스코드·X 링크 미리보기)
