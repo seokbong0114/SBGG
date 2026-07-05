@@ -2166,7 +2166,15 @@
             }
 
             const radarOptions = { responsive: true, maintainAspectRatio: false, scales: { r: { angleLines: { color: 'rgba(255, 255, 255, 0.05)' }, grid: { color: 'rgba(255, 255, 255, 0.05)' }, pointLabels: { color: '#8b949e', font: { size: 12, weight: '800', family: 'Pretendard' } }, ticks: { display: false, min: 0, max: 100 } } }, plugins: { legend: { display: false } } };
+            // 티어 평균 오버레이가 있을 때만 범례 표시(어느 선이 '나'/'평균'인지 구분)
+            const radarOptionsLegend = { ...radarOptions, plugins: { legend: { display: true, position: 'bottom', labels: { color: '#8b949e', boxWidth: 10, boxHeight: 10, padding: 10, font: { size: 11, weight: '700', family: 'Pretendard' } } } } };
             const radarLabels = ['전투', '성장', '시야', '생존', '오브젝트', '합류'];
+
+            // 서버가 표본 30+ 티어평균을 주면 배열, 부족하면 null → 오버레이 생략
+            const tierAvgLabel = {{ tier_avg_label | tojson | safe if tier_avg_label else '"티어 평균"' }};
+            const benchPrimary = {{ radar_bench_primary | tojson | safe if radar_bench_primary else 'null' }};
+            const benchSecondary = {{ radar_bench_secondary | tojson | safe if radar_bench_secondary else 'null' }};
+            function ghostDs(data) { return { label: tierAvgLabel, data: data, backgroundColor: 'rgba(148,163,184,0.10)', borderColor: 'rgba(148,163,184,0.85)', borderDash: [4,4], pointRadius: 0, borderWidth: 1.5, fill: true }; }
 
             const presentRadar = {{ radar_data | tojson | safe }};
             let overallChart = null;
@@ -2174,10 +2182,18 @@
             if (ctx0) overallChart = new Chart(ctx0, { type: 'radar', data: { labels: radarLabels, datasets: [{ label: '현재', data: presentRadar, backgroundColor: 'rgba(139, 92, 246, 0.3)', borderColor: '#8b5cf6', pointBackgroundColor: '#fff', borderWidth: 2, fill: true }] }, options: radarOptions });
 
             const ctx1 = document.getElementById('radarPrimary')?.getContext('2d');
-            if (ctx1) new Chart(ctx1, { type: 'radar', data: { labels: radarLabels, datasets: [{ data: {{ primary_role.radar | tojson | safe if primary_role else '[]' }}, backgroundColor: 'rgba(59, 130, 246, 0.3)', borderColor: '#3b82f6', pointBackgroundColor: '#fff', borderWidth: 2, fill: true }] }, options: radarOptions });
+            if (ctx1) {
+                const dsP = [{ label: '나', data: {{ primary_role.radar | tojson | safe if primary_role else '[]' }}, backgroundColor: 'rgba(59, 130, 246, 0.3)', borderColor: '#3b82f6', pointBackgroundColor: '#fff', borderWidth: 2, fill: true }];
+                if (benchPrimary) dsP.unshift(ghostDs(benchPrimary));
+                new Chart(ctx1, { type: 'radar', data: { labels: radarLabels, datasets: dsP }, options: benchPrimary ? radarOptionsLegend : radarOptions });
+            }
 
             const ctx2 = document.getElementById('radarSecondary')?.getContext('2d');
-            if (ctx2) new Chart(ctx2, { type: 'radar', data: { labels: radarLabels, datasets: [{ data: {{ secondary_role.radar | tojson | safe if secondary_role else '[]' }}, backgroundColor: 'rgba(245, 158, 11, 0.3)', borderColor: '#f59e0b', pointBackgroundColor: '#fff', borderWidth: 2, fill: true }] }, options: radarOptions });
+            if (ctx2) {
+                const dsS = [{ label: '나', data: {{ secondary_role.radar | tojson | safe if secondary_role else '[]' }}, backgroundColor: 'rgba(245, 158, 11, 0.3)', borderColor: '#f59e0b', pointBackgroundColor: '#fff', borderWidth: 2, fill: true }];
+                if (benchSecondary) dsS.unshift(ghostDs(benchSecondary));
+                new Chart(ctx2, { type: 'radar', data: { labels: radarLabels, datasets: dsS }, options: benchSecondary ? radarOptionsLegend : radarOptions });
+            }
 
             let currentStart = 20;
             const targetPuuid = '{{ searched_puuid }}';

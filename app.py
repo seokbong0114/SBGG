@@ -559,6 +559,20 @@ def _extract_metrics(p, duration_min):
         "deaths": d,
     }
 
+def _radar_contrib(p):
+    """Match-v5 참가자 → 레이더 6축 '한 게임 기여값'.
+    get_match_details의 overall_stats 누적식과 100% 동일해야 티어평균이 유저 레이더와 같은 스케일이 됨."""
+    ch = p.get('challenges', {}) or {}
+    d = p.get('deaths', 0)
+    return {
+        "r_combat":     p.get('kills', 0) + p.get('assists', 0),
+        "r_growth":     p.get('goldEarned', 0),
+        "r_vision":     p.get('visionScore', 0),
+        "r_survival":   max(0, 20 - d),
+        "r_objectives": p.get('damageDealtToObjectives', 0),
+        "r_join":       ch.get('killParticipation', 0) * 100,
+    }
+
 def record_tier_benchmark(metrics, tier, role):
     """티어×역할×지표 평균에 한 표본 누적. tier는 소문자 티어명."""
     if not tier or role not in VALID_ROLES:
@@ -577,7 +591,8 @@ def record_tier_benchmark(metrics, tier, role):
         except Exception: pass
 
 def get_tier_benchmarks(tier, role):
-    """해당 티어·역할의 지표 평균 {metric: avg} (표본 충분한 것만)."""
+    """해당 티어·역할의 지표 평균 {metric: avg} (표본 충분한 것만).
+    r_* (레이더 축) 키는 개선팁용 지표가 아니므로 제외."""
     out = {}
     if not tier:
         return out
@@ -585,12 +600,37 @@ def get_tier_benchmarks(tier, role):
         conn = db_connect()
         for metric, total, cnt in conn.execute(
                 "SELECT metric, total, cnt FROM tier_benchmark WHERE tier=? AND role=?", (tier, role)):
-            if cnt >= BENCH_MIN_SAMPLE:
+            if cnt >= BENCH_MIN_SAMPLE and not metric.startswith('r_'):
                 out[metric] = round(total / cnt, 2)
         conn.close()
     except Exception as e:
         print(f"벤치마크 조회 에러: {e}")
     return out
+
+_RADAR_AXES = ['r_combat', 'r_growth', 'r_vision', 'r_survival', 'r_objectives', 'r_join']
+
+def get_tier_radar(tier, role):
+    """티어×역할 평균 레이더(6축, 0~100). 표본이 BENCH_MIN_SAMPLE 미만이면 None(가짜 숫자 금지).
+    유저 레이더와 동일한 calc_radar 정규화를 적용해 같은 스케일로 겹쳐볼 수 있게 함."""
+    if not tier or role not in VALID_ROLES:
+        return None
+    avg = {}
+    try:
+        conn = db_connect()
+        for metric, total, cnt in conn.execute(
+                "SELECT metric, total, cnt FROM tier_benchmark WHERE tier=? AND role=? AND metric LIKE 'r\\_%' ESCAPE '\\'",
+                (tier, role)):
+            if cnt >= BENCH_MIN_SAMPLE:
+                avg[metric] = total / cnt
+        conn.close()
+    except Exception as e:
+        print(f"티어 레이더 조회 에러: {e}")
+        return None
+    if any(k not in avg for k in _RADAR_AXES):
+        return None  # 6축 중 하나라도 표본 부족 → 오버레이 숨김
+    stats = {'combat': avg['r_combat'], 'growth': avg['r_growth'], 'vision': avg['r_vision'],
+             'survival': avg['r_survival'], 'objectives': avg['r_objectives'], 'join': avg['r_join']}
+    return calc_radar(stats, 1)
 # 아이템 패치 자동감지: 공식 패치노트와 일치 확인됨(예: 도란의 투구 방어/마저 10→8, 체력 140→150).
 # 동일 이름 중복 id 중 '변경이 있는 = 현재 살아있는' 항목만 잡히므로 신뢰 가능.
 RELIABLE_ITEM_DIFF = True
@@ -1905,7 +1945,8 @@ def get_match_details(puuid, start=0, count=20, queue=None, collect_stats=True, 
                     _pm = _extract_metrics(p, duration_m)
                     main_player_data['metrics'] = _pm
                     if collect_stats and player_tier and p.get('teamPosition') in VALID_ROLES and duration_m >= 5:
-                        deferred_stats.append(('bench', _pm, player_tier, p['teamPosition']))
+                        # 지표 벤치마크 + 레이더 축 평균을 함께 적립(같은 티어×역할 키)
+                        deferred_stats.append(('bench', {**_pm, **_radar_contrib(p)}, player_tier, p['teamPosition']))
                     grade = calc_game_grade(main_player_data['kda_ratio'], round(kp), main_player_data['cs_per_min'], p['win'])
                     main_player_data['grade'] = grade
                     main_player_data['grade_style'] = GRADE_STYLE.get(grade, GRADE_STYLE['C'])
@@ -2049,8 +2090,8 @@ def get_match_details(puuid, start=0, count=20, queue=None, collect_stats=True, 
     sorted_roles = sorted(role_stats.items(), key=lambda x: x[1]['count'], reverse=True)
     primary_role, secondary_role = None, None
 
-    if len(sorted_roles) > 0: primary_role = {'name': ROLE_MAP.get(sorted_roles[0][0], "기타"), 'icon': ROLE_ICON.get(sorted_roles[0][0], "🎲"), 'radar': calc_radar(sorted_roles[0][1], sorted_roles[0][1]['count']), 'count': sorted_roles[0][1]['count']}
-    if len(sorted_roles) > 1: secondary_role = {'name': ROLE_MAP.get(sorted_roles[1][0], "기타"), 'icon': ROLE_ICON.get(sorted_roles[1][0], "🎲"), 'radar': calc_radar(sorted_roles[1][1], sorted_roles[1][1]['count']), 'count': sorted_roles[1][1]['count']}
+    if len(sorted_roles) > 0: primary_role = {'name': ROLE_MAP.get(sorted_roles[0][0], "기타"), 'icon': ROLE_ICON.get(sorted_roles[0][0], "🎲"), 'radar': calc_radar(sorted_roles[0][1], sorted_roles[0][1]['count']), 'count': sorted_roles[0][1]['count'], 'role_en': sorted_roles[0][0]}
+    if len(sorted_roles) > 1: secondary_role = {'name': ROLE_MAP.get(sorted_roles[1][0], "기타"), 'icon': ROLE_ICON.get(sorted_roles[1][0], "🎲"), 'radar': calc_radar(sorted_roles[1][1], sorted_roles[1][1]['count']), 'count': sorted_roles[1][1]['count'], 'role_en': sorted_roles[1][0]}
 
     win_rate = round((win_count/game_count)*100) if matches else 0
     most = Counter([m['champ_img'] for m in matches]).most_common(3)
@@ -2354,7 +2395,7 @@ def generate_improvement_tips(matches, overall_kda, radar_array, primary_role=No
                 vals = [m['metrics'].get(metric) for m in role_games if m['metrics'].get(metric) is not None]
                 if vals:
                     uavg[metric] = sum(vals) / len(vals)
-            tkr = TIER_KR.get(tier_key, tier_key)
+            tkr = TIER_KR.get(tier_key.upper(), tier_key)  # TIER_KR은 대문자 키('GOLD')
             weak = []  # (상대격차, tip)
             for metric, meta in BENCHMARK_METRICS.items():
                 if metric not in bench or metric not in uavg or bench[metric] <= 0:
@@ -3223,7 +3264,7 @@ def _do_collect_once(n=5, tier="auto"):
                     dm = info.get('gameDuration', 0) / 60.0
                     me = next((pp for pp in info.get('participants', []) if pp.get('puuid') == puuid), None)
                     if me and me.get('teamPosition') in VALID_ROLES and dm >= 5:
-                        record_tier_benchmark(_extract_metrics(me, dm), tier, me['teamPosition'])
+                        record_tier_benchmark({**_extract_metrics(me, dm), **_radar_contrib(me)}, tier, me['teamPosition'])
                     tl = riot_get(f"https://asia.api.riotgames.com/lol/match/v5/matches/{m_id}/timeline")
                     if tl.status_code == 200:
                         record_timeline_stats(tl.json(), m_json, m_id)
@@ -3590,6 +3631,13 @@ def search():
     improvement_tips = generate_improvement_tips(matches, overall_kda, overall_radar, primary_role, tier_name)
     champion_recs = recommend_champions(overall_radar, primary_role)
 
+    # ★ 레이더 티어 평균 오버레이 — 같은 티어×역할 실측 평균(표본 30+ 게이팅, 부족 시 None)
+    _tk = (tier_name or "").strip().split(" ")[0].lower()
+    # TIER_KR은 대문자 키('GOLD') → 소문자 _tk는 .upper()로 조회
+    tier_avg_label = (TIER_KR[_tk.upper()] + " 평균") if _tk.upper() in TIER_KR else "티어 평균"
+    radar_bench_primary = get_tier_radar(_tk, primary_role['role_en']) if primary_role else None
+    radar_bench_secondary = get_tier_radar(_tk, secondary_role['role_en']) if secondary_role else None
+
     # ★ 모스트 챔피언 맞춤 패치 변화 (DDragon 버전 비교) — 챔피언별 독립·캐시됨 → 병렬 조회
     _tcs = top_recent_champs[:5]
     if _tcs:
@@ -3660,6 +3708,8 @@ def search():
         "recent_team_luck": recent_team_luck,
         "position_dist": position_dist, "duo_stats": duo_stats,
         "patch_changes": patch_changes, "current_patch": CURRENT_PATCH_DISPLAY,
+        "radar_bench_primary": radar_bench_primary, "radar_bench_secondary": radar_bench_secondary,
+        "tier_avg_label": tier_avg_label,
     }
 
     # 3. 새로운 데이터를 DB에 JSON 문자열 형태로 저장/갱신
