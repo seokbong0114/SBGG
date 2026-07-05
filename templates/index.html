@@ -667,6 +667,7 @@
             <a href="/champions"{% if active == 'champions' %} class="on"{% endif %}>챔피언 도감</a>
             <a href="/duo"{% if active == 'duo' %} class="on"{% endif %}>듀오 찾기</a>
             <a href="/privacy"{% if active == 'privacy' %} class="on"{% endif %}>개인정보</a>
+            <a href="/privacy#tos"{% if active == 'tos' %} class="on"{% endif %}>이용약관</a>
             {% if feedback %}<a href="#" onclick="openFeedback(); return false;">고객의 소리</a>{% endif %}
         </div>
         <div class="footer-disclaimer">SB.GG isn't endorsed by Riot Games. Riot Games and all associated properties are trademarks or registered trademarks of Riot Games, Inc.</div>
@@ -3086,10 +3087,55 @@
             <div style="margin-top: 20px; font-size: 12px; color: var(--text-muted);">시행일: 2026년 6월 25일 · 패치 {{ current_patch }} 기준</div>
         </div>
 
+        <!-- ===== 이용약관 ===== -->
+        <div id="tos" class="glass-panel" style="padding: 36px; line-height: 1.8; margin-top: 24px;">
+            <div class="page-title" style="font-size: 22px; margin-bottom: 24px;">📋 이용약관 <span style="font-size: 13px; color: var(--text-muted); font-weight: 600;">Terms of Service</span></div>
+            <p style="color: var(--text-muted); font-size: 14px; margin-top: 0;">
+                SB.GG(이하 "서비스")를 이용하시면 아래 이용약관에 동의하는 것으로 간주합니다.
+            </p>
+
+            <div class="privacy-section">
+                <h3 class="privacy-h">1. 서비스 제공</h3>
+                <p class="privacy-p">SB.GG는 리그 오브 레전드(League of Legends) 공개 전적·통계·빌드 정보를 무료로 제공하는 정보 서비스입니다. Riot Games API를 통해 수집된 공개 데이터를 가공·표시하며, 서비스 이용은 무료입니다.</p>
+            </div>
+
+            <div class="privacy-section">
+                <h3 class="privacy-h">2. 이용자 의무</h3>
+                <ul class="privacy-ul">
+                    <li>서비스를 불법적인 목적이나 타인에게 피해를 주는 방식으로 이용하지 않습니다.</li>
+                    <li>서비스의 자동화 스크래핑, 크롤링, API 무단 접근 등을 하지 않습니다.</li>
+                    <li>다른 이용자의 계정을 도용하거나 허위 정보를 입력하지 않습니다.</li>
+                </ul>
+            </div>
+
+            <div class="privacy-section">
+                <h3 class="privacy-h">3. 데이터 정확성</h3>
+                <p class="privacy-p">SB.GG가 표시하는 전적·통계 데이터는 Riot Games API에서 제공하는 공개 데이터를 기반으로 합니다. 데이터의 완전성·정확성을 보증하지 않으며, 공식 클라이언트와 차이가 있을 수 있습니다.</p>
+            </div>
+
+            <div class="privacy-section">
+                <h3 class="privacy-h">4. 서비스 변경 및 중단</h3>
+                <p class="privacy-p">운영자는 사전 고지 없이 서비스 일부 또는 전부를 변경·중단할 수 있습니다. Riot Games의 API 정책 변경으로 인해 일부 기능이 제한될 수 있습니다.</p>
+            </div>
+
+            <div class="privacy-section">
+                <h3 class="privacy-h">5. 면책조항</h3>
+                <p class="privacy-p">SB.GG는 서비스 이용으로 발생하는 직·간접적 손해에 대해 책임을 지지 않습니다. 서비스는 Riot Games와 무관하며, Riot Games의 공식 승인을 받은 제품이 아닙니다.</p>
+            </div>
+
+            <div class="privacy-section">
+                <h3 class="privacy-h">6. 문의처</h3>
+                <p class="privacy-p">이용약관 관련 문의: <a href="mailto:seokbong0114@gmail.com" style="color: var(--point-color); font-weight: 700;">seokbong0114@gmail.com</a></p>
+            </div>
+
+            <div style="margin-top: 20px; font-size: 12px; color: var(--text-muted);">시행일: 2026년 7월 6일</div>
+        </div>
+
         <div style="margin-top: 20px; text-align: center;">
             <a href="/" style="color: var(--text-muted); font-size: 14px; font-weight: 700; text-decoration: none;">← 홈으로 돌아가기</a>
         </div>
     </div>
+    {{ site_footer('privacy') }}
 
     {% elif page == 'login' %}
     <!-- ================= 로그인 ================= -->
