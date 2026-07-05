@@ -2573,7 +2573,7 @@ def is_admin():
 # ================= 자체 경량 애널리틱스 (쿠키리스 · PII 미저장) =================
 _ANALYTICS_SALT = os.getenv("SECRET_KEY", "sbgg-analytics-salt")
 _ANALYTICS_SKIP_PREFIX = ('/static', '/favicon', '/og/', '/api/', '/live_games', '/admin')
-_ANALYTICS_SKIP_EXACT = {'/sitemap.xml', '/robots.txt', '/riot.txt', '/collect', '/more_matches'}
+_ANALYTICS_SKIP_EXACT = {'/sitemap.xml', '/robots.txt', '/riot.txt', '/collect', '/more_matches', '/ping'}
 
 def _analytics_path(path):
     """경로 정규화 — 상세 페이지는 그룹핑(카디널리티 폭발 방지)."""
@@ -3575,6 +3575,11 @@ def spectate():
 @app.route('/privacy')
 def privacy():
     return render_template('index.html', page='privacy', current_patch=CURRENT_PATCH_DISPLAY)
+
+@app.route('/ping')
+def ping():
+    """UptimeRobot 등 외부 모니터링용 헬스체크 — DB/API 호출 없이 즉시 응답."""
+    return "ok", 200
 
 @app.route('/riot.txt')
 def riot_txt():
