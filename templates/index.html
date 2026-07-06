@@ -269,7 +269,7 @@
         .champ-filter-btn.active { background: var(--point-color); color: #05242e; border-color: var(--point-color); }
         .champ-filter-btn.active .cnt { background: rgba(0,0,0,0.2); }
 
-        .match-card { background: var(--bg-panel); border-radius: 16px; display: grid; grid-template-columns: 100px 130px 120px 140px 1fr 100px; gap: 15px; align-items: center; padding: 14px 20px; margin-bottom: 8px; transition: 0.2s; border: 1px solid transparent; position: relative; overflow: hidden; }
+        .match-card { background: var(--bg-panel); border-radius: 16px; display: grid; grid-template-columns: 100px 66px 116px 140px 1fr 112px; gap: 15px; align-items: center; padding: 14px 20px; margin-bottom: 8px; transition: 0.2s; border: 1px solid transparent; position: relative; overflow: hidden; }
         .match-card:hover { transform: translateY(-2px); box-shadow: 0 10px 20px rgba(0,0,0,0.4); }
         .match-card.win { border-left: 4px solid var(--win-color); background: linear-gradient(90deg, rgba(74, 222, 128, 0.08) 0%, var(--bg-panel) 50%); border-top: 1px solid rgba(74, 222, 128, 0.2); }
         .match-card.lose { border-left: 4px solid var(--lose-color); background: linear-gradient(90deg, rgba(239, 68, 68, 0.08) 0%, var(--bg-panel) 50%); border-top: 1px solid rgba(239, 68, 68, 0.2); }
@@ -604,9 +604,11 @@
 
         /* ═══ AI 인게임 코치 ═══ */
         .ai-coach-block { margin: 10px 0 2px; }
-        .ai-coach-btn { width: 100%; display: flex; align-items: center; justify-content: center; gap: 8px; padding: 11px 16px; border: none; border-radius: 12px; cursor: pointer; font-size: 14px; font-weight: 800; letter-spacing: -0.2px; color: #06131c; background: linear-gradient(100deg, #38bdf8 0%, #818cf8 55%, #c084fc 100%); box-shadow: 0 6px 18px rgba(56,189,248,0.22); transition: 0.2s; }
-        .ai-coach-btn:hover { transform: translateY(-1px); box-shadow: 0 10px 24px rgba(129,140,248,0.34); filter: brightness(1.05); }
-        .ai-coach-btn:disabled { cursor: default; opacity: 0.65; transform: none; box-shadow: none; }
+        /* 카드 우측 끝 미니 AI 버튼 (풀너비 버튼 대체) */
+        .ai-coach-mini { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; padding: 5px 11px; border: 1px solid rgba(129,140,248,0.45); border-radius: 9px; cursor: pointer; font-family: 'Pretendard', sans-serif; font-size: 11px; font-weight: 800; letter-spacing: -0.2px; color: #c4b5fd; background: rgba(129,140,248,0.12); transition: 0.18s; }
+        .ai-coach-mini:hover { background: rgba(129,140,248,0.26); border-color: rgba(129,140,248,0.75); color: #e9e4ff; transform: translateY(-1px); }
+        .ai-coach-mini:disabled { cursor: default; opacity: 0.6; transform: none; }
+        .ai-coach-block:empty { display: none; }
         .ai-coach-result { margin-top: 10px; }
         /* 스켈레톤 로딩 */
         .ai-coach-skeleton { border-radius: 14px; padding: 18px; background: var(--bg-elev); border: var(--border-glass); }
@@ -725,18 +727,11 @@
                     <span style="display:inline-block; padding:3px 10px; border-radius:8px; font-size:15px; font-weight:900; letter-spacing:1px; background:{{ match.grade_style.bg }}; color:{{ match.grade_style.color }}; border:1px solid {{ match.grade_style.border }};">{{ match.grade }}</span>
                     {% endif %}
                 </div>
-                <div style="display: flex; align-items: center; gap: 10px;">
+                <div style="display: flex; align-items: center; justify-content: center;">
                     <a href="/champion/{{ match.champ_img }}" title="{{ match.championName_kr }} 메타 분석 보기" style="display:block; position:relative; flex-shrink:0;">
-                        <img src="https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/champion/{{ match.champ_img }}.png" style="width: 55px; height: 55px; border-radius: 50%; box-shadow: 0 4px 10px rgba(0,0,0,0.5); transition:0.2s;" onmouseover="this.style.opacity='0.75'; this.style.transform='scale(1.05)'" onmouseout="this.style.opacity='1'; this.style.transform='scale(1)'">
+                        <img src="https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/champion/{{ match.champ_img }}.png" style="width: 56px; height: 56px; border-radius: 50%; box-shadow: 0 4px 10px rgba(0,0,0,0.5); transition:0.2s;" onmouseover="this.style.opacity='0.75'; this.style.transform='scale(1.05)'" onmouseout="this.style.opacity='1'; this.style.transform='scale(1)'">
+                        <img src="https://ddragon.leagueoflegends.com/cdn/img/{{ match.rune1 }}" title="핵심 룬" style="position:absolute; right:-3px; bottom:-3px; width:24px; height:24px; border-radius:50%; background:#0b0e14; padding:1px; border:1.5px solid rgba(255,255,255,0.18); box-shadow:0 2px 5px rgba(0,0,0,0.6);" onerror="this.style.display='none'">
                     </a>
-                    <div style="display: flex; flex-direction: column; gap: 3px;">
-                        <img src="https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/spell/{{ match.spell1 }}.png" style="width: 26px; height: 26px; border-radius: 6px;">
-                        <img src="https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/spell/{{ match.spell2 }}.png" style="width: 26px; height: 26px; border-radius: 6px;">
-                    </div>
-                    <div style="display: flex; flex-direction: column; gap: 3px;">
-                        <img src="https://ddragon.leagueoflegends.com/cdn/img/{{ match.rune1 }}" style="width: 26px; height: 26px; border-radius: 50%; background: #000; padding: 1px;" onerror="this.style.display='none'">
-                        <img src="https://ddragon.leagueoflegends.com/cdn/img/{{ match.rune2 }}" style="width: 26px; height: 26px; border-radius: 50%; background: #000; padding: 1px;" onerror="this.style.display='none'">
-                    </div>
                 </div>
                 
                 <div style="display: flex; flex-direction: column; align-items: center; justify-content: center;">
@@ -769,24 +764,36 @@
                     <div style="font-size: 16px; font-weight: 900; color: {% if match.win %}var(--win-color){% else %}var(--lose-color){% endif %}; margin-bottom: 2px;">{% if match.win %}승리{% else %}패배{% endif %}</div>
                     <div class="badge-pill {{ match.main_badge_class }}">{{ match.main_badge }}</div>
                     <div class="badge-pill {{ match.team_luck_class }}">{{ match.team_luck }}</div>
+                    {% if ai_coach_enabled %}
+                    <button type="button" class="ai-coach-mini"
+                        data-champ="{{ match.champ_img }}" data-champ-kr="{{ match.championName_kr }}"
+                        data-k="{{ match.k }}" data-d="{{ match.d }}" data-a="{{ match.a }}"
+                        data-kp="{{ match.kp }}" data-cs="{{ match.cs }}" data-cspm="{{ match.cs_per_min }}"
+                        data-vspm="{{ match.metrics.vspm }}"
+                        data-win="{{ 1 if match.win else 0 }}" data-role="{{ match.role_en }}"
+                        data-match="{{ match.match_id }}" data-pid="{{ match.participant_id }}" data-opp-pid="{{ match.opp_participant_id or '' }}"
+                        onclick="runAiCoach(this)">✨ AI 피드백</button>
+                    {% endif %}
                 </div>
             </div>
 
             {% if ai_coach_enabled %}
-            <div class="ai-coach-block">
-                <button type="button" class="ai-coach-btn"
-                    data-champ="{{ match.champ_img }}" data-champ-kr="{{ match.championName_kr }}"
-                    data-k="{{ match.k }}" data-d="{{ match.d }}" data-a="{{ match.a }}"
-                    data-kp="{{ match.kp }}" data-cs="{{ match.cs }}" data-cspm="{{ match.cs_per_min }}"
-                    data-vspm="{{ match.metrics.vspm }}"
-                    data-win="{{ 1 if match.win else 0 }}" data-role="{{ match.role_en }}"
-                    data-match="{{ match.match_id }}" data-pid="{{ match.participant_id }}" data-opp-pid="{{ match.opp_participant_id or '' }}"
-                    onclick="runAiCoach(this)">✨ AI 인게임 리포트 분석하기</button>
-            </div>
+            <div class="ai-coach-block"></div>
             {% endif %}
 
             <details class="scoreboard-details" data-match="{{ match.match_id }}">
                 <summary><span class="summary-icon">▼</span> 팀 상세 스코어보드 열기</summary>
+                <div style="display:flex; align-items:center; gap:14px; padding:12px 4px 6px; flex-wrap:wrap;">
+                    <span style="font-size:11px; font-weight:800; color:var(--text-muted); letter-spacing:0.3px;">내 스펠·룬</span>
+                    <div style="display:flex; gap:5px;">
+                        <img src="https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/spell/{{ match.spell1 }}.png" title="소환사 주문" style="width:26px; height:26px; border-radius:7px;">
+                        <img src="https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/spell/{{ match.spell2 }}.png" title="소환사 주문" style="width:26px; height:26px; border-radius:7px;">
+                    </div>
+                    <div style="display:flex; gap:5px;">
+                        <img src="https://ddragon.leagueoflegends.com/cdn/img/{{ match.rune1 }}" title="핵심 룬" style="width:26px; height:26px; border-radius:50%; background:#000; padding:1px;" onerror="this.style.display='none'">
+                        <img src="https://ddragon.leagueoflegends.com/cdn/img/{{ match.rune2 }}" title="보조 룬" style="width:26px; height:26px; border-radius:50%; background:#000; padding:1px;" onerror="this.style.display='none'">
+                    </div>
+                </div>
                 <div class="scoreboard-container">
                     <div class="team-box blue-team-box">
                         <table class="score-table">
@@ -3564,13 +3571,14 @@
                 + stat + '</div>' + foot + '</div>';
         }
         async function runAiCoach(btn) {
-            var wrap = btn.closest('.ai-coach-block');
+            // 미니 버튼은 카드 안에 있고, 리포트 컨테이너(.ai-coach-block)는 카드 아래 형제 → 래퍼 기준으로 탐색
+            var wrap = btn.closest('.match-item-wrapper').querySelector('.ai-coach-block');
             var box = wrap.querySelector('.ai-coach-result');
             // 이미 리포트가 로드돼 있으면 재호출 없이 접기/펼치기 토글
             if (box && box.dataset.loaded === '1') {
                 var willShow = box.style.display === 'none';
                 box.style.display = willShow ? '' : 'none';
-                btn.innerHTML = willShow ? '🔼 AI 리포트 접기' : '✨ AI 리포트 다시 보기';
+                btn.innerHTML = willShow ? '🔼 접기' : '✨ 다시 보기';
                 return;
             }
             if (!box) { box = document.createElement('div'); box.className = 'ai-coach-result'; wrap.appendChild(box); }
@@ -3596,10 +3604,10 @@
                 if (!j.ok) throw new Error(j.msg || '분석 실패');
                 box.innerHTML = renderCoachCard(j.report, j.is_live, j.data_source);
                 box.dataset.loaded = '1';
-                btn.innerHTML = '🔼 AI 리포트 접기';
+                btn.innerHTML = '🔼 접기';
             } catch (e) {
                 box.innerHTML = '<div class="coach-error">⚠️ 분석 중 문제가 발생했어요. 잠시 후 다시 시도해 주세요.</div>';
-                btn.innerHTML = '✨ AI 리포트 다시 보기';
+                btn.innerHTML = '✨ 다시 보기';
             } finally {
                 btn.disabled = false;
             }
