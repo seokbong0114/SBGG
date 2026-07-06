@@ -1729,7 +1729,22 @@
                         {% if tier_name != 'unranked' %}<img src="https://opgg-static.akamaized.net/images/medals_new/{{ tier_name }}.png" class="tier-icon">{% endif %}
                         {{ tier_text }}
                     </div>
-                    
+
+                    {% if recent_form is defined and recent_form %}
+                    <div style="margin-top: 14px; display: inline-flex; align-items: center; gap: 13px; padding: 9px 15px 9px 16px; background: rgba(0,0,0,0.45); backdrop-filter: blur(6px); border: 1.5px solid {{ recent_form.color }}66; border-radius: 15px; box-shadow: 0 4px 16px rgba(0,0,0,0.45);"
+                         title="최근 {{ recent_form.n }}판의 실측 인게임 등급(S+~C)으로 계산한 '체감 티어'입니다. 승급/강등 LP가 아니라 실제 퍼포먼스 기준이에요.">
+                        <div style="display:flex; flex-direction:column; line-height:1.18; text-align:left;">
+                            <span style="font-size:10px; font-weight:800; letter-spacing:0.4px; color:rgba(255,255,255,0.55);">{{ recent_form.title }}</span>
+                            <span style="font-size:16px; font-weight:900; color:{{ recent_form.color }}; text-shadow:none;">{{ recent_form.arrow }} {{ recent_form.feel }}</span>
+                        </div>
+                        <div style="width:1px; height:28px; background:rgba(255,255,255,0.2);"></div>
+                        <div style="display:flex; flex-direction:column; align-items:center; line-height:1.1;">
+                            <span style="font-size:18px; font-weight:900; color:#fff; text-shadow:none;">{{ recent_form.index }}</span>
+                            <span style="font-size:9px; font-weight:800; letter-spacing:0.3px; color:{{ recent_form.color }};">{{ recent_form.trend }}</span>
+                        </div>
+                    </div>
+                    {% endif %}
+
                     <div style="margin-top: 15px; display: flex; flex-direction: column; gap: 8px;">
                         
                         <div style="display: flex; gap: 8px; flex-wrap: wrap;">

@@ -2176,6 +2176,47 @@ def calc_game_grade(kda_ratio, kp, cs_per_min, win):
     elif score >= 32: return "B"
     return "C"
 
+# 등급 → 폼 지수 환산 대표점수(calc_game_grade 점수 구간 중앙값 근사)
+_GRADE_FORM_PTS = {'S+': 100, 'S': 84, 'A+': 72, 'A': 60, 'B+': 50, 'B': 38, 'C': 24}
+
+def calc_recent_form(matches, tier_kr=None):
+    """최근 경기 '실측 등급'으로 폼 지수(0~100)를 산출해 '체감 티어' 배지를 만든다.
+    - calc_game_grade가 매긴 실제 등급만 사용, 최근 경기일수록 가중치를 높게.
+    - 표본(등급 있는 경기)이 5판 미만이면 None → 배지 숨김(가짜 정보 금지).
+    - 없는 티어명을 지어내지 않는다: '현재 티어' 안에서의 위치·흐름만 표현."""
+    graded = [m for m in matches if m.get('grade') in _GRADE_FORM_PTS]
+    if len(graded) < 5:
+        return None
+    recent = graded[:20]
+    n = len(recent)
+    tot = tot_w = 0.0
+    for i, m in enumerate(recent):  # matches[0]=최신 → 최신에 큰 가중(1.0 → 0.45)
+        w = 1.0 - 0.55 * (i / (n - 1)) if n > 1 else 1.0
+        tot += _GRADE_FORM_PTS[m['grade']] * w
+        tot_w += w
+    idx = tot / tot_w
+    # 최근 승률로 소폭 보정(퍼포먼스 85% + 실제 결과 15%)
+    wr = sum(1 for m in recent if m.get('win')) / n
+    idx = max(0, min(100, round(idx * 0.85 + wr * 100 * 0.15)))
+
+    if idx >= 72:
+        level, arrow, trend, color = "상위권", "▲", "폼 최고조", "#f59e0b"
+    elif idx >= 60:
+        level, arrow, trend, color = "중상위권", "▲", "상승세", "#22c55e"
+    elif idx >= 46:
+        level, arrow, trend, color = "안정권", "―", "티어 유지", "#3b82f6"
+    elif idx >= 34:
+        level, arrow, trend, color = "하위권", "▼", "주춤", "#f97316"
+    else:
+        level, arrow, trend, color = "반등 필요", "▼", "하락세", "#ef4444"
+
+    if tier_kr:
+        title, feel = "체감 티어", f"{tier_kr} {level}"
+    else:
+        title, feel = "최근 폼", trend
+    return {"index": idx, "level": level, "arrow": arrow, "trend": trend,
+            "color": color, "n": n, "title": title, "feel": feel}
+
 def calc_player_tag(p):
     """스코어보드용 플레이어 1줄 분석 태그. 인게임 성과 기반 자동 판정."""
     kda = p.get('kda', 0)
@@ -3641,6 +3682,10 @@ def search():
     radar_bench_primary = get_tier_radar(_tk, primary_role['role_en']) if primary_role else None
     radar_bench_secondary = get_tier_radar(_tk, secondary_role['role_en']) if secondary_role else None
 
+    # ★ '체감 티어(최근 폼)' 배지 — 최근 실측 등급 기반 폼 지수(표본 5판 미만 시 None)
+    _tier_kr = TIER_KR.get(_tk.upper()) if _tk else None
+    recent_form = calc_recent_form(matches, _tier_kr)
+
     # ★ 모스트 챔피언 맞춤 패치 변화 (DDragon 버전 비교) — 챔피언별 독립·캐시됨 → 병렬 조회
     _tcs = top_recent_champs[:5]
     if _tcs:
@@ -3712,7 +3757,7 @@ def search():
         "position_dist": position_dist, "duo_stats": duo_stats,
         "patch_changes": patch_changes, "current_patch": CURRENT_PATCH_DISPLAY,
         "radar_bench_primary": radar_bench_primary, "radar_bench_secondary": radar_bench_secondary,
-        "tier_avg_label": tier_avg_label,
+        "tier_avg_label": tier_avg_label, "recent_form": recent_form,
     }
 
     # 3. 새로운 데이터를 DB에 JSON 문자열 형태로 저장/갱신
