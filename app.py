@@ -1071,11 +1071,15 @@ def get_league_info_by_puuid(puuid):
         res = riot_get(f"https://kr.api.riotgames.com/lol/league/v4/entries/by-puuid/{puuid}")
         if res.status_code == 200:
             data = res.json()
-            for q in data:
-                if q['queueType'] == 'RANKED_SOLO_5x5': return f"{q['tier']} {q['rank']} ({q['leaguePoints']} LP)", q['tier'].lower()
-            if data: return f"{data[0]['tier']} {data[0]['rank']} ({data[0]['leaguePoints']} LP)", data[0]['tier'].lower()
+            solo_q = next((q for q in data if q.get('queueType') == 'RANKED_SOLO_5x5'), None)
+            if solo_q:
+                return (f"{solo_q['tier']} {solo_q['rank']} ({solo_q['leaguePoints']} LP)",
+                        solo_q['tier'].lower(), solo_q)
+            if data:
+                return (f"{data[0]['tier']} {data[0]['rank']} ({data[0]['leaguePoints']} LP)",
+                        data[0]['tier'].lower(), None)
     except Exception: pass
-    return "Unranked", "unranked"
+    return "Unranked", "unranked", None
 
 # ═══ 재방문 훅: 내 소환사 랭크 추적 ═══
 SOLO_TIER_ORDER = {'IRON': 0, 'BRONZE': 1, 'SILVER': 2, 'GOLD': 3, 'PLATINUM': 4,
@@ -3667,7 +3671,7 @@ def search():
         _f_live = _ex.submit(get_live_game, searched_puuid)
         _f_mas = _ex.submit(get_mastery, searched_puuid)
         v4 = _f_v4.result()
-        tier_text, tier_name = _f_lg.result()
+        tier_text, tier_name, _lg_raw = _f_lg.result()
         live_game = _f_live.result()
         masteries = _f_mas.result()
 
@@ -3737,6 +3741,46 @@ def search():
     duo_stats.sort(key=lambda x: (-x['games'], -x['wr']))
     duo_stats = duo_stats[:5]
 
+    # ★ LP 스냅샷 적립 — 비회원 포함 모든 검색 소환사 대상 랭크 이력 추적
+    _rt_key = f"ranktrack#s{searched_puuid[:20]}"
+    _rt_raw, _ = db_read(_rt_key)
+    _rt_history = json.loads(_rt_raw) if _rt_raw else []
+    _rt_prev = _rt_history[-1] if _rt_history else None
+    _now_t = int(time.time())
+    if _lg_raw:
+        _snap_now = {
+            'tier': _lg_raw.get('tier', 'UNRANKED'),
+            'rank': _lg_raw.get('rank', ''),
+            'lp': _lg_raw.get('leaguePoints', 0),
+            'wins': _lg_raw.get('wins', 0),
+            'losses': _lg_raw.get('losses', 0),
+            't': _now_t,
+        }
+        _snap_now['abs'] = rank_to_abs(_snap_now['tier'], _snap_now['rank'], _snap_now['lp'])
+    else:
+        _snap_now = {'tier': 'UNRANKED', 'rank': '', 'lp': 0, 'wins': 0, 'losses': 0, 'abs': None, 't': _now_t}
+    lp_delta = None
+    if _rt_prev and _snap_now.get('abs') is not None and _rt_prev.get('abs') is not None:
+        _abs_diff = _snap_now['abs'] - _rt_prev['abs']
+        _games_diff = (_snap_now['wins'] + _snap_now['losses']) - (_rt_prev.get('wins', 0) + _rt_prev.get('losses', 0))
+        _since_ago = _now_t - (_rt_prev.get('t') or _now_t)
+        if _since_ago < 3600:
+            _since_lbl = f"{max(1, _since_ago // 60)}분 전"
+        elif _since_ago < 86400:
+            _since_lbl = f"{_since_ago // 3600}시간 전"
+        else:
+            _since_lbl = f"{_since_ago // 86400}일 전"
+        lp_delta = {'abs': _abs_diff, 'games': _games_diff, 'since_lbl': _since_lbl,
+                    'tier_changed': (_snap_now['tier'] != _rt_prev.get('tier') or _snap_now['rank'] != _rt_prev.get('rank'))}
+    _total_now = _snap_now['wins'] + _snap_now['losses']
+    _total_prev = (_rt_prev.get('wins', 0) + _rt_prev.get('losses', 0)) if _rt_prev else None
+    if not _rt_prev or _total_now != _total_prev or (_now_t - _rt_prev.get('t', 0) > 12 * 3600):
+        _rt_history.append({k: _snap_now[k] for k in ('tier', 'rank', 'lp', 'wins', 'losses', 'abs', 't')})
+        _rt_history = _rt_history[-90:]
+        db_write(_rt_key, _rt_history, _now_t)
+    lp_spark = render_lp_sparkline(_rt_history)
+    lp_history_len = len([h for h in _rt_history if h.get('abs') is not None])
+
     # 템플릿에 보낼 데이터를 딕셔너리로 구조화
     render_payload = {
         "page": 'search',
@@ -3758,6 +3802,7 @@ def search():
         "patch_changes": patch_changes, "current_patch": CURRENT_PATCH_DISPLAY,
         "radar_bench_primary": radar_bench_primary, "radar_bench_secondary": radar_bench_secondary,
         "tier_avg_label": tier_avg_label, "recent_form": recent_form,
+        "lp_spark": lp_spark, "lp_delta": lp_delta, "lp_history_len": lp_history_len,
     }
 
     # 3. 새로운 데이터를 DB에 JSON 문자열 형태로 저장/갱신

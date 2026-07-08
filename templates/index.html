@@ -1784,6 +1784,25 @@
             </div>
         </div>
 
+        {% if lp_spark is defined and lp_spark %}
+        <div style="max-width:900px; margin:10px auto 0; padding:0 16px;">
+            <div class="dash-spark-card">
+                <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px; flex-wrap:wrap; gap:6px;">
+                    <span class="dash-spark-title" style="margin-bottom:0;">📊 LP 변화 이력</span>
+                    {% if lp_delta is defined and lp_delta %}
+                    <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                        <span style="font-size:11px; color:var(--text-muted);">{{ lp_delta.since_lbl }} 대비</span>
+                        <span style="font-size:13px; font-weight:900; color:{% if lp_delta.abs > 0 %}#34d399{% elif lp_delta.abs < 0 %}#f87171{% else %}#9ca3af{% endif %};">{% if lp_delta.abs > 0 %}▲ +{{ lp_delta.abs }}{% elif lp_delta.abs < 0 %}▼ {{ lp_delta.abs }}{% else %}─ 변화없음{% endif %} pt</span>
+                        {% if lp_delta.games > 0 %}<span style="font-size:11px; color:var(--text-muted);">· {{ lp_delta.games }}판</span>{% endif %}
+                        {% if lp_delta.tier_changed %}<span style="font-size:11px; font-weight:800; color:#f59e0b;">티어변동</span>{% endif %}
+                    </div>
+                    {% endif %}
+                </div>
+                {{ lp_spark | safe }}
+            </div>
+        </div>
+        {% endif %}
+
         <div class="main-container">
             {% if from_cache %}
             <div class="cache-notice">
