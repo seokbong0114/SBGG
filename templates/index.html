@@ -1819,6 +1819,82 @@
             </form>
             {% endif %}
 
+            {% if improvement_tips or champion_recs %}
+            <div id="roadmapCard" style="background:var(--bg-elev); border:var(--border-glass); border-radius:16px; padding:18px 20px 16px; margin-bottom:16px;">
+                <!-- 헤더 -->
+                <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:14px; cursor:pointer;" onclick="(function(){var b=document.getElementById('roadmapBody');var t=document.getElementById('roadmapToggle');if(b.style.display==='none'){b.style.display='';t.textContent='접기 ▲';}else{b.style.display='none';t.textContent='펼치기 ▼';}})()">
+                    <span style="font-size:13px; font-weight:900; color:var(--text-main); letter-spacing:-0.2px;">🎯 이번 주 승급 미션</span>
+                    <span id="roadmapToggle" style="font-size:11px; font-weight:800; color:var(--text-muted); user-select:none;">접기 ▲</span>
+                </div>
+                <div id="roadmapBody">
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px 20px;">
+
+                        <!-- 왼쪽: 현재 폼 + LP 모멘텀 -->
+                        <div style="display:flex; flex-direction:column; gap:8px;">
+                            <div style="font-size:11px; font-weight:800; color:var(--text-muted); letter-spacing:0.3px;">현재 상태</div>
+                            {% if recent_form is defined and recent_form %}
+                            <div style="display:flex; align-items:center; gap:10px; padding:10px 12px; background:rgba(0,0,0,0.3); border-radius:12px; border:1px solid {{ recent_form.color }}44;">
+                                <span style="font-size:22px; font-weight:900; color:{{ recent_form.color }};">{{ recent_form.arrow }}</span>
+                                <div>
+                                    <div style="font-size:13px; font-weight:900; color:{{ recent_form.color }};">{{ recent_form.feel }}</div>
+                                    <div style="font-size:11px; color:var(--text-muted);">폼 지수 {{ recent_form.index }}/100 · {{ recent_form.n }}판 기준</div>
+                                </div>
+                            </div>
+                            {% endif %}
+                            {% if lp_delta is defined and lp_delta %}
+                            <div style="display:flex; align-items:center; gap:8px; padding:8px 12px; background:rgba(0,0,0,0.2); border-radius:10px;">
+                                <span style="font-size:13px; font-weight:900; color:{% if lp_delta.abs > 0 %}#34d399{% elif lp_delta.abs < 0 %}#f87171{% else %}#9ca3af{% endif %};">{% if lp_delta.abs > 0 %}▲ +{{ lp_delta.abs }}{% elif lp_delta.abs < 0 %}▼ {{ lp_delta.abs }}{% else %}─{% endif %} pt</span>
+                                <span style="font-size:11px; color:var(--text-muted);">{{ lp_delta.since_lbl }} 대비{% if lp_delta.games > 0 %} · {{ lp_delta.games }}판{% endif %}</span>
+                            </div>
+                            {% endif %}
+                        </div>
+
+                        <!-- 오른쪽: 이번 주 미션 -->
+                        <div style="display:flex; flex-direction:column; gap:6px;">
+                            <div style="font-size:11px; font-weight:800; color:var(--text-muted); letter-spacing:0.3px;">이번 주 미션</div>
+                            {% for tip in improvement_tips %}
+                            <div style="display:flex; gap:8px; align-items:flex-start; padding:8px 10px; border-radius:10px;
+                                background:{% if tip.type == 'danger' %}rgba(239,68,68,0.08){% elif tip.type == 'warning' %}rgba(251,191,36,0.08){% elif tip.type == 'good' %}rgba(74,222,128,0.08){% else %}rgba(255,255,255,0.04){% endif %};
+                                border-left:3px solid {% if tip.type == 'danger' %}#ef4444{% elif tip.type == 'warning' %}#fbbf24{% elif tip.type == 'good' %}#4ade80{% else %}rgba(255,255,255,0.15){% endif %};">
+                                <span style="font-size:14px; flex-shrink:0;">{{ tip.icon }}</span>
+                                <div>
+                                    <div style="font-size:12px; font-weight:800; color:var(--text-main); line-height:1.3;">{{ tip.title }}</div>
+                                    <div style="font-size:11px; color:var(--text-muted); margin-top:2px;">{{ tip.desc }}</div>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+
+                    </div>
+
+                    <!-- 추천 챔피언 -->
+                    {% if champion_recs %}
+                    <div style="margin-top:14px; padding-top:14px; border-top:1px solid rgba(255,255,255,0.07);">
+                        <div style="font-size:11px; font-weight:800; color:var(--text-muted); letter-spacing:0.3px; margin-bottom:10px;">이번 주 추천 픽</div>
+                        <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                            {% for rec in champion_recs[:3] %}
+                            <a href="/champion/{{ rec.id }}" style="display:flex; align-items:center; gap:8px; padding:8px 12px; border-radius:12px; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.09); text-decoration:none; transition:0.18s; flex-shrink:0;" onmouseover="this.style.background='rgba(255,255,255,0.09)'" onmouseout="this.style.background='rgba(255,255,255,0.04)'">
+                                <img src="https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/champion/{{ rec.id }}.png" style="width:34px; height:34px; border-radius:8px; border:1.5px solid {% if rec.tier_style %}{{ rec.tier_style.border }}{% else %}rgba(255,255,255,0.15){% endif %}; flex-shrink:0;">
+                                <div>
+                                    <div style="font-size:12px; font-weight:900; color:var(--text-main);">{{ rec.kr }}</div>
+                                    <div style="font-size:10px; color:var(--text-muted);">{{ rec.role }} · 승률 {{ rec.wr }}%</div>
+                                </div>
+                            </a>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+
+                    <!-- 코치 총평 -->
+                    {% if coach_summary is defined and coach_summary %}
+                    <div style="margin-top:14px; padding:10px 14px; background:rgba(99,102,241,0.08); border:1px solid rgba(99,102,241,0.2); border-radius:10px; font-size:12px; color:var(--text-main); line-height:1.6;">
+                        💬 <strong>코치 총평</strong> — {{ coach_summary }}
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+            {% endif %}
+
             <div class="dashboard-wrapper">
                 <div class="queue-filter">
                     <a href="/search?name={{ name }}&tag={{ tag }}&queue=all" class="queue-btn {% if not queue or queue == 'all' %}active{% endif %}">종합 랭크</a>

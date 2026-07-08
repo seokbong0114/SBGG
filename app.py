@@ -2541,6 +2541,31 @@ def recommend_champions(radar_array, primary_role=None):
             break
     return recs[:4]
 
+def build_coach_summary(improvement_tips, recent_form, lp_delta):
+    """기존 분석 데이터를 종합한 1-2줄 코치 총평 텍스트. 가짜 수치/조언 없음."""
+    if not improvement_tips:
+        return None
+    sep = '—'  # em-dash
+    danger = [t for t in improvement_tips if t.get('type') == 'danger']
+    warning = [t for t in improvement_tips if t.get('type') == 'warning']
+    good = [t for t in improvement_tips if t.get('type') == 'good']
+    parts = []
+    if danger:
+        raw = danger[0]['title']
+        issue = raw.split(sep)[0].strip() if sep in raw else raw
+        parts.append(f"현재 가장 급한 과제는 '{issue}'입니다.")
+    elif warning:
+        raw = warning[0]['title']
+        issue = raw.split(sep)[0].strip() if sep in raw else raw
+        parts.append(f"'{issue}' 개선이 이번 주 핵심 목표입니다.")
+    if good:
+        raw = good[0]['title']
+        strength = raw.split(sep)[0].strip() if sep in raw else raw
+        parts.append(f"{strength}은 뚜렷한 강점 — 이 기세를 유지하세요.")
+    elif recent_form and recent_form.get('index', 0) >= 60:
+        parts.append("최근 폼이 좋습니다. 지금이 집중 플레이 타이밍입니다.")
+    return " ".join(parts) if parts else None
+
 def resolve_riot_id(puuid):
     """puuid → (gameName, tagLine). Riot이 league-v4 엔트리에서 summonerName을 제거했으므로
     account-v1로 실제 라이엇 ID를 해석(개인 키 허용). 24h 캐시(닉네임 거의 불변) → 갱신 시 API 절약.
@@ -3803,6 +3828,7 @@ def search():
         "radar_bench_primary": radar_bench_primary, "radar_bench_secondary": radar_bench_secondary,
         "tier_avg_label": tier_avg_label, "recent_form": recent_form,
         "lp_spark": lp_spark, "lp_delta": lp_delta, "lp_history_len": lp_history_len,
+        "coach_summary": build_coach_summary(improvement_tips, recent_form, lp_delta),
     }
 
     # 3. 새로운 데이터를 DB에 JSON 문자열 형태로 저장/갱신
