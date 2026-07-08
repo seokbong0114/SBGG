@@ -1872,7 +1872,7 @@
                     <div style="margin-top:14px; padding-top:14px; border-top:1px solid rgba(255,255,255,0.07);">
                         <div style="font-size:11px; font-weight:800; color:var(--text-muted); letter-spacing:0.3px; margin-bottom:10px;">이번 주 추천 픽</div>
                         <div style="display:flex; gap:10px; flex-wrap:wrap;">
-                            {% for rec in champion_recs[:3] %}
+                            {% for rec in champion_recs %}
                             <a href="/champion/{{ rec.id }}" style="display:flex; align-items:center; gap:8px; padding:8px 12px; border-radius:12px; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.09); text-decoration:none; transition:0.18s; flex-shrink:0;" onmouseover="this.style.background='rgba(255,255,255,0.09)'" onmouseout="this.style.background='rgba(255,255,255,0.04)'">
                                 <img src="https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/champion/{{ rec.id }}.png" style="width:34px; height:34px; border-radius:8px; border:1.5px solid {% if rec.tier_style %}{{ rec.tier_style.border }}{% else %}rgba(255,255,255,0.15){% endif %}; flex-shrink:0;">
                                 <div>
@@ -2011,7 +2011,7 @@
             <!-- ★ 심층 분석 (접이식) — 부가 정보는 접어서 최근 전적을 위로 -->
             {% if game_count > 0 %}
             <details class="deep-analysis-details">
-                <summary class="deep-summary"><span class="summary-icon">▼</span> 📊 심층 분석 펼치기 <span style="color:var(--text-muted); font-weight:600;">— 패치 변화 · 모스트 챔피언 · 포지션/듀오 · 개선점 · 추천 챔피언</span></summary>
+                <summary class="deep-summary"><span class="summary-icon">▼</span> 📊 심층 분석 펼치기 <span style="color:var(--text-muted); font-weight:600;">— 패치 변화 · 모스트 챔피언 · 포지션/듀오 · 자주 만난 소환사</span></summary>
                 <div class="deep-analysis-body">
 
             <!-- ★ 모스트 챔피언 맞춤 패치 변화 -->
@@ -2162,52 +2162,7 @@
             </div>
             {% endif %}
 
-            <!-- ★ YOUR.GG 스타일 개선 피드백 + 챔피언 추천 -->
-            {% if improvement_tips or champion_recs %}
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-top: 32px;">
-                {% if improvement_tips %}
-                <div class="glass-panel" style="padding: 22px 25px;">
-                    <div class="section-title" style="margin-bottom: 16px;">🔍 플레이 개선 포인트</div>
-                    <div style="display: flex; flex-direction: column; gap: 12px;">
-                        {% for tip in improvement_tips %}
-                        <div style="display: flex; gap: 14px; align-items: flex-start; padding: 14px; border-radius: 12px;
-                            background: {% if tip.type == 'danger' %}rgba(239,68,68,0.08){% elif tip.type == 'warning' %}rgba(251,191,36,0.08){% elif tip.type == 'good' %}rgba(74,222,128,0.08){% else %}rgba(255,255,255,0.04){% endif %};
-                            border: 1px solid {% if tip.type == 'danger' %}rgba(239,68,68,0.25){% elif tip.type == 'warning' %}rgba(251,191,36,0.25){% elif tip.type == 'good' %}rgba(74,222,128,0.25){% else %}rgba(255,255,255,0.08){% endif %};">
-                            <div style="font-size: 22px; flex-shrink: 0; line-height: 1;">{{ tip.icon }}</div>
-                            <div>
-                                <div style="font-size: 14px; font-weight: 900; color: white; margin-bottom: 4px;">{{ tip.title }}</div>
-                                <div style="font-size: 12px; color: var(--text-muted); line-height: 1.6;">{{ tip.desc }}</div>
-                            </div>
-                        </div>
-                        {% endfor %}
-                    </div>
-                </div>
-                {% endif %}
-                {% if champion_recs %}
-                <div class="glass-panel" style="padding: 22px 25px;">
-                    <div class="section-title" style="margin-bottom: 3px;">🎯 플레이 스타일 맞춤 챔피언</div>
-                    <div style="font-size: 11px; color: var(--text-muted); margin-bottom: 14px;">내 플레이 성향과 현재 메타를 함께 반영한 추천</div>
-                    <div style="display: flex; flex-direction: column; gap: 12px;">
-                        {% for rec in champion_recs %}
-                        <a href="/champion/{{ rec.id }}" style="text-decoration: none; display: flex; gap: 14px; align-items: center; padding: 14px; border-radius: 12px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.08); transition: 0.2s;" onmouseover="this.style.background='rgba(255,255,255,0.07)'" onmouseout="this.style.background='rgba(255,255,255,0.03)'">
-                            <img src="https://ddragon.leagueoflegends.com/cdn/{{ latest_version }}/img/champion/{{ rec.id }}.png" style="width: 46px; height: 46px; border-radius: 12px; border: 2px solid {% if rec.tier_style %}{{ rec.tier_style.border }}{% else %}rgba(255,255,255,0.15){% endif %}; flex-shrink:0;">
-                            <div style="flex: 1; min-width: 0;">
-                                <div style="font-size: 10px; font-weight: 800; color: #c4b5fd;">{{ rec.icon }} {{ rec.cat }}</div>
-                                <div style="display: flex; align-items: center; gap: 6px; margin-top: 3px; flex-wrap: wrap;">
-                                    <span style="font-size: 15px; font-weight: 900; color: white;">{{ rec.kr }}</span>
-                                    {% if rec.tier_style %}<span style="font-size: 10px; font-weight: 900; padding: 1px 7px; border-radius: 8px; background: {{ rec.tier_style.bg }}; color: {{ rec.tier_style.color }}; border: 1px solid {{ rec.tier_style.border }};">{% if rec.tier == 'OP' %}OP{% else %}{{ rec.tier }}티어{% endif %}</span>{% endif %}
-                                    <span style="font-size: 11px; color: var(--text-muted);">{{ rec.role }}</span>
-                                </div>
-                                <div style="font-size: 11px; color: var(--text-muted); margin-top: 3px;">{{ rec.reason }}</div>
-                            </div>
-                            <div style="color: var(--point-color); font-weight: 900;">➔</div>
-                        </a>
-                        {% endfor %}
-                    </div>
-                </div>
-                {% endif %}
-            </div>
-            {% endif %}
+            <!-- 개선 피드백 + 추천 챔피언은 상단 '이번 주 승급 미션' 카드로 승격(중복 제거) -->
 
             {% if repeat_encounters is defined and repeat_encounters %}
             <div class="glass-panel" style="padding: 24px; margin-top: 24px;">
